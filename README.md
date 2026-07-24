@@ -368,12 +368,16 @@ LUMI includes **Designer-in-Residence (MoD v3.0)**, an embedded senior product d
 - **Industry Pattern Library Registry (`PatternLibrary.ts`)**: Benchmarks UI proposals against learned user conventions (Command Palette, Split Workspace, Contextual Action Toolbar, Optimistic Undo Toast, Guided Empty State, Focus-Trapped Modals).
 - **Design Token Sensing & Codemod Sync Engine (`TokenSyncEngine.ts`)**: Automatically extracts CSS custom properties and generates codemod patches mapping hardcoded CSS/HEX values to canonical variables (`var(--color-primary)`).
 - **Dynamic UX Health Index (0-100)**: Live scoring, letter grades (`A+` to `F`), and category breakdowns across 7 explicit design debt dimensions.
+- **Invariant Target Resolution Guard (`TargetResolutionException`)**: Hard invariant boundary enforcing zero-hallucination target grounding before code mutations. Eliminates fuzzy keyword guessing and blocks ghost task generation.
+- **Automatic Execution Strategy (`"auto"`)**: Orchestrator automatically discerns whether requests require `plan-only` review vs `plan-and-implement` execution without requiring manual UI outcome toggle buttons.
+- **Glassbox MoD Live Council Inspector**: Replaced generic loading spinners with a live Council Inspector Card in the webview, streaming active persona lenses, locked decision drawers (`🔒`), mutation checklists (`⚡`), 8-gate audit matrices (`🛡️`), and a 5-step visual pipeline indicator.
 - **Design Decision Records & System Drift Guard (`DesignDecisionRecord.ts`, `DesignDriftDetector.ts`)**: Formats immutable decision records (`DDR-001`) and scans source files for design system drift.
 - **8-State Interactive UI Contract Ledger & Predictive Risk Calculator (`ComponentContractLedger.ts`, `UXRegressionRiskCalculator.ts`)**: Audits UI components across all 8 interactive states and evaluates breaking layout/flow regression risk (`0-100`).
 - **High-Throughput Speculative Execution (`SpeculativeTaskPlanner.ts`, `DesignCircuitBreaker.ts`, `DesignStateCache.ts`)**: Partitions implementation tasks into parallel disjoint execution waves, enforces 30s LLM stream safety valves, and caches state in memory.
 
 | Paper / Guide | Target Audience / Purpose |
 |---------------|--------------------------|
+| **[MoD Executive Architecture Document](docs/mixture-of-designers.md)** | Technical specification, circuit breakers, consensus, and Glassbox UI engine |
 | **[MoD Executive Brief](.wiki/mod-executive-brief.md)** | Product strategy, Designer-in-Residence paradigm, and token efficiency models |
 | **[MoD Design Philosophy](.wiki/mod-philosophy.md)** | Embedded senior design judgment, 5-Whys reasoning, and Familiarity Heuristic |
 | **[MoD Technical Whitepaper](.wiki/mod-whitepaper.md)** | Mathematical formulation, 8-state UI contracts, token codemods, and speculative task waves |

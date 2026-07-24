@@ -18,7 +18,7 @@ export interface DoctorReport {
 
 /**
  * StabilityDoctor: Performs deep environment-level health checks.
- * Ensures the environment for JoyZoning is stable.
+ * Ensures the workspace integrity and configuration state are stable.
  */
 export class StabilityDoctor {
 	constructor(private cwd: string) {}
@@ -85,8 +85,7 @@ export class StabilityDoctor {
 	}
 
 	private async checkMcpStability(issues: DiagnosticIssue[]) {
-		// Example: check for MCP settings file
-		const settingsPath = path.join(this.cwd, ".vscode", "dietcode_mcp_settings.json")
+		const settingsPath = path.join(this.cwd, ".vscode", "lumi_mcp_settings.json")
 		if (fs.existsSync(settingsPath)) {
 			try {
 				const content = await fs.promises.readFile(settingsPath, "utf-8")
@@ -135,7 +134,7 @@ export class StabilityDoctor {
 					message: `Repeated cooldown events detected (${cooldownCount} in last 30m). The project is under sustained heavy workload.`,
 					remediable: true,
 					remediationHint:
-						"Consider a # STABILITY BREAK to allow structural stabilization. Reduce parallel operations.",
+						"Pause active tasks temporarily to allow structural stabilization. Reduce parallel operations.",
 				})
 			} else if (writeCount > 50) {
 				issues.push({
@@ -144,8 +143,7 @@ export class StabilityDoctor {
 					severity: "LOW",
 					message: `High write frequency detected (${writeCount} writes in last 30m). Project is under heavy workload.`,
 					remediable: true,
-					remediationHint:
-						"Pause high-frequency operations or use # STABILITY BREAK to allow structural stabilization.",
+					remediationHint: "Pause high-frequency operations to allow structural stabilization.",
 				})
 			} else if (recentEntries.length > 0) {
 				issues.push({
@@ -167,14 +165,13 @@ export class StabilityDoctor {
 		if (fs.existsSync(cachePath)) {
 			const stats = await fs.promises.stat(cachePath)
 			if (stats.size > 1024 * 1024 * 5) {
-				// Silent High-Velocity: > 5MB of anomalies
 				issues.push({
 					id: "DOC-102",
 					category: "STATE",
 					severity: "MEDIUM",
 					message: "Diagnostic history cache (AnomalyRegistry) is bloating (large state file).",
 					remediable: true,
-					remediationHint: "Run 'DietCode: Audit Cache' to prune stale data.",
+					remediationHint: "Prune or clear stale entries in the anomaly registry store.",
 				})
 			}
 		}

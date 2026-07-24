@@ -140,6 +140,24 @@ Recent production audits resolved critical pipeline failure modes and added high
 6. **Executive Summary Design Reporting**:
    - `reportFinalResult()` outputs a structured executive summary detailing locked decisions, rationales, implementation task completion rates, and quality gate audit results.
 
+7. **Invariant Target Resolution Guard (`TargetResolutionException`)**:
+   - `resolveTargetFilesForDecision()` enforces a zero-hallucination boundary between design appraisal and mutation execution.
+   - Prohibits fuzzy keyword guessing fallbacks. If a design decision targets `General` or `General Area`, target resolution attempts *only* deterministic extraction (from explicit paths in evidence, AST references, or refinements).
+   - If no concrete workspace file paths can be deterministically extracted, it throws `TargetResolutionException`.
+   - `generateImplementationTasks()` catches the exception and records `[TARGET_RESOLUTION_FAILURE]` in execution limitations, cleanly blocking implementation without creating ghost mutation tasks.
+
+8. **Automatic & Discerning Execution Strategy (`"auto"`)**:
+   - `determineEffectiveOutcome(requestText)` automatically discerns whether to run `plan-only` vs `plan-and-implement` without requiring manual webview toggle buttons.
+   - Explicit review/audit prompts defer code modifications, while grounded, actionable tasks seamlessly proceed to execution.
+
+9. **Glassbox MoD Live Council Inspector**:
+   - Replaced generic spinners and raw stage strings with real-time **Glassbox Council Inspector Cards**:
+     - **Active Specialist Lenses**: Displays live assigned persona pills (`Product Strategist`, `UX Architect`, `Accessibility Specialist`).
+     - **Locked Design Decisions**: Displays locked decisions (`🔒`), rationales, and targeted workspace file badges (`[AnomalyRegistry.ts]`).
+     - **Governed Code Mutations**: Displays concrete mutation task objectives with target file tags and status indicators (`⏳ pending`, `⚡ executing`, `✅ completed`).
+     - **Quality Gate Audit Matrix**: Displays live pass/audit status across all 8 quality gates.
+     - **5-Stage Visual Stepper**: Displays pipeline progress (`Intent & Routing` ➔ `Council Audit` ➔ `Decision Lock` ➔ `Code Execution` ➔ `Quality Audit`) with glowing Lumi purple step indicators.
+
 ---
 
 ## Verification & Testing

@@ -1925,7 +1925,7 @@ export class Task {
 		if (modEnabled) {
 			this.taskLoopActive = true
 			try {
-				const outcome = this.stateManager.getGlobalSettingsKey("modOutcome") || "plan-and-implement"
+				const outcome = this.stateManager.getGlobalSettingsKey("modOutcome") || "auto"
 				const orchestrator = new MixtureOfDesignersOrchestrator(this, outcome as any)
 				await orchestrator.run(userContent)
 			} finally {

@@ -59,6 +59,43 @@ const INPUT_ASKS = new Set<DietCodeMessage["ask"]>([
 	"report_bug",
 ])
 
+const MOD_STAGE_TITLE_MAP: Record<string, string> = {
+	initializing: "Initializing Council",
+	intent: "Analyzing Intent & Boundaries",
+	classification: "Classifying Problems",
+	"specialist-selection": "Routing Personas",
+	"specialist-analysis": "Designer Investigation",
+	"recommendation-validation": "Validating Recommendations",
+	convergence: "Converging Decisions",
+	"decision-lock": "Locking Decisions",
+	"implementation-planning": "Planning Code Edits",
+	implementation: "Executing Code Edits",
+	validation: "Multi-Gate Audit",
+	critique: "Product Critique",
+	"post-implementation-audit": "Post-Implementation Audit",
+	completed: "Run Completed",
+	"completed-with-limitations": "Completed with Limitations",
+	failed: "Run Failed",
+}
+
+function tryParseModStage(text: string | undefined): { stage: string; progress: number; detail?: string } | null {
+	if (!text) return null
+	try {
+		const parsed = JSON.parse(text)
+		if (parsed && typeof parsed === "object" && parsed.stage && (parsed.runId || parsed.progress !== undefined)) {
+			const detail = parsed.items?.[0]?.latestToolCall || parsed.items?.[0]?.prompt
+			return {
+				stage: String(parsed.stage),
+				progress: typeof parsed.progress === "number" ? parsed.progress : 0,
+				detail,
+			}
+		}
+	} catch {
+		return null
+	}
+	return null
+}
+
 function getApprovalDetail(message: DietCodeMessage): string {
 	switch (message.ask) {
 		case "command":
@@ -292,6 +329,15 @@ export function deriveExecutionStatus({
 			title: lastMessage.ask === "resume_task" ? "Ready to resume" : "Input required",
 			detail: "LUMI is paused at a decision point and will not continue without you.",
 			nextAction: "Respond below to continue or choose another path.",
+		}
+	} else if (lastMessage?.say === "subagent" && lastMessage.text && tryParseModStage(lastMessage.text)) {
+		const modData = tryParseModStage(lastMessage.text)!
+		const label = MOD_STAGE_TITLE_MAP[modData.stage] || modData.stage
+		status = {
+			state: "running",
+			title: `MoD: ${label} (${modData.progress}%)`,
+			detail: modData.detail || `Mixture of Designers council executing ${label}.`,
+			nextAction: "No action required. MoD design council is evaluating architecture.",
 		}
 	} else if (
 		lastMessage?.partial === true ||

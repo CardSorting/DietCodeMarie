@@ -1,4 +1,4 @@
-import { ClipboardList, Compass, Eye, HelpCircle, Layers, Layout, Palette, Sparkles, Terminal, Zap } from "lucide-react"
+import { Compass, Eye, HelpCircle, Layers, Layout, Palette, Sparkles, Terminal } from "lucide-react"
 import React, { memo, useCallback, useState } from "react"
 import { updateSetting } from "@/components/settings/utils/settingsHandlers"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -14,11 +14,10 @@ export interface ModModeSwitcherProps {
  * Provides a clean, subtle toggle between Coding Mode and Design (MoD) Mode.
  */
 export const ModModeSwitcher: React.FC<ModModeSwitcherProps> = memo(({ className }) => {
-	const { modEnabled, modOutcome } = useExtensionState()
+	const { modEnabled } = useExtensionState()
 	const [infoOpen, setInfoOpen] = useState(false)
 
 	const isDesignMode = Boolean(modEnabled)
-	const currentOutcome = modOutcome ?? "plan-and-implement"
 
 	const handleSetCodingMode = useCallback(() => {
 		updateSetting("modEnabled", false)
@@ -26,10 +25,6 @@ export const ModModeSwitcher: React.FC<ModModeSwitcherProps> = memo(({ className
 
 	const handleSetDesignMode = useCallback(() => {
 		updateSetting("modEnabled", true)
-	}, [])
-
-	const handleToggleOutcome = useCallback((outcome: "plan-and-implement" | "plan-only") => {
-		updateSetting("modOutcome", outcome)
 	}, [])
 
 	const handleKeyDown = useCallback(
@@ -121,39 +116,8 @@ export const ModModeSwitcher: React.FC<ModModeSwitcherProps> = memo(({ className
 				</button>
 			</div>
 
-			{/* Minimal Outcome & Info Tools */}
+			{/* Minimal Info Tools */}
 			<div className="flex items-center gap-1 shrink-0 text-[9.5px]">
-				{isDesignMode && (
-					<div className="inline-flex items-center p-0.5 rounded border border-purple-500/30 bg-[#161422] text-[8.5px] shadow-xs">
-						<button
-							className={cn(
-								"px-1 py-0.2 rounded transition-colors flex items-center gap-0.5 font-medium",
-								currentOutcome === "plan-and-implement"
-									? "bg-purple-900/40 text-purple-200 border border-purple-400/30"
-									: "text-description/50 hover:text-[#faf9f7]",
-							)}
-							onClick={() => handleToggleOutcome("plan-and-implement")}
-							title="Plan & Build"
-							type="button">
-							<Zap className="size-2 text-amber-400 shrink-0" />
-							<span>Build</span>
-						</button>
-						<button
-							className={cn(
-								"px-1 py-0.2 rounded transition-colors flex items-center gap-0.5 font-medium",
-								currentOutcome === "plan-only"
-									? "bg-purple-900/40 text-purple-200 border border-purple-400/30"
-									: "text-description/50 hover:text-[#faf9f7]",
-							)}
-							onClick={() => handleToggleOutcome("plan-only")}
-							title="Plan Only"
-							type="button">
-							<ClipboardList className="size-2 text-sky-400 shrink-0" />
-							<span>Plan</span>
-						</button>
-					</div>
-				)}
-
 				<Popover onOpenChange={setInfoOpen} open={infoOpen}>
 					<PopoverTrigger asChild>
 						<button

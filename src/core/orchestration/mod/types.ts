@@ -1,6 +1,4 @@
-export type AgentExecutionMode = "standard" | "mixture-of-designers"
-
-export type MoDOutcome = "plan-only" | "plan-and-implement"
+export type MoDOutcome = "auto" | "plan-only" | "plan-and-implement"
 
 export type MoDStage =
 	| "initializing"

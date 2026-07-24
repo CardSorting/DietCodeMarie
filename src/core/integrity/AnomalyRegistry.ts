@@ -44,10 +44,10 @@ export class AnomalyRegistry {
 			existing.severity = Math.max(existing.severity, severity)
 		} else {
 			this.anomalies.set(hash, {
-				id: Math.random().toString(36).substring(7),
+				id: crypto.randomUUID(),
 				type,
 				signature: hash,
-				originalSummary: `${originalSignature.substring(0, 50)}...`,
+				originalSummary: originalSignature.length > 60 ? `${originalSignature.substring(0, 57)}...` : originalSignature,
 				timestamp: Date.now(),
 				severity,
 				hitCount: 1,
@@ -67,8 +67,7 @@ export class AnomalyRegistry {
 			return true
 		}
 
-		// PRODUCTION HARDENING: Pattern-based sensing
-		// If the file resides in a directory with "STRESS", it inherits the anomaly state.
+		// Directory-level stress pattern check
 		const dir = path.dirname(signature)
 		const dirHash = this.hashSignature(`dir_stress:${dir}`)
 		const dp = this.anomalies.get(dirHash)
@@ -82,7 +81,7 @@ export class AnomalyRegistry {
 	}
 
 	/**
-	 * V10: Harmonic Decay. Reduces the weight of an anomaly when integrity improves.
+	 * Decay anomaly severity and hit count upon successful operations.
 	 */
 	public decay(signature: string, amount = 1) {
 		const hash = this.hashSignature(signature)
@@ -92,7 +91,7 @@ export class AnomalyRegistry {
 			p.severity = Math.max(0, p.severity - 0.5)
 			if (p.hitCount <= 0) {
 				this.anomalies.delete(hash)
-				Logger.info(`[AnomalyRegistry] Forgiveness granted: Anomaly cleared for ${p.originalSummary}`)
+				Logger.info(`[AnomalyRegistry] Clear condition met: Anomaly resolved for ${p.originalSummary}`)
 			} else {
 				p.timestamp = Date.now()
 			}
@@ -101,7 +100,7 @@ export class AnomalyRegistry {
 	}
 
 	/**
-	 * V10: Explicitly clears an anomaly.
+	 * Explicitly clears a recorded anomaly by signature.
 	 */
 	public clearAnomaly(signature: string) {
 		const hash = this.hashSignature(signature)
@@ -112,7 +111,7 @@ export class AnomalyRegistry {
 	}
 
 	/**
-	 * V18: Forcefully clears all anomalies related to a directory or file.
+	 * Forcefully clears all anomalies related to a directory or file target.
 	 */
 	public forceClear(target: string) {
 		let cleared = 0
@@ -137,7 +136,7 @@ export class AnomalyRegistry {
 	}
 
 	/**
-	 * PRODUCTION HARDENING: Predicts if an edit is likely to fail based on historical anomalies.
+	 * Evaluates historical anomaly patterns to predict regression risk for an edit path.
 	 */
 	public predictAnomaly(filePath: string): { likely: boolean; reason?: string } {
 		const dir = path.dirname(filePath)
@@ -147,16 +146,16 @@ export class AnomalyRegistry {
 		if (dp && dp.hitCount > 3) {
 			return {
 				likely: true,
-				reason: `Architectural Stress Zone detected in \`${dir}\`. Historic violations suggest high risk of regression.`,
+				reason: `Frequent structural violations detected in directory \`${dir}\`. Historical patterns indicate elevated regression risk.`,
 			}
 		}
 
-		// Pattern-based Prediction (v12)
+		// Structural pattern violation check
 		for (const p of this.anomalies.values()) {
 			if (p.type === "LAYER_VIOLATION_PATTERN" && p.hitCount > 5) {
 				return {
 					likely: true,
-					reason: `Stability Protocol Alert: This move matches a historically failed architectural pattern.`,
+					reason: `Layer boundary alert: Proposed edit matches a historically problematic architectural pattern.`,
 				}
 			}
 		}
@@ -165,7 +164,7 @@ export class AnomalyRegistry {
 	}
 
 	/**
-	 * PRODUCTION HARDENING: Records a failed architectural pattern.
+	 * Records a recurrent layer boundary violation pattern.
 	 */
 	public recordPatternSignature(originLayer: string, targetLayer: string) {
 		const sig = `pattern:${originLayer}->${targetLayer}`
@@ -183,10 +182,10 @@ export class AnomalyRegistry {
 			existing.timestamp = Date.now()
 		} else {
 			this.anomalies.set(hash, {
-				id: Math.random().toString(36).substring(7),
+				id: crypto.randomUUID(),
 				type: "DIRECTORY_STRESS",
 				signature: hash,
-				originalSummary: `Stress in ${directory}`,
+				originalSummary: `Directory stress: ${directory}`,
 				timestamp: Date.now(),
 				severity: 2,
 				hitCount: 1,
@@ -196,9 +195,9 @@ export class AnomalyRegistry {
 	}
 
 	/**
-	 * Prunes the store to prevent .json bloat.
-	 * 1. Removes expired anomalies.
-	 * 2. Enforces MAX_ANOMALIES cap using LRU (least recently used).
+	 * Prunes the store to maintain bounded memory overhead:
+	 * 1. Expire entries older than EXPIRATION_MS.
+	 * 2. Enforce MAX_ANOMALIES threshold via LRU eviction.
 	 */
 	private prune() {
 		const now = Date.now()
@@ -226,7 +225,7 @@ export class AnomalyRegistry {
 	}
 
 	/**
-	 * V34: Path-aware violation retrieval for Proactive Discovery.
+	 * Path-aware violation retrieval for diagnostic discovery.
 	 */
 	public getViolations(filePath: string): Anomaly[] {
 		return this.getAnomalies().filter((p) => p.originalSummary.includes(filePath))
@@ -258,10 +257,10 @@ export class AnomalyRegistry {
 	}
 
 	/**
-	 * V200: Industrial Hygiene (Disposal).
+	 * Releases anomaly registry resources.
 	 */
 	public dispose(): void {
 		this.anomalies.clear()
-		Logger.info("[AnomalyRegistry] Anomaly substrate released.")
+		Logger.info("[AnomalyRegistry] Anomaly registry disposed.")
 	}
 }

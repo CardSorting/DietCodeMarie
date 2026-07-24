@@ -252,6 +252,13 @@ Accepted design decisions are locked before mutation. Reopening a locked decisio
 ### Mutation Authority & Governance
 Mutations are permitted only in **Plan-and-Implement** outcome mode and must remain within the approved boundaries. Overlapping parallel mutations are prohibited.
 
+### Invariant Target Resolution Guard
+Before task generation, `resolveTargetFilesForDecision()` validates target areas. If a decision targets `General` or `General Area` without deterministic workspace file evidence, it throws `TargetResolutionException`. Keyword-guessing fallbacks are banned to prevent hallucinated file edits. Failed resolutions cleanly block implementation with `[TARGET_RESOLUTION_FAILURE]` recorded in the run state limitations.
+
+### Automatic Execution Strategy & Glassbox UI
+- **Discerning Execution**: `determineEffectiveOutcome(requestText)` automatically determines whether execution proceeds (`plan-and-implement`) or defers (`plan-only`) based on request intent and task grounding, removing manual outcome buttons from the webview.
+- **Glassbox Council Inspector**: Displays live specialist persona lenses, locked architectural decisions (`🔒`), governed code mutation tasks (`⚡`), 8-gate audit results (`🛡️`), and a 5-step visual pipeline indicator directly in the webview UI, eliminating generic spinners and uninformative status text.
+
 ### Completion Gates
 Final results are audited against 8 gates: Product Intent, UX Architecture, Visual System, Interaction & State, Accessibility, Implementation Fidelity, Cross-Surface Consistency, and Final Product Critique (ensuring the final product does not feel generic or stitched together).
 

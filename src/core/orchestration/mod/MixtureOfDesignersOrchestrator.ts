@@ -32,12 +32,49 @@ import {
 	DesignRefinement,
 	DesignRevisionRequest,
 	DesignValidationResult,
+	MoDOutcome,
 	MoDRunState,
 	MoDStage,
 	SpecialistResult,
 	SpecialistSelection,
 } from "./types"
 import { UXRegressionRiskCalculator } from "./UXRegressionRiskCalculator"
+
+export class TargetResolutionException extends Error {
+	constructor(
+		public readonly decisionId: string,
+		public readonly reason: "TARGET_RESOLUTION_FAILED" | "EMPTY_MUTATION_BOUNDARY",
+		message: string,
+	) {
+		super(message)
+		this.name = "TargetResolutionException"
+	}
+}
+
+export const STAGE_DESCRIPTIONS: Record<MoDStage, string> = {
+	initializing: "Initializing multi-specialist design council...",
+	observe: "Observing workspace structure...",
+	intent: "Analyzing product intent & architectural boundaries...",
+	classification: "Classifying problem dimensions across codebase...",
+	"build-mental-model": "Building structural mental model...",
+	audit: "Auditing component contract completeness...",
+	investigate: "Investigating user experience friction...",
+	"specialist-selection": "Routing request to specialized design personas...",
+	"specialist-analysis": "Designer-in-Residence investigating codebase architecture...",
+	"explore-design": "Exploring architectural design options...",
+	"recommendation-validation": "Validating recommendations against WCAG & design system patterns...",
+	convergence: "Converging decisions & resolving design priority lattice...",
+	"decision-lock": "Locking converged design decisions & building intent contracts...",
+	"contract-generation": "Generating component intent contracts...",
+	"implementation-planning": "Planning disjoint mutation tasks & assessing UX regression risk...",
+	implementation: "Developer subagents executing code modifications within mutation boundaries...",
+	validation: "Running multi-dimension gate audit (Accessibility, Visual, UX, Feasibility)...",
+	critique: "Product critic evaluating holistic user experience coherence...",
+	"post-implementation-audit": "Post-implementation audit verifying intent fulfillment...",
+	completed: "Mixture of Designers pass completed successfully.",
+	"completed-with-limitations": "Mixture of Designers pass completed with limitations.",
+	failed: "Mixture of Designers run failed.",
+}
 
 export const MOD_DEFAULTS = {
 	maxSpecialists: 6,
@@ -64,7 +101,7 @@ export class MixtureOfDesignersOrchestrator {
 
 	constructor(
 		private readonly task: Task,
-		private readonly outcome: "plan-only" | "plan-and-implement",
+		private readonly outcome: MoDOutcome = "auto",
 	) {
 		const api = this.task.api
 		this.intentAnalyzer = new IntentAnalyzer(api)
@@ -148,7 +185,7 @@ export class MixtureOfDesignersOrchestrator {
 
 		// Stage 1 & Stage 2: Concurrent Product Intent & Problem Classification
 		if (!this.state.intent || !this.state.problemClassification) {
-			await this.transitionTo("intent")
+			await this.transitionTo("intent", "Analyzing goal & workspace boundaries")
 			const [intentRes, classificationRes] = await Promise.all([
 				this.state.intent ? Promise.resolve(this.state.intent) : this.intentAnalyzer.analyze(requestText, workspaceDir),
 				this.state.problemClassification
@@ -164,7 +201,7 @@ export class MixtureOfDesignersOrchestrator {
 
 		// Stage 3: Select the internal lenses the resident will apply to one coherent investigation.
 		if (this.state.specialistSelections.length === 0) {
-			await this.transitionTo("specialist-selection")
+			await this.transitionTo("specialist-selection", "Evaluating problem dimensions")
 			this.state.specialistSelections = this.specialistSelector.select(
 				this.state.problemClassification.problems,
 				MOD_DEFAULTS.maxSpecialists,
@@ -176,9 +213,10 @@ export class MixtureOfDesignersOrchestrator {
 
 		// Stage 4: One Designer-in-Residence investigates through the selected lenses.
 		if (this.state.refinements.length === 0) {
-			await this.transitionTo("specialist-analysis")
+			const rolesList = this.state.specialistSelections.map((s) => s.role).join(", ")
+			await this.transitionTo("specialist-analysis", `Examining codebase via lenses: ${rolesList || "Product Strategist"}`)
 			await this.runDesignerInResidenceInvestigation(requestText, workspaceDir)
-			await this.transitionTo("recommendation-validation")
+			await this.transitionTo("recommendation-validation", "Verifying WCAG & design token fit")
 			this.validateRecommendations()
 			void ReceiptStore.save(this.task.taskId, this.state)
 			this.emitTelemetry("mod.recommendations.validated")
@@ -186,7 +224,7 @@ export class MixtureOfDesignersOrchestrator {
 
 		// Stage 5 & Stage 6: Fast-Path Atomic Decision Lock & Contract Generation
 		if (this.state.decisions.length === 0) {
-			await this.transitionTo("convergence")
+			await this.transitionTo("convergence", `Fusing ${this.state.refinements.length} recommendations via priority lattice`)
 			const converged = this.convergenceEngine.converge(this.state.intent!, this.state.refinements)
 			this.state.decisions = converged.decisions
 			this.state.designIntentContracts = this.buildDesignIntentContracts()
@@ -206,7 +244,7 @@ export class MixtureOfDesignersOrchestrator {
 			void ReceiptStore.save(this.task.taskId, this.state)
 			this.emitTelemetry("mod.convergence.completed")
 		} else {
-			await this.transitionTo("decision-lock")
+			await this.transitionTo("decision-lock", `Locking ${this.state.decisions.length} design decisions`)
 			for (const dec of this.state.decisions) {
 				if (dec.status === "accepted") {
 					dec.locked = true
@@ -217,7 +255,7 @@ export class MixtureOfDesignersOrchestrator {
 
 		// Stage 7: Implementation Planning
 		if (this.state.implementationTasks.length === 0) {
-			await this.transitionTo("implementation-planning")
+			await this.transitionTo("implementation-planning", "Resolving mutation boundaries")
 			this.state.implementationTasks = this.generateImplementationTasks()
 			const riskReport = new UXRegressionRiskCalculator().calculateRisk(
 				this.state.decisions,
@@ -232,17 +270,20 @@ export class MixtureOfDesignersOrchestrator {
 			void ReceiptStore.save(this.task.taskId, this.state)
 		}
 
-		// Mode branch check
-		if (this.outcome === "plan-only") {
-			Logger.info("[MoD] Outcome mode is plan-only, bypassing implementation")
+		// Dynamic outcome discernment based on request intent and grounded task availability
+		const effectiveOutcome = this.determineEffectiveOutcome(requestText)
+		this.state.outcome = effectiveOutcome
+
+		if (effectiveOutcome === "plan-only") {
+			Logger.info("[MoD Execution Strategy] Strategy determined plan-only outcome, bypassing implementation")
 			await Promise.all([this.runIntegratedValidation(), this.runCritique(workspaceDir)])
 			this.state.gateResults = this.gateEvaluator.evaluate(this.state)
 			if (this.state.gateResults.some((gate) => !gate.passed)) {
 				this.state.limitations.push("Plan-only run did not satisfy every quality gate.")
-				await this.transitionTo("completed-with-limitations")
+				await this.transitionTo("completed-with-limitations", "Gate validation finished with limitations")
 				this.emitTelemetry("mod.completed_with_limitations")
 			} else {
-				await this.transitionTo("completed")
+				await this.transitionTo("completed", "All quality gates satisfied")
 				this.emitTelemetry("mod.completed")
 			}
 			await ReceiptStore.save(this.task.taskId, this.state)
@@ -251,18 +292,18 @@ export class MixtureOfDesignersOrchestrator {
 		}
 
 		// Stage 8: Parent-Authorized Implementation
-		await this.transitionTo("implementation")
+		await this.transitionTo("implementation", `${this.state.implementationTasks.length} mutation tasks queued`)
 		this.emitTelemetry("mod.implementation.started")
 		await this.executeImplementationTasks(workspaceDir)
 		this.emitTelemetry("mod.implementation.completed")
 
 		// Stage 9: Concurrent Integrated Validation & Product Critique
-		await this.transitionTo("validation")
+		await this.transitionTo("validation", "Auditing Accessibility, Visual, UX & Feasibility gates")
 		await Promise.all([this.runIntegratedValidation(), this.runCritique(workspaceDir)])
 		this.emitTelemetry("mod.validation.completed")
 
 		// Post-Implementation Design Audit by Designer-in-Residence
-		await this.transitionTo("post-implementation-audit")
+		await this.transitionTo("post-implementation-audit", "Evaluating code modifications against intent contracts")
 		await this.runPostImplementationAudit(workspaceDir)
 
 		// Stage 10: Gate Evaluation & Revisions Loop
@@ -312,12 +353,12 @@ export class MixtureOfDesignersOrchestrator {
 		await this.reportFinalResult()
 	}
 
-	private async transitionTo(stage: MoDStage): Promise<void> {
+	private async transitionTo(stage: MoDStage, details?: string): Promise<void> {
 		this.state.stage = stage
 		this.state.updatedAt = new Date().toISOString()
 		DesignStateCache.set(this.task.taskId, this.state)
-		Logger.info(`[MoD] Transitioned to stage: ${stage}`)
-		// Report progress update to the user UI
+		Logger.info(`[MoD] Transitioned to stage: ${stage}${details ? ` (${details})` : ""}`)
+
 		const progress = this.getStageProgressPercent(stage)
 		const statusStr =
 			stage === "completed" || stage === "completed-with-limitations"
@@ -325,6 +366,35 @@ export class MixtureOfDesignersOrchestrator {
 				: stage === "failed"
 					? "failed"
 					: "running"
+
+		const description = STAGE_DESCRIPTIONS[stage] || `Stage: ${stage}`
+		const promptText = details ? `${description} · ${details}` : description
+
+		const glassbox = {
+			specialists: this.state.specialistSelections?.map((s) => ({
+				role: s.role,
+				focus: s.reasons?.[0] || s.role,
+				status: this.state.refinements?.length > 0 ? "completed" : "active",
+			})),
+			decisions: this.state.decisions?.map((d) => ({
+				id: d.id,
+				title: d.decision || d.rationale,
+				rationale: d.rationale,
+				targetFiles: d.affectedAreas || [],
+				locked: Boolean(d.locked),
+			})),
+			tasks: this.state.implementationTasks?.map((t) => ({
+				id: t.id,
+				objective: t.objective,
+				targetFiles: t.affectedFiles || [],
+				status: t.status,
+			})),
+			gates: this.state.gateResults?.map((g) => ({
+				gate: g.gate,
+				passed: g.passed,
+			})),
+		}
+
 		await this.task.say(
 			"subagent",
 			JSON.stringify({
@@ -332,14 +402,16 @@ export class MixtureOfDesignersOrchestrator {
 				stage: this.state.stage,
 				progress,
 				status: statusStr,
+				glassbox,
 				items: [
 					{
 						id: `mod-${this.state.runId}`,
 						name: "Mixture of Designers",
 						index: 1,
-						prompt: `MoD Stage: ${stage} (${progress}%)`,
+						prompt: promptText,
+						latestToolCall: details || description,
 						status: statusStr,
-						toolCalls: 0,
+						toolCalls: this.state.implementationTasks.filter((t) => t.status === "completed").length,
 						inputTokens: 0,
 						outputTokens: 0,
 						totalCost: 0,
@@ -872,34 +944,160 @@ Output JSON array only.`
 
 		let taskIndex = 1
 		for (const dec of acceptedDecisions) {
-			// Filter affected areas against preserve list (Hoare logic precondition)
-			const validMutationBoundary = dec.affectedAreas.filter((file) => {
-				const isPreserved = preserveBoundaries.some((p) => file.includes(p))
-				if (allowedToChange.length > 0) {
-					return !isPreserved && allowedToChange.some((a) => file.includes(a))
-				}
-				return !isPreserved
-			})
+			try {
+				const resolvedAreas = this.resolveTargetFilesForDecision(dec)
+				dec.affectedAreas = resolvedAreas
 
-			tasks.push({
-				id: `task-${taskIndex++}`,
-				decisionIds: [dec.id],
-				objective: `Implement design decision: ${dec.decision}`,
-				affectedFiles: dec.affectedAreas,
-				affectedComponents: [],
-				affectedStates: [],
-				instructions: [dec.rationale],
-				dependencies: [],
-				acceptanceCriteria: dec.acceptanceCriteria,
-				validationCommands: [],
-				mutationBoundary: validMutationBoundary.length > 0 ? validMutationBoundary : dec.affectedAreas,
-				preservedBehavior: preserveBoundaries,
-				rollbackNotes: [],
-				status: "pending",
-			})
+				// Filter affected areas against preserve list (Hoare logic precondition)
+				const validMutationBoundary = resolvedAreas.filter((file) => {
+					const isPreserved = preserveBoundaries.some((p) => file.includes(p))
+					if (allowedToChange.length > 0) {
+						return !isPreserved && allowedToChange.some((a) => file.includes(a))
+					}
+					return !isPreserved
+				})
+
+				if (validMutationBoundary.length === 0) {
+					throw new TargetResolutionException(
+						dec.id,
+						"EMPTY_MUTATION_BOUNDARY",
+						`Design decision '${dec.id}' mutation boundary resolved to 0 editable files.`,
+					)
+				}
+
+				tasks.push({
+					id: `task-${taskIndex++}`,
+					decisionIds: [dec.id],
+					objective: `Implement design decision: ${dec.decision}`,
+					affectedFiles: resolvedAreas,
+					affectedComponents: [],
+					affectedStates: [],
+					instructions: [dec.rationale],
+					dependencies: [],
+					acceptanceCriteria: dec.acceptanceCriteria,
+					validationCommands: [],
+					mutationBoundary: validMutationBoundary,
+					preservedBehavior: preserveBoundaries,
+					rollbackNotes: [],
+					status: "pending",
+				})
+			} catch (error) {
+				if (error instanceof TargetResolutionException) {
+					Logger.warn(`[MoD Target Resolution Failure] ${error.message}`)
+					this.state.limitations.push(`[TARGET_RESOLUTION_FAILURE] Implementation blocked: ${error.message}`)
+				} else {
+					throw error
+				}
+			}
+		}
+
+		if (tasks.length === 0 && acceptedDecisions.length > 0) {
+			Logger.warn(
+				"[MoD] Implementation blocked: Design decisions exist, but no concrete workspace targets could be resolved.",
+			)
 		}
 
 		return tasks
+	}
+
+	private resolveTargetFilesForDecision(dec: {
+		id: string
+		decision: string
+		rationale: string
+		affectedAreas: string[]
+		sourceRefinementIds?: string[]
+	}): string[] {
+		const rawAreas = dec.affectedAreas || []
+
+		// 1. Explicitly ban generic areas from reaching the mutation phase without grounding
+		const validPaths = rawAreas.filter(
+			(file) => file && file !== "General" && file !== "General Area" && (file.includes("/") || file.includes(".")),
+		)
+		if (validPaths.length > 0) {
+			return Array.from(new Set(validPaths))
+		}
+
+		// 2. Attempt deterministic extraction (explicit paths in evidence, AST references, or refinements)
+		const refFiles: string[] = []
+		const refinements = (this.state.refinements || []).filter((r) => dec.sourceRefinementIds?.includes(r.id))
+		for (const r of refinements) {
+			for (const file of r.implementation?.affectedFiles || []) {
+				if (file && file !== "General" && file !== "General Area" && (file.includes("/") || file.includes("."))) {
+					refFiles.push(file)
+				}
+			}
+			for (const ev of r.evidence || []) {
+				const ref = typeof ev === "string" ? ev : (ev as any)?.reference
+				if (typeof ref === "string" && (ref.includes("/") || ref.includes("."))) {
+					refFiles.push(ref)
+				}
+			}
+		}
+		if (refFiles.length > 0) {
+			return Array.from(new Set(refFiles))
+		}
+
+		// 3. Attempt deterministic extraction from problem classification evidence
+		const problemFiles: string[] = []
+		for (const p of this.state.problemClassification?.problems || []) {
+			if (
+				p.target &&
+				p.target !== "General" &&
+				p.target !== "General Area" &&
+				(p.target.includes("/") || p.target.includes("."))
+			) {
+				problemFiles.push(p.target)
+			}
+			for (const ev of p.evidence || []) {
+				if (typeof ev === "string" && (ev.includes("/") || ev.includes("."))) {
+					problemFiles.push(ev)
+				}
+			}
+		}
+		if (problemFiles.length > 0) {
+			return Array.from(new Set(problemFiles))
+		}
+
+		// 4. Invariant Enforcer: Throw TargetResolutionException for ungrounded scopes
+		if (rawAreas.includes("General") || rawAreas.includes("General Area") || rawAreas.length === 0) {
+			throw new TargetResolutionException(
+				dec.id,
+				"TARGET_RESOLUTION_FAILED",
+				`Design decision '${dec.id}' targeted '${rawAreas.join(", ") || "General"}', but could not be grounded in concrete workspace files.`,
+			)
+		}
+
+		throw new TargetResolutionException(
+			dec.id,
+			"EMPTY_MUTATION_BOUNDARY",
+			`Design decision '${dec.id}' has no concrete target files assigned.`,
+		)
+	}
+
+	private determineEffectiveOutcome(requestText: string): "plan-only" | "plan-and-implement" {
+		if (this.outcome === "plan-only") return "plan-only"
+		if (this.outcome === "plan-and-implement") return "plan-and-implement"
+
+		const lower = requestText.toLowerCase()
+		if (
+			lower.includes("plan only") ||
+			lower.includes("audit only") ||
+			lower.includes("architecture review") ||
+			lower.includes("review only") ||
+			lower.includes("do not modify") ||
+			lower.includes("do not edit")
+		) {
+			Logger.info("[MoD Discerning Strategy] Request explicitly specifies plan/review only; deferring code mutations.")
+			return "plan-only"
+		}
+
+		if (this.state.implementationTasks.length === 0) {
+			Logger.info("[MoD Discerning Strategy] No grounded implementation tasks available; deferring execution.")
+			return "plan-only"
+		}
+
+		Logger.info("[MoD Discerning Strategy] Grounded implementation tasks available; seamlessly executing code modifications.")
+		return "plan-and-implement"
 	}
 
 	private async executeImplementationTasks(workspaceDir: string): Promise<void> {

@@ -264,6 +264,7 @@ The MIRA UX work landed in ten focused passes:
 | **8** | Long-session serenity — `auditUiStyles.ts`, night desk, audit exhale CSS |
 | **9** | Workshop atmosphere — vertical audit reading surface, JoyZoning reflection, serenity levels |
 | **10** | Language de-infrastructuring — archival export labels, reading reveal animation, softened risk metrics |
+| **11** | Glassbox MoD Council Inspector — 5-stage visual stepper, live specialist persona lenses, locked decision drawer (`🔒`), mutation checklist (`⚡`), 8-gate audit matrix (`🛡️`), and complete removal of generic spinners |
 
 ---
 

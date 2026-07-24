@@ -266,7 +266,6 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		focusChainSettings,
 		nativeToolCallSetting,
 		modEnabled,
-		modOutcome,
 		enableParallelToolCalling,
 		backgroundEditEnabled,
 		doubleCheckCompletionEnabled,
@@ -416,22 +415,6 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 											value={focusChainSettings?.remindDietcodeInterval || 6}
 											valueWidth="w-6"
 										/>
-									)}
-									{feature.id === "mod-enabled" && featureState[feature.stateKey] && (
-										<div className="ml-6 mb-2 space-y-1">
-											<Label className="text-[10px] text-description/80">Outcome Mode</Label>
-											<Select
-												onValueChange={(value) => updateSetting("modOutcome", value)}
-												value={modOutcome ?? "plan-and-implement"}>
-												<SelectTrigger className="h-7 text-xs">
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent>
-													<SelectItem value="plan-only">Plan Only</SelectItem>
-													<SelectItem value="plan-and-implement">Plan and Implement</SelectItem>
-												</SelectContent>
-											</Select>
-										</div>
 									)}
 								</div>
 							))}

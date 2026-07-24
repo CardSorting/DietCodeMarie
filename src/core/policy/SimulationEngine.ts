@@ -14,9 +14,9 @@ export interface SimulationResult {
 }
 
 /**
- * SimulationEngine: The Pre-flight Prophet of JoyZoning.
- * Clones the structural state and predicts the impact of architectural changes
- * BEFORE they are committed to disk.
+ * SimulationEngine: Pre-flight architectural impact simulator.
+ * Clones the dependency graph and evaluates structural integrity impact
+ * before modifications are applied to disk.
  */
 export class SimulationEngine {
 	constructor(private cwd: string) {}
@@ -30,17 +30,17 @@ export class SimulationEngine {
 		currentEngine: SpiderEngine,
 		anomalies: AnomalyRegistry,
 		isHealingMode = false,
-		isAgile = false, // V16: Support structural agility bypass
+		isAgile = false,
 	): Promise<SimulationResult> {
 		// Anomaly Check
 		if (anomalies.hasAnomaly(oldPath) && !isHealingMode && !isAgile) {
 			return {
-				safe: true, // Total Deblocking: Always safe
+				safe: true,
 				predictedScore: 0,
 				scoreDrop: 100,
 				violations: ["Potential regression risk detected"],
 				message:
-					"⚠️ REGRESSION RISK NOTICE: This move has failed in the past. Re-routing attempt to keep the architecture stable and clean.",
+					"Regression Risk Alert: This path has historical anomaly records. Proceeding with extra boundary validation.",
 			}
 		}
 

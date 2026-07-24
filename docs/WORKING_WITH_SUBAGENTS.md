@@ -77,6 +77,9 @@ Multi-lane swarms run through `GovernedSwarmCoordinator` with durable receipts a
 | `read_only`, `audit_only`, `planning_only`, `documentation_only`, `diagnostic_only` | Skipped |
 | `mutation` (default when omitted) | Required |
 
+### Mixture of Designers (MoD) Glassbox Telemetry
+When running in MoD mode (`src/core/orchestration/mod/`), the orchestrator automatically discerns execution strategy (`plan-only` vs `plan-and-implement`) and streams a full Glassbox Council payload containing active persona lenses, locked architectural decisions (`🔒`), governed code mutation tasks (`⚡`), 8-gate audit results (`🛡️`), and a 5-step visual pipeline indicator directly into the chat timeline. For detailed architecture, see [MoD Architecture](mixture-of-designers.md).
+
 ### Lifecycle (production handler)
 
 ```

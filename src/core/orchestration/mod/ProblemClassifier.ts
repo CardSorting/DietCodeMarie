@@ -28,7 +28,7 @@ Output a JSON object that strictly adheres to the following ProductProblemClassi
 interface ClassifiedProductProblem {
   id: string; // unique short ID like "prob-1", "prob-2"
   dimension: ProductProblemDimension;
-  target: string; // target file, component or area
+  target: string; // MUST be a specific relative file path (e.g. "src/core/integrity/AnomalyRegistry.ts") if identifiable from context or request; do not use generic "General" unless no file path exists
   observation: string;
   userImpact: string;
   evidence: string[]; // specific lines, file names or behaviors
