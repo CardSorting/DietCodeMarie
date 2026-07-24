@@ -31,7 +31,7 @@ function main() {
 	const version = pkg.version
 	const target = nativeTargetForHost()
 	const outPath = path.join(repoRoot, "dist", `lumi-${version}-${target}.vsix`)
-	let didPatchName = false
+	const didPatchName = false
 	let didReconcileWorkspaceLink = false
 
 	fs.mkdirSync(path.dirname(outPath), { recursive: true })
@@ -39,15 +39,10 @@ function main() {
 	try {
 		rebuildBetterSqlite3(repoRoot)
 
-		if (pkg.name !== OPENVSX_EXTENSION_NAME) {
-			pkg.name = OPENVSX_EXTENSION_NAME
-			fs.writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, "\t")}\n`)
-			didPatchName = true
-			console.log(`[openvsx] patched name → "${OPENVSX_EXTENSION_NAME}" (CardSorting.${OPENVSX_EXTENSION_NAME})`)
-		}
-
-		// Stage package.json so vsce reads the patched name when packing the archive
+		pkg.name = OPENVSX_EXTENSION_NAME
+		fs.writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, "\t")}\n`)
 		execFileSync("git", ["add", "package.json"], { cwd: repoRoot })
+		console.log(`[openvsx] patched name → "${OPENVSX_EXTENSION_NAME}" (CardSorting.${OPENVSX_EXTENSION_NAME})`)
 
 		didReconcileWorkspaceLink = workspaceLinks.reconcile({
 			fromName: MARKETPLACE_EXTENSION_NAME,
@@ -74,11 +69,6 @@ function main() {
 			console.error(`[openvsx] ${error.message}`)
 		}
 	} finally {
-		// Unstage package.json
-		try {
-			execFileSync("git", ["reset", "package.json"], { cwd: repoRoot, stdio: "ignore" })
-		} catch {}
-
 		workspaceLinks.restore({
 			fromName: MARKETPLACE_EXTENSION_NAME,
 			toName: OPENVSX_EXTENSION_NAME,
@@ -87,9 +77,14 @@ function main() {
 		if (didReconcileWorkspaceLink) {
 			console.log(`[openvsx] restored workspace self-link: ${OPENVSX_EXTENSION_NAME} → ${MARKETPLACE_EXTENSION_NAME}`)
 		}
-		if (didPatchName) {
-			restorePackageJson(originalPackageJson)
-		}
+
+		try {
+			const currentPkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"))
+			currentPkg.name = MARKETPLACE_EXTENSION_NAME
+			fs.writeFileSync(packageJsonPath, `${JSON.stringify(currentPkg, null, "\t")}\n`)
+			execFileSync("git", ["add", "package.json"], { cwd: repoRoot, stdio: "ignore" })
+			console.log(`[openvsx] restored name → "${MARKETPLACE_EXTENSION_NAME}"`)
+		} catch {}
 	}
 }
 

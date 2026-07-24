@@ -22,24 +22,17 @@ function main() {
 	const pkg = JSON.parse(originalPackageJson)
 	const target = nativeTargetForHost()
 	const outPath = path.join(repoRoot, "dist", `lumi-vscode-${pkg.version}-${target}.vsix`)
-	let didPatchName = false
+	const didPatchName = false
 
 	fs.mkdirSync(path.dirname(outPath), { recursive: true })
 
 	try {
 		rebuildBetterSqlite3(repoRoot)
 
-		if (pkg.name !== "lumi-vscode") {
-			pkg.name = "lumi-vscode"
-			fs.writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, "\t")}\n`)
-			didPatchName = true
-			console.log(`[vscode] patched name → "lumi-vscode" (CardSorting.lumi-vscode)`)
-		}
-
-		// Stage package.json so vsce reads the patched name when packing the archive
-		if (didPatchName) {
-			execFileSync("git", ["add", "package.json"], { cwd: repoRoot })
-		}
+		pkg.name = "lumi-vscode"
+		fs.writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, "\t")}\n`)
+		execFileSync("git", ["add", "package.json"], { cwd: repoRoot })
+		console.log(`[vscode] patched name → "lumi-vscode" (CardSorting.lumi-vscode)`)
 
 		execFileSync(
 			process.platform === "win32" ? "vsce.cmd" : "vsce",
@@ -55,15 +48,6 @@ function main() {
 		process.exitCode = 1
 		if (error instanceof Error) {
 			console.error(`[vscode] ${error.message}`)
-		}
-	} finally {
-		// Unstage package.json and restore it if patched
-		if (didPatchName) {
-			try {
-				execFileSync("git", ["reset", "package.json"], { cwd: repoRoot, stdio: "ignore" })
-			} catch {}
-			fs.writeFileSync(packageJsonPath, originalPackageJson)
-			console.log("[vscode] restored package.json")
 		}
 	}
 }
