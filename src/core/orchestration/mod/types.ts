@@ -4,17 +4,24 @@ export type MoDOutcome = "plan-only" | "plan-and-implement"
 
 export type MoDStage =
 	| "initializing"
+	| "observe"
 	| "intent"
 	| "classification"
+	| "build-mental-model"
+	| "audit"
+	| "investigate"
 	| "specialist-selection"
 	| "specialist-analysis"
+	| "explore-design"
 	| "recommendation-validation"
 	| "convergence"
 	| "decision-lock"
+	| "contract-generation"
 	| "implementation-planning"
 	| "implementation"
 	| "validation"
 	| "critique"
+	| "post-implementation-audit"
 	| "completed"
 	| "completed-with-limitations"
 	| "failed"
@@ -107,6 +114,119 @@ export type DesignerRole =
 	| "responsive-design-reviewer"
 	| "frontend-implementation-designer"
 	| "product-critic"
+
+/**
+ * Internal viewpoints available to the Designer-in-Residence. They are evidence
+ * lenses, not independently acting agents and never vote on a design outcome.
+ */
+export type DesignLens = DesignerRole
+
+export interface DesignIntelligenceNode {
+	id: string
+	type: "screen" | "workflow" | "component" | "pattern" | "user-goal" | "state" | "token"
+	label: string
+	references: string[]
+}
+
+export interface DesignIntelligenceEdge {
+	from: string
+	relation: "belongs-to" | "uses" | "transitions-to" | "governed-by" | "solves" | "has-state" | "emits-event"
+	to: string
+}
+
+export type DesignDebtCategory =
+	| "UX Debt"
+	| "Visual Debt"
+	| "Interaction Debt"
+	| "Accessibility Debt"
+	| "Consistency Debt"
+	| "Information Architecture Debt"
+	| "Pattern Debt"
+
+export interface DesignDebtItem {
+	id: string
+	category?: DesignDebtCategory
+	dimension: ProductProblemDimension
+	target: string
+	description: string
+	severity: "critical" | "high" | "medium" | "low"
+	status: "open" | "addressed" | "needs-follow-up"
+	lastAuditedAt: string
+}
+
+export interface DesignToken {
+	name: string
+	type: "color" | "spacing" | "typography" | "radius" | "elevation" | "motion"
+	value: string
+	semanticMeaning: string
+	sourceFile: string
+}
+
+export interface UXHealthIndex {
+	score: number
+	grade: "A+" | "A" | "B" | "C" | "D" | "F"
+	trend: "improving" | "stable" | "degrading"
+	breakdown: Record<DesignDebtCategory, number>
+	openDebtCount: number
+	addressedDebtCount: number
+	lastCalculatedAt: string
+}
+
+/** Durable, workspace-level mental model maintained by the Designer-in-Residence. */
+export interface DesignIntelligenceGraph {
+	version: 1
+	productSummary: string
+	users: string[]
+	primaryJobs: string[]
+	nodes: DesignIntelligenceNode[]
+	edges: DesignIntelligenceEdge[]
+	knownPatterns: string[]
+	designTokens?: DesignToken[]
+	healthIndex?: UXHealthIndex
+	designDebt: DesignDebtItem[]
+	auditedLenses: DesignLens[]
+	lastAuditedAt: string
+}
+
+export interface DesignHypothesis {
+	id: string
+	findingId: string
+	statement: string
+	evidence: string[]
+	alternatives: string[]
+	confidence: "high" | "medium" | "low"
+}
+
+export interface DesignOption {
+	id: string
+	title: string
+	approach: string
+	pros: string[]
+	cons: string[]
+	recommended: boolean
+}
+
+export interface DesignAuditFinding {
+	id: string
+	lens: DesignLens
+	target: string
+	observation: string
+	userImpact: string
+	evidence: string[]
+	severity: "critical" | "high" | "medium" | "low"
+	status: "open" | "addressed" | "needs-follow-up"
+}
+
+export interface DesignInvestigation {
+	id: string
+	request: string
+	lenses: DesignLens[]
+	findings: DesignAuditFinding[]
+	hypotheses: DesignHypothesis[]
+	options: DesignOption[]
+	summary: string
+	createdAt: string
+}
 
 export interface SpecialistSelection {
 	role: DesignerRole
@@ -210,6 +330,21 @@ export interface DesignDecision {
 	locked: boolean
 	reopenConditions: string[]
 	utility?: number
+}
+
+/**
+ * The implementation handoff. This keeps the product rationale alongside the
+ * code task without turning it into a detached, exhaustive specification.
+ */
+export interface DesignIntentContract {
+	decisionId: string
+	goal: string
+	mustPreserve: string[]
+	mustImprove: string[]
+	use: string[]
+	avoid: string[]
+	successCriteria: string[]
+	validationPlan: string[]
 }
 
 export interface DesignImplementationPhase {
@@ -330,6 +465,19 @@ export interface MoDFailure {
 	recommendedAction: string
 }
 
+export interface MotionContract {
+	duration: "100ms" | "200ms" | "300ms"
+	easing: string
+	reducedMotionFallback: string
+	trigger: string
+}
+
+export interface WCAGComplianceRule {
+	criterion: "contrast" | "touch-target" | "focus-visible" | "aria-label" | "keyboard-trap"
+	requirement: string
+	level: "AA" | "AAA"
+}
+
 export interface MoDRunState {
 	runId: string
 	mode: "mixture-of-designers"
@@ -337,6 +485,11 @@ export interface MoDRunState {
 	stage: MoDStage
 	intent?: ProductDesignIntent
 	problemClassification?: ProductProblemClassification
+	designIntelligence?: DesignIntelligenceGraph
+	designInvestigations?: DesignInvestigation[]
+	designIntentContracts?: DesignIntentContract[]
+	designDecisionRecords?: any[]
+	designDriftItems?: any[]
 	specialistSelections: SpecialistSelection[]
 	specialistResults: SpecialistResult[]
 	refinements: DesignRefinement[]

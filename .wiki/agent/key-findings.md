@@ -1,5 +1,16 @@
 # Key Findings
 
+## 2026-07-24 LUMI Designer-in-Residence Enterprise Architecture Upgrade
+
+- **Designer-in-Residence vs. Persona Council**: Replaced multi-agent persona voting with an embedded senior product designer agent (`DesignerInResidence.ts`) that evaluates workspace UI through internal design lenses (UX Architecture, Accessibility, Visual Hierarchy, Interaction Patterns, System Engineering) to maintain one coherent product vision.
+- **Industry Pattern Library Registry (`PatternLibrary.ts`)**: Built-in benchmark pattern registry (Command Palette, Split Workspace, Contextual Action Toolbar, Optimistic Undo Toast, Guided Empty State, Focus-Trapped Modals, Interactive Filter Bar) matching UI issues against learned user conventions from Figma, Linear, VS Code, Notion, Stripe, Apple, and Vercel.
+- **Design Token Sensing & Codemod Sync Engine (`ContextBuilder.ts`, `TokenSyncEngine.ts`)**: Automatically extracts CSS custom properties (`--color-*`, `--spacing-*`, `--radius-*`) and generates codemod patches converting hardcoded CSS values (`#007acc`, `16px`) into canonical token usages.
+- **Dynamic UX Health Index (0-100) & Debt Graph (`DesignIntelligenceGraph.ts`)**: Computes live health scores, letter grades (`A+` to `F`), and category breakdowns across 7 explicit design debt dimensions (`UX Debt`, `Visual Debt`, `Interaction Debt`, `Accessibility Debt`, `Consistency Debt`, `IA Debt`, `Pattern Debt`).
+- **Design Decision Records & System Drift Guard (`DesignDecisionRecord.ts`, `DesignDriftDetector.ts`)**: Formats immutable decision records (`DDR-001`) with problem context, rationale, non-goals, and positive/negative trade-offs. Scans workspace files for inline style leaks, unaligned pixel grid spacing, and hardcoded colors.
+- **8-State Interactive UI Contract Ledger & Predictive UX Risk Calculator (`ComponentContractLedger.ts`, `UXRegressionRiskCalculator.ts`)**: Audits UI components across all 8 core interactive states (`default`, `hover`, `focus-visible`, `active`, `disabled`, `loading`, `error`, `empty`) and computes a predictive UX regression risk score (`0-100`) to prevent breaking user flows.
+- **High-Throughput Execution Authority (`SpeculativeTaskPlanner.ts`, `DesignCircuitBreaker.ts`, `DesignStateCache.ts`)**: Partitions implementation tasks into parallel disjoint execution waves, enforces 30s LLM stream safety valves with deterministic fallbacks, and caches state in memory to eliminate disk read latency.
+- **Verification Evidence**: `npm run check-types` passed cleanly with 0 errors; all 53 unit tests in `mod.test.ts` passed cleanly.
+
 ## 2026-07-18 Transaction-Split Completion Saga and Committed Boundary Migration
 
 - **Decisive Boundary Enforcement**: Refactored completion tool execution to prevent nested execution permit leaks. The `AttemptCompletionHandler` immediately returns a typed continuation outcome (releasing its execution permit and committing the terminal execution event) before any validation commands or user prompts are run.

@@ -4,7 +4,28 @@
 > **When do I use it?** Before introducing new abstractions, changing completion contracts, or altering workspace data-flow spines.
 > **What is the source of truth?** Approved implementation plans, user-signed ADRs, and structural design conventions.
 
-Last audited: 2026-07-18
+Last audited: 2026-07-24
+
+## ADR-015: LUMI Designer-in-Residence Enterprise Architecture & Governance
+
+**Status:** Accepted
+
+**Context:** The Mixture of Designers framework originally modeled design expertise as five isolated voting personas. World-class product design requires a Designer-in-Residence: a single senior product designer embedded in the workspace who moves fluidly across internal design lenses (UX Architecture, Accessibility, Visual Hierarchy, Interaction Patterns, System Engineering) while maintaining one coherent product vision.
+
+**Decision:** Implement the LUMI Designer-in-Residence architecture in `src/core/orchestration/mod/`:
+1. Single senior designer agent with 5-Whys recursive root-cause reasoning (`DesignerInResidence.ts`).
+2. Industry Pattern Library Registry (`PatternLibrary.ts`) benchmarking UI issues against learned conventions (Command Palette, Split Workspace, Contextual Action Toolbar, Optimistic Undo Toast, Guided Empty State, Focus-Trapped Modals).
+3. Design Token Sensing & Codemod Sync Engine (`ContextBuilder.ts`, `TokenSyncEngine.ts`) mapping hardcoded CSS/HEX values to canonical design tokens.
+4. Dynamic UX Health Index (0-100) & Debt Graph (`DesignIntelligenceGraph.ts`).
+5. Design Decision Records (`DesignDecisionRecord.ts`) and Design System Drift Guard (`DesignDriftDetector.ts`).
+6. 8-State Interactive UI Component Contract Ledger (`ComponentContractLedger.ts`) and Predictive UX Regression Risk Calculator (`UXRegressionRiskCalculator.ts`).
+7. Speculative Task Wave Planner (`SpeculativeTaskPlanner.ts`), Adaptive Circuit Breaker (`DesignCircuitBreaker.ts`), In-Memory State Cache (`DesignStateCache.ts`), and Fast-Path Atomic Decision Locking (`MixtureOfDesignersOrchestrator.ts`).
+
+**Consequences:**
+- Eliminates multi-agent persona voting overhead and consensus deadlocks.
+- Provides immutable design governance logging (`DDR-001`) and automated CSS token codemod patches.
+- Prevents breaking UI layout regressions via predictive risk scoring.
+- Achieves high throughput via parallel disjoint task wave partitioning and non-blocking background I/O.
 
 ## ADR-001: Root continuity docs are the first agent entry point
 

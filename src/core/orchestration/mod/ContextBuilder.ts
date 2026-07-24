@@ -1,5 +1,5 @@
 import { Logger } from "@/shared/services/Logger"
-import { ClassifiedProductProblem, DesignerContextPackage, DesignerRole, ProductDesignIntent } from "./types"
+import { ClassifiedProductProblem, DesignerContextPackage, DesignerRole, DesignToken, ProductDesignIntent } from "./types"
 
 export class ContextBuilder {
 	private readonly targetCache = new Map<
@@ -12,6 +12,61 @@ export class ContextBuilder {
 	public clearCache(): void {
 		this.targetCache.clear()
 		this.contentCache.clear()
+	}
+
+	public extractDesignTokens(cssContent: string, sourceFile: string): DesignToken[] {
+		const tokens: DesignToken[] = []
+		const variableRegex = /--([a-z0-9-]+)\s*:\s*([^;]+);/gi
+		let match: RegExpExecArray | null
+		while (true) {
+			match = variableRegex.exec(cssContent)
+			if (!match) break
+			const name = `--${match[1]}`
+			const value = match[2].trim()
+			let type: DesignToken["type"] = "color"
+			if (name.includes("radius") || name.includes("rounded")) {
+				type = "radius"
+			} else if (
+				name.includes("spacing") ||
+				name.includes("space") ||
+				name.includes("margin") ||
+				name.includes("padding") ||
+				name.includes("gap")
+			) {
+				type = "spacing"
+			} else if (
+				name.includes("font") ||
+				name.includes("text") ||
+				name.includes("size") ||
+				name.includes("height") ||
+				name.includes("line-height")
+			) {
+				type = "typography"
+			} else if (name.includes("shadow") || name.includes("elevation")) {
+				type = "elevation"
+			} else if (name.includes("duration") || name.includes("ease") || name.includes("transition")) {
+				type = "motion"
+			} else if (
+				name.includes("color") ||
+				name.includes("bg") ||
+				name.includes("fill") ||
+				name.includes("stroke") ||
+				value.startsWith("#") ||
+				value.startsWith("rgb") ||
+				value.startsWith("hsl")
+			) {
+				type = "color"
+			}
+
+			tokens.push({
+				name,
+				type,
+				value,
+				semanticMeaning: `Token derived from ${sourceFile}`,
+				sourceFile,
+			})
+		}
+		return tokens
 	}
 
 	public setCachedFileContent(path: string, content: string): void {

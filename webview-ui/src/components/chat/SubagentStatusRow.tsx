@@ -147,7 +147,11 @@ function parseSubagentRowData(message: DietCodeMessage): SubagentRowData | null 
 			const stageStr = String(parsed.stage)
 			const progressNum = typeof parsed.progress === "number" ? parsed.progress : 0
 			const rowStatus: SubagentRowStatus =
-				stageStr === "completed" ? "completed" : stageStr === "failed" ? "failed" : "running"
+				stageStr === "completed" || stageStr === "completed-with-limitations"
+					? "completed"
+					: stageStr === "failed"
+						? "failed"
+						: "running"
 			const items: SubagentStatusItem[] =
 				Array.isArray(parsed.items) && parsed.items.length > 0
 					? parsed.items
@@ -265,7 +269,11 @@ export default function SubagentStatusRow({ message, isLast, lastModifiedMessage
 			resumedBeforeNextVisibleMessage)
 
 	const singular = data.items.length === 1
-	const title = singular ? "I could use a little extra help here:" : "A few helpers could explore this together:"
+	const title = data.modStage
+		? "Mixture of Designers:"
+		: singular
+			? "I could use a little extra help here:"
+			: "A few helpers could explore this together:"
 	const isPromptConstructionRow = message.ask === "use_subagents" || message.say === "use_subagents"
 	const toggleItem = (index: number) => {
 		setExpandedItems((prev) => ({
@@ -349,7 +357,7 @@ export default function SubagentStatusRow({ message, isLast, lastModifiedMessage
 					const isExpanded = expandedItems[entry.index] === true
 					const isStreamingPromptUnderConstruction =
 						isPromptConstructionRow && message.partial === true && index === data.items.length - 1
-					const shouldShowStats = !isStreamingPromptUnderConstruction
+					const shouldShowStats = !isStreamingPromptUnderConstruction && !data.modStage
 					const statsText = `${formatCount(entry.toolCalls)} steps · ${formatCount(entry.contextTokens)} tokens · ${formatCost(entry.totalCost)}`
 					const latestToolCallText = entry.latestToolCall?.trim() || ""
 					return (

@@ -1,17 +1,22 @@
-# Mixture of Designers (MoD) v2.0: Executive Brief
-**A High-Throughput Cognitive-Specialization Runtime for Governed Product Design and Zero-Stall Codebase Mutations**
+# Mixture of Designers (MoD) & LUMI Designer-in-Residence v3.0: Executive Brief
+**An Embedded Senior Product Designer Agent Architecture with Automated Design System Governance, 8-State UI Contracts, and High-Throughput Execution Authority**
 
 ---
 
 ## 1. Executive Summary
 
-### The Challenge of AI Design Drift & Execution Blockers
-As LLM-based coding agents are deployed to handle large-scale codebase transformations, they face two key limitations:
-1. **Design Drift**: While single-agent loops solve local syntax repairs, they lack the multi-dimensional awareness required to maintain product integrity, UX architecture, visual styling systems, and accessibility guidelines.
-2. **Execution Blockers & Latency Spikes**: Sequential multi-agent loops can suffer single-point failures. If one subagent or stream fails, times out, or returns malformed output, traditional frameworks stall or crash the entire execution pipeline.
+### The Evolution from Persona Councils to Designer-in-Residence
+While early multi-agent experiments modeled design expertise as five persona bots voting on UI decisions, world-class product design requires a **Designer-in-Residence**: an agent that behaves like an exceptionally senior product designer embedded inside the engineering workspace. The specialized personas become internal lenses available to the resident (UX Architecture, Accessibility, Visual Hierarchy, Product Strategy, Interaction Patterns, System Engineering). The lenses don't talk to each other, don't vote, don't negotiate, and don't produce competing designs.
 
-### The Solution: Mixture of Designers (MoD) v2.0
-Mixture of Designers (MoD) v2.0 is a high-throughput, fault-tolerant orchestration mode in LUMI that models professional software design organization workflows. Inspired by **Mixture of Experts (MoE)** routing in deep learning, **Byzantine Fault Tolerant (BFT)** consensus, and **Circuit-Breaker Execution Authority**, MoD activates a dynamically routed council of specialized design personas (e.g. UX Architect, Design System Engineer, Accessibility Reviewer). Their observations are converged using a deterministic priority matrix, locked into design decisions, and executed by developer subagents under strict mutation fences.
+### The Solution: LUMI Designer-in-Residence v3.0
+LUMI Designer-in-Residence v3.0 provides an enterprise-grade product design governance runtime featuring:
+- **5-Whys Recursive Investigation**: Traces surface symptoms down to underlying information architecture and mental model breakdowns.
+- **Industry Pattern Library Registry (`PatternLibrary.ts`)**: Benchmarks UI friction against learned user conventions (Command Palette, Split Workspace, Contextual Action Toolbar, Optimistic Undo Toast, Guided Empty State, Focus-Trapped Modals).
+- **Design Token Sensing & Codemod Sync Engine (`TokenSyncEngine.ts`)**: Automatically converts legacy CSS/HEX values into canonical design tokens (`var(--color-primary)`).
+- **Dynamic UX Health Index (0-100)**: Live scoring, letter grades (`A+` to `F`), and category breakdowns across 7 explicit design debt categories.
+- **Design Decision Records & Drift Guard (`DesignDecisionRecord.ts`, `DesignDriftDetector.ts`)**: Formats immutable decision records (`DDR-001`) and scans source files for design system drift.
+- **8-State Interactive UI Contract Ledger & Predictive Risk Calculator (`ComponentContractLedger.ts`, `UXRegressionRiskCalculator.ts`)**: Audits UI components across all 8 interactive states and evaluates breaking layout/flow regression risk (`0-100`).
+- **High-Throughput Speculative Execution (`SpeculativeTaskPlanner.ts`, `DesignCircuitBreaker.ts`, `DesignStateCache.ts`)**: Partitions implementation tasks into parallel disjoint execution waves, enforces 30s LLM stream safety valves, and caches state in memory.
 
 ```
        [ User Refinement Request ]

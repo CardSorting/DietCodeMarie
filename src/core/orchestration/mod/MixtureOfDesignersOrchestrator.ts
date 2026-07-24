@@ -3,18 +3,32 @@ import { Task } from "@/core/task"
 import { SUBAGENT_DEFAULT_ALLOWED_TOOLS, SubagentBuilder } from "@/core/task/tools/subagent/SubagentBuilder"
 import { SubagentRunner } from "@/core/task/tools/subagent/SubagentRunner"
 import { Logger } from "@/shared/services/Logger"
+import { ComponentContractLedger } from "./ComponentContractLedger"
 import { ContextBuilder } from "./ContextBuilder"
 import { ConvergenceEngine } from "./ConvergenceEngine"
+import { DesignCircuitBreaker } from "./DesignCircuitBreaker"
+import { DesignDecisionRecordBuilder } from "./DesignDecisionRecord"
+import { DesignerInResidence } from "./DesignerInResidence"
+import { DesignIntelligenceGraphBuilder } from "./DesignIntelligenceGraph"
+import { DesignIntelligenceStore } from "./DesignIntelligenceStore"
+import { DesignStateCache } from "./DesignStateCache"
 import { GateEvaluator } from "./GateEvaluator"
 import { IntentAnalyzer } from "./IntentAnalyzer"
 import { ProblemClassifier } from "./ProblemClassifier"
 import { ProductCriticRunner } from "./ProductCriticRunner"
 import { ReceiptStore } from "./ReceiptStore"
 import { SpecialistSelector } from "./SpecialistSelector"
+import { SpeculativeTaskPlanner } from "./SpeculativeTaskPlanner"
+import { TokenSyncEngine } from "./TokenSyncEngine"
 import {
+	DesignAuditFinding,
 	DesignerRole,
 	DesignGateResult,
+	DesignHypothesis,
 	DesignImplementationTask,
+	DesignIntentContract,
+	DesignInvestigation,
+	DesignOption,
 	DesignRefinement,
 	DesignRevisionRequest,
 	DesignValidationResult,
@@ -23,6 +37,7 @@ import {
 	SpecialistResult,
 	SpecialistSelection,
 } from "./types"
+import { UXRegressionRiskCalculator } from "./UXRegressionRiskCalculator"
 
 export const MOD_DEFAULTS = {
 	maxSpecialists: 6,
@@ -44,6 +59,8 @@ export class MixtureOfDesignersOrchestrator {
 	private readonly convergenceEngine: ConvergenceEngine
 	private readonly gateEvaluator: GateEvaluator
 	private readonly productCriticRunner: ProductCriticRunner
+	private readonly designerInResidence: DesignerInResidence
+	private readonly designIntelligenceGraphBuilder: DesignIntelligenceGraphBuilder
 
 	constructor(
 		private readonly task: Task,
@@ -57,6 +74,8 @@ export class MixtureOfDesignersOrchestrator {
 		this.convergenceEngine = new ConvergenceEngine()
 		this.gateEvaluator = new GateEvaluator()
 		this.productCriticRunner = new ProductCriticRunner(api)
+		this.designerInResidence = new DesignerInResidence(api)
+		this.designIntelligenceGraphBuilder = new DesignIntelligenceGraphBuilder()
 	}
 
 	public async run(userContent: any[]): Promise<void> {
@@ -71,16 +90,24 @@ export class MixtureOfDesignersOrchestrator {
 
 		// Load or initialize state
 		const workspaceDir = (this.task as any).cwd || process.cwd()
-		const saved = await ReceiptStore.loadAndValidate(this.task.taskId, workspaceDir)
+		const cachedState = DesignStateCache.get(this.task.taskId)
+		const persistedDesignIntelligence = await DesignIntelligenceStore.load(workspaceDir)
+		const saved = cachedState || (await ReceiptStore.loadAndValidate(this.task.taskId, workspaceDir))
 		if (saved) {
 			Logger.info("[MoD] Found existing run state, resuming...")
 			this.state = saved
+			this.state.designIntelligence ??= persistedDesignIntelligence
+			this.state.designInvestigations ??= []
+			this.state.designIntentContracts ??= []
 		} else {
 			this.state = {
 				runId: crypto.randomUUID(),
 				mode: "mixture-of-designers",
 				outcome: this.outcome,
 				stage: "initializing",
+				designIntelligence: persistedDesignIntelligence,
+				designInvestigations: [],
+				designIntentContracts: [],
 				specialistSelections: [],
 				specialistResults: [],
 				refinements: [],
@@ -121,7 +148,7 @@ export class MixtureOfDesignersOrchestrator {
 
 		// Stage 1 & Stage 2: Concurrent Product Intent & Problem Classification
 		if (!this.state.intent || !this.state.problemClassification) {
-			this.transitionTo("intent")
+			await this.transitionTo("intent")
 			const [intentRes, classificationRes] = await Promise.all([
 				this.state.intent ? Promise.resolve(this.state.intent) : this.intentAnalyzer.analyze(requestText, workspaceDir),
 				this.state.problemClassification
@@ -135,74 +162,108 @@ export class MixtureOfDesignersOrchestrator {
 			this.emitTelemetry("mod.classification.completed")
 		}
 
-		// Stage 3: Specialist Selection
+		// Stage 3: Select the internal lenses the resident will apply to one coherent investigation.
 		if (this.state.specialistSelections.length === 0) {
-			this.transitionTo("specialist-selection")
+			await this.transitionTo("specialist-selection")
 			this.state.specialistSelections = this.specialistSelector.select(
 				this.state.problemClassification.problems,
 				MOD_DEFAULTS.maxSpecialists,
 			)
-			await ReceiptStore.save(this.task.taskId, this.state)
+			void ReceiptStore.save(this.task.taskId, this.state)
 			this.emitTelemetry("mod.specialists.selected")
 		}
+		await this.refreshDesignIntelligence(workspaceDir)
 
-		// Stage 4: Specialist Analysis & Recommendation Validation
+		// Stage 4: One Designer-in-Residence investigates through the selected lenses.
 		if (this.state.refinements.length === 0) {
-			this.transitionTo("specialist-analysis")
-			await this.runSpecialistsAnalysis(workspaceDir)
-			this.transitionTo("recommendation-validation")
+			await this.transitionTo("specialist-analysis")
+			await this.runDesignerInResidenceInvestigation(requestText, workspaceDir)
+			await this.transitionTo("recommendation-validation")
 			this.validateRecommendations()
-			await ReceiptStore.save(this.task.taskId, this.state)
+			void ReceiptStore.save(this.task.taskId, this.state)
 			this.emitTelemetry("mod.recommendations.validated")
 		}
 
-		// Stage 5: Convergence & Conflict Resolution
+		// Stage 5 & Stage 6: Fast-Path Atomic Decision Lock & Contract Generation
 		if (this.state.decisions.length === 0) {
-			this.transitionTo("convergence")
+			await this.transitionTo("convergence")
 			const converged = this.convergenceEngine.converge(this.state.intent!, this.state.refinements)
 			this.state.decisions = converged.decisions
-			await ReceiptStore.save(this.task.taskId, this.state)
-			this.emitTelemetry("mod.convergence.completed")
-		}
-
-		// Stage 6: Decision Lock
-		this.transitionTo("decision-lock")
-		for (const dec of this.state.decisions) {
-			if (dec.status === "accepted") {
-				dec.locked = true
-				this.emitTelemetry("mod.decision.locked")
+			this.state.designIntentContracts = this.buildDesignIntentContracts()
+			this.state.designDecisionRecords = this.state.decisions.map((dec, idx) =>
+				DesignDecisionRecordBuilder.createDDR(
+					idx + 1,
+					dec,
+					this.state.refinements.find((r) => dec.sourceRefinementIds.includes(r.id)),
+				),
+			)
+			for (const dec of this.state.decisions) {
+				if (dec.status === "accepted") {
+					dec.locked = true
+					this.emitTelemetry("mod.decision.locked")
+				}
 			}
+			void ReceiptStore.save(this.task.taskId, this.state)
+			this.emitTelemetry("mod.convergence.completed")
+		} else {
+			await this.transitionTo("decision-lock")
+			for (const dec of this.state.decisions) {
+				if (dec.status === "accepted") {
+					dec.locked = true
+				}
+			}
+			void ReceiptStore.save(this.task.taskId, this.state)
 		}
-		await ReceiptStore.save(this.task.taskId, this.state)
 
 		// Stage 7: Implementation Planning
 		if (this.state.implementationTasks.length === 0) {
-			this.transitionTo("implementation-planning")
+			await this.transitionTo("implementation-planning")
 			this.state.implementationTasks = this.generateImplementationTasks()
-			await ReceiptStore.save(this.task.taskId, this.state)
+			const riskReport = new UXRegressionRiskCalculator().calculateRisk(
+				this.state.decisions,
+				this.state.implementationTasks,
+			)
+			if (riskReport.riskLevel === "critical" || riskReport.riskLevel === "high") {
+				Logger.warn(
+					`[MoD Predictive Risk] Risk score elevated (${riskReport.score}/100, Level: ${riskReport.riskLevel}). Mitigations: ${riskReport.mitigationRecommendations.join("; ")}`,
+				)
+				this.state.limitations.push(...riskReport.riskFactors)
+			}
+			void ReceiptStore.save(this.task.taskId, this.state)
 		}
 
 		// Mode branch check
 		if (this.outcome === "plan-only") {
 			Logger.info("[MoD] Outcome mode is plan-only, bypassing implementation")
 			await Promise.all([this.runIntegratedValidation(), this.runCritique(workspaceDir)])
-			this.transitionTo("completed")
+			this.state.gateResults = this.gateEvaluator.evaluate(this.state)
+			if (this.state.gateResults.some((gate) => !gate.passed)) {
+				this.state.limitations.push("Plan-only run did not satisfy every quality gate.")
+				await this.transitionTo("completed-with-limitations")
+				this.emitTelemetry("mod.completed_with_limitations")
+			} else {
+				await this.transitionTo("completed")
+				this.emitTelemetry("mod.completed")
+			}
 			await ReceiptStore.save(this.task.taskId, this.state)
-			this.emitTelemetry("mod.completed")
 			await this.reportFinalResult()
 			return
 		}
 
 		// Stage 8: Parent-Authorized Implementation
-		this.transitionTo("implementation")
+		await this.transitionTo("implementation")
 		this.emitTelemetry("mod.implementation.started")
 		await this.executeImplementationTasks(workspaceDir)
 		this.emitTelemetry("mod.implementation.completed")
 
 		// Stage 9: Concurrent Integrated Validation & Product Critique
-		this.transitionTo("validation")
+		await this.transitionTo("validation")
 		await Promise.all([this.runIntegratedValidation(), this.runCritique(workspaceDir)])
 		this.emitTelemetry("mod.validation.completed")
+
+		// Post-Implementation Design Audit by Designer-in-Residence
+		await this.transitionTo("post-implementation-audit")
+		await this.runPostImplementationAudit(workspaceDir)
 
 		// Stage 10: Gate Evaluation & Revisions Loop
 		let revisionCount = 0
@@ -219,22 +280,31 @@ export class MixtureOfDesignersOrchestrator {
 			this.emitTelemetry("mod.gate.failed")
 
 			// Trigger targeted revisions
-			this.transitionTo("specialist-analysis")
+			await this.transitionTo("specialist-analysis")
 			await this.runRevisionAnalysis(failedGates, revisionCount)
-			this.transitionTo("implementation")
+			this.state.decisions = this.convergenceEngine.converge(this.state.intent!, this.state.refinements).decisions
+			for (const decision of this.state.decisions) {
+				if (decision.status === "accepted") {
+					decision.locked = true
+				}
+			}
+			this.state.designIntentContracts = this.buildDesignIntentContracts()
+			this.state.implementationTasks = this.generateImplementationTasks()
+			await this.transitionTo("implementation")
 			await this.executeImplementationTasks(workspaceDir)
-			this.transitionTo("validation")
+			await this.transitionTo("validation")
 			await this.runIntegratedValidation()
+			this.state.gateResults = this.gateEvaluator.evaluate(this.state)
 		}
 
 		if (this.state.gateResults.some((g) => !g.passed)) {
 			// Revision budget exhausted
 			Logger.error("[MoD] Revision budget exhausted, failing run or returning with limitations")
 			this.state.limitations.push("Revision budget exhausted before all gates passed.")
-			this.transitionTo("completed-with-limitations")
+			await this.transitionTo("completed-with-limitations")
 			this.emitTelemetry("mod.completed_with_limitations")
 		} else {
-			this.transitionTo("completed")
+			await this.transitionTo("completed")
 			this.emitTelemetry("mod.completed")
 		}
 
@@ -242,14 +312,20 @@ export class MixtureOfDesignersOrchestrator {
 		await this.reportFinalResult()
 	}
 
-	private transitionTo(stage: MoDStage): void {
+	private async transitionTo(stage: MoDStage): Promise<void> {
 		this.state.stage = stage
 		this.state.updatedAt = new Date().toISOString()
+		DesignStateCache.set(this.task.taskId, this.state)
 		Logger.info(`[MoD] Transitioned to stage: ${stage}`)
 		// Report progress update to the user UI
 		const progress = this.getStageProgressPercent(stage)
-		const statusStr = stage === "completed" ? "completed" : stage === "failed" ? "failed" : "running"
-		void this.task.say(
+		const statusStr =
+			stage === "completed" || stage === "completed-with-limitations"
+				? "completed"
+				: stage === "failed"
+					? "failed"
+					: "running"
+		await this.task.say(
 			"subagent",
 			JSON.stringify({
 				runId: this.state.runId,
@@ -273,10 +349,17 @@ export class MixtureOfDesignersOrchestrator {
 					},
 				],
 			}),
+			undefined,
+			undefined,
+			stage !== "completed" && stage !== "completed-with-limitations" && stage !== "failed",
 		)
 	}
 
 	private getStageProgressPercent(stage: MoDStage): number {
+		if (stage === "completed-with-limitations") {
+			return 100
+		}
+
 		const stages: MoDStage[] = [
 			"initializing",
 			"intent",
@@ -294,6 +377,255 @@ export class MixtureOfDesignersOrchestrator {
 		]
 		const idx = stages.indexOf(stage)
 		return idx === -1 ? 0 : Math.round((idx / (stages.length - 1)) * 100)
+	}
+
+	private async refreshDesignIntelligence(workspaceDir: string): Promise<void> {
+		if (!this.state.intent || !this.state.problemClassification) return
+
+		const tokenEngine = new TokenSyncEngine()
+		if (this.state.designIntelligence?.designTokens) {
+			tokenEngine.generateCodemodPatch("", this.state.designIntelligence.designTokens)
+		}
+
+		this.state.designIntelligence = this.designIntelligenceGraphBuilder.build({
+			intent: this.state.intent,
+			problems: this.state.problemClassification.problems,
+			lenses: this.state.specialistSelections.map((selection) => selection.role),
+			previous: this.state.designIntelligence,
+		})
+		await DesignIntelligenceStore.save(workspaceDir, this.state.designIntelligence)
+	}
+
+	private async runDesignerInResidenceInvestigation(requestText: string, workspaceDir: string): Promise<void> {
+		const selections = this.state.specialistSelections
+		const lenses = selections.map((selection) => selection.role)
+		const primaryLens = lenses[0] || "product-strategist"
+		const contextPackages = await this.contextBuilder.buildBatch(
+			lenses,
+			this.state.intent!,
+			this.state.problemClassification!.problems,
+			workspaceDir,
+		)
+		const workspaceFiles = [...contextPackages.values()]
+			.flatMap((context) => context.files)
+			.filter((file, index, allFiles) => allFiles.findIndex((candidate) => candidate.path === file.path) === index)
+			.map(({ path, relevance }) => ({ path, relevance }))
+
+		const investigationResult = await DesignCircuitBreaker.executeWithFallback(
+			() =>
+				this.designerInResidence.investigate({
+					request: requestText,
+					intent: this.state.intent!,
+					graph: this.state.designIntelligence!,
+					lenses,
+					workspaceFiles,
+				}),
+			{
+				name: "DesignerInResidence.investigate",
+				timeoutMs: 30_000,
+				fallback: () => ({
+					summary: `Heuristic senior design direction for ${requestText}`,
+					findings: [],
+					hypotheses: [],
+					options: [],
+					selectedOptionId: "option-a",
+					refinement: this.getFallbackRefinement(primaryLens, requestText),
+					rawResponse: "Heuristic fallback investigation",
+					durationMs: 0,
+					success: false,
+				}),
+			},
+		)
+		const parsed = this.parseDesignInvestigation(investigationResult.rawResponse, primaryLens)
+		const refinements =
+			investigationResult.success && parsed.refinements.length > 0
+				? parsed.refinements
+				: [this.getFallbackRefinement(primaryLens, "", this.getAssignedProblem(selections[0]))]
+
+		const investigation: DesignInvestigation = {
+			id: `investigation-${this.state.designInvestigations?.length || 0 + 1}`,
+			request: requestText,
+			lenses,
+			findings: parsed.findings,
+			hypotheses: parsed.hypotheses,
+			options: parsed.options,
+			summary:
+				parsed.summary ||
+				"The Designer-in-Residence synthesized the observed product evidence into one implementation-ready direction.",
+			createdAt: new Date().toISOString(),
+		}
+
+		this.state.designInvestigations ??= []
+		this.state.designInvestigations.push(investigation)
+		// Kept for receipt compatibility; this is one resident investigation, not a specialist council result.
+		this.state.specialistResults = [
+			{
+				role: primaryLens,
+				refinements,
+				durationMs: investigationResult.durationMs,
+				success: investigationResult.success,
+				error: investigationResult.error,
+			},
+		]
+		this.state.refinements = refinements
+		if (!investigationResult.success) {
+			this.state.limitations.push(
+				"The Designer-in-Residence used an evidence-backed fallback because the primary design investigation was unavailable.",
+			)
+		}
+	}
+
+	private async runPostImplementationAudit(workspaceDir: string): Promise<void> {
+		const contract = this.state.designIntentContracts?.[0]
+		if (!contract) return
+
+		const changedFiles = this.state.implementationTasks.flatMap((t) => t.affectedFiles)
+		const auditResult = await this.designerInResidence.auditPostImplementation({
+			contract,
+			changesMade: changedFiles,
+			workspaceDir,
+		})
+
+		if (!auditResult.achievedIntent) {
+			for (const dev of auditResult.deviations) {
+				this.state.limitations.push(`Post-implementation audit deviation: ${dev}`)
+			}
+		}
+
+		if (auditResult.designDebtAdjustments.length > 0 && this.state.designIntelligence) {
+			const addressed = auditResult.designDebtAdjustments.filter((a) => a.status === "addressed").map((a) => a.id)
+			const followUp = auditResult.designDebtAdjustments.filter((a) => a.status === "needs-follow-up").map((a) => a.id)
+			this.state.designIntelligence = this.designIntelligenceGraphBuilder.reconcileDebt(
+				this.state.designIntelligence,
+				addressed,
+				followUp,
+			)
+			await DesignIntelligenceStore.save(workspaceDir, this.state.designIntelligence)
+		}
+	}
+
+	private buildDesignIntentContracts(): DesignIntentContract[] {
+		const acceptedDecisions = (this.state.decisions || []).filter((d) => d.status === "accepted")
+		return acceptedDecisions.map((dec) => ({
+			decisionId: dec.id,
+			goal: dec.decision,
+			mustPreserve: this.state.intent?.boundaries?.preserve || [],
+			mustImprove: [dec.rationale],
+			use: [...(this.state.intent?.currentExperience?.existingPatterns || [])],
+			avoid: [...(this.state.intent?.boundaries?.outOfScope || [])],
+			successCriteria: dec.acceptanceCriteria,
+			validationPlan: dec.reopenConditions,
+		}))
+	}
+
+	private parseDesignInvestigation(
+		text: string,
+		primaryLens: DesignerRole,
+	): Pick<DesignInvestigation, "findings" | "hypotheses" | "options" | "summary"> & { refinements: DesignRefinement[] } {
+		try {
+			const cleaned = text
+				.replace(/```json/gi, "")
+				.replace(/```/g, "")
+				.trim()
+			const objectMatch = cleaned.match(/\{[\s\S]*\}/)
+			const payload = objectMatch ? JSON.parse(objectMatch[0]) : JSON.parse(cleaned)
+			if (Array.isArray(payload)) {
+				return {
+					findings: [],
+					hypotheses: [],
+					options: [],
+					summary: "",
+					refinements: this.parseRefinements(JSON.stringify(payload), primaryLens),
+				}
+			}
+
+			const refinements = Array.isArray(payload.refinements)
+				? this.parseRefinements(JSON.stringify(payload.refinements), primaryLens)
+				: []
+			return {
+				findings: this.sanitizeAuditFindings(payload.findings, primaryLens),
+				hypotheses: this.sanitizeHypotheses(payload.hypotheses),
+				options: this.sanitizeDesignOptions(payload.options),
+				summary: typeof payload.summary === "string" ? payload.summary : "",
+				refinements,
+			}
+		} catch (error) {
+			Logger.warn("[Designer-in-Residence] Could not parse investigation response; using its refinement fallback", error)
+			return {
+				findings: [],
+				hypotheses: [],
+				options: [],
+				summary: "",
+				refinements: this.parseRefinements(text, primaryLens),
+			}
+		}
+	}
+
+	private sanitizeAuditFindings(value: unknown, fallbackLens: DesignerRole): DesignAuditFinding[] {
+		if (!Array.isArray(value)) return []
+		return value.map((finding, index) => {
+			const raw = finding as any
+			return {
+				id: typeof raw.id === "string" ? raw.id : `finding-${index + 1}`,
+				lens: this.isDesignerRole(raw.lens) ? raw.lens : fallbackLens,
+				target: typeof raw.target === "string" ? raw.target : "General product surface",
+				observation: typeof raw.observation === "string" ? raw.observation : "Design opportunity requires investigation.",
+				userImpact: typeof raw.userImpact === "string" ? raw.userImpact : "User experience friction.",
+				evidence: Array.isArray(raw.evidence) ? raw.evidence.filter((item: unknown) => typeof item === "string") : [],
+				severity: ["critical", "high", "medium", "low"].includes(raw.severity) ? raw.severity : "medium",
+				status: ["open", "addressed", "needs-follow-up"].includes(raw.status) ? raw.status : "open",
+			}
+		})
+	}
+
+	private sanitizeHypotheses(value: unknown): DesignHypothesis[] {
+		if (!Array.isArray(value)) return []
+		return value.map((hypothesis, index) => {
+			const raw = hypothesis as any
+			return {
+				id: typeof raw.id === "string" ? raw.id : `hypothesis-${index + 1}`,
+				findingId: typeof raw.findingId === "string" ? raw.findingId : "",
+				statement: typeof raw.statement === "string" ? raw.statement : "Investigate the underlying experience issue.",
+				evidence: Array.isArray(raw.evidence) ? raw.evidence.filter((item: unknown) => typeof item === "string") : [],
+				alternatives: Array.isArray(raw.alternatives)
+					? raw.alternatives.filter((item: unknown) => typeof item === "string")
+					: [],
+				confidence: ["high", "medium", "low"].includes(raw.confidence) ? raw.confidence : "medium",
+			}
+		})
+	}
+
+	private sanitizeDesignOptions(value: unknown): DesignOption[] {
+		if (!Array.isArray(value)) return []
+		return value.map((option, index) => {
+			const raw = option as any
+			return {
+				id: typeof raw.id === "string" ? raw.id : `option-${index + 1}`,
+				title: typeof raw.title === "string" ? raw.title : `Option ${index + 1}`,
+				approach: typeof raw.approach === "string" ? raw.approach : "Explore a familiar product pattern.",
+				pros: Array.isArray(raw.pros) ? raw.pros.filter((item: unknown) => typeof item === "string") : [],
+				cons: Array.isArray(raw.cons) ? raw.cons.filter((item: unknown) => typeof item === "string") : [],
+				recommended: raw.recommended === true,
+			}
+		})
+	}
+
+	private isDesignerRole(value: unknown): value is DesignerRole {
+		return (
+			typeof value === "string" &&
+			[
+				"product-strategist",
+				"ux-architect",
+				"interaction-designer",
+				"visual-systems-designer",
+				"content-designer",
+				"design-system-engineer",
+				"accessibility-reviewer",
+				"responsive-design-reviewer",
+				"frontend-implementation-designer",
+				"product-critic",
+			].includes(value)
+		)
 	}
 
 	private async runSpecialistsAnalysis(workspaceDir: string): Promise<void> {
@@ -318,7 +650,7 @@ export class MixtureOfDesignersOrchestrator {
 				const fallbackRole = this.specialistSelector.getFallbackRole(selection.role)
 				results.push({
 					role: selection.role,
-					refinements: [],
+					refinements: [this.getFallbackRefinement(selection.role, "", this.getAssignedProblem(selection))],
 					durationMs: 0,
 					success: false,
 					error: `Circuit tripped: ${errorMsg}. Re-routed to fallback ${fallbackRole}`,
@@ -334,14 +666,15 @@ export class MixtureOfDesignersOrchestrator {
 		const start = Date.now()
 		this.emitTelemetry("mod.specialist.started")
 
-		const packageCtx = await this.contextBuilder.build(
-			selection.role,
-			this.state.intent!,
-			this.state.problemClassification!.problems,
-			workspaceDir,
-		)
+		try {
+			const packageCtx = await this.contextBuilder.build(
+				selection.role,
+				this.state.intent!,
+				this.state.problemClassification!.problems,
+				workspaceDir,
+			)
 
-		const contractPrompt = `You are the ${selection.role} specialist in a design council.
+			const contractPrompt = `You are the ${selection.role} specialist in a design council.
 Analyze assigned problems: ${JSON.stringify(packageCtx.assignedProblems, null, 2)}
 Workspace files: ${JSON.stringify(packageCtx.files, null, 2)}
 
@@ -349,7 +682,6 @@ Provide design refinements. Avoid generic language like "make it cleaner" or "im
 
 Output JSON array only.`
 
-		try {
 			const stream = this.task.api.createMessage(contractPrompt, [
 				{ role: "user", content: [{ type: "text", text: `Build details for ${selection.role}` }], ts: Date.now() },
 			])
@@ -376,7 +708,7 @@ Output JSON array only.`
 			this.emitTelemetry("mod.specialist.failed")
 			return {
 				role: selection.role,
-				refinements: [],
+				refinements: [this.getFallbackRefinement(selection.role, "", this.getAssignedProblem(selection))],
 				durationMs: Date.now() - start,
 				success: false,
 				error: error.message || String(error),
@@ -452,34 +784,51 @@ Output JSON array only.`
 		}))
 	}
 
-	private getFallbackRefinement(role: DesignerRole, text: string): DesignRefinement {
+	private getAssignedProblem(selection: SpecialistSelection) {
+		const problemIds = new Set(selection.assignedProblemIds)
+		return this.state?.problemClassification?.problems.find((problem) => problemIds.has(problem.id))
+	}
+
+	private getFallbackRefinement(
+		role: DesignerRole,
+		text: string,
+		problem = this.state?.problemClassification?.problems.find((candidate) => {
+			const selection = this.state?.specialistSelections.find((item) => item.role === role)
+			return selection?.assignedProblemIds.includes(candidate.id)
+		}),
+	): DesignRefinement {
 		const cleanText = text.replace(/```[\s\S]*?```/g, "").trim()
-		const firstLine = cleanText.split("\n").filter((l) => l.trim().length > 0)[0] || `Optimize experience for ${role}`
+		const firstLine = cleanText.split("\n").filter((l) => l.trim().length > 0)[0]
+		const target = problem?.target || "General Area"
+		const proposedChange =
+			firstLine || `Address ${problem?.observation || "the requested product experience issue"} in ${target}.`
+		const affectedFiles =
+			target !== "General" && target !== "General Area" && (target.includes("/") || target.includes(".")) ? [target] : []
 
 		return {
 			id: `ref-${role}-fallback`,
 			role,
 			problem: {
-				problemId: "general",
-				target: "General Area",
-				observedBehavior: "Needs product experience optimization",
-				userImpact: "User experience friction",
-				severity: "medium",
+				problemId: problem?.id || "general",
+				target,
+				observedBehavior: problem?.observation || "Needs product experience optimization",
+				userImpact: problem?.userImpact || "User experience friction",
+				severity: problem?.severity || "medium",
 				frequency: "frequent",
 			},
-			evidence: [],
+			evidence: problem ? [{ type: "product-intent", reference: problem.target, observation: problem.observation }] : [],
 			recommendation: {
 				designStrategy: `Refine experience using ${role} best practices`,
-				proposedChange: firstLine.slice(0, 150),
+				proposedChange: proposedChange.slice(0, 150),
 				adaptationNotes: [],
 				alternativesConsidered: [],
 				tradeoffs: [],
 			},
 			implementation: {
-				affectedFiles: [],
+				affectedFiles,
 				affectedComponents: [],
 				affectedStates: [],
-				instructions: [firstLine],
+				instructions: [proposedChange],
 				dependencies: [],
 				riskLevel: "low",
 			},
@@ -577,27 +926,9 @@ Output JSON array only.`
 		tasks: DesignImplementationTask[],
 		maxConcurrency: number,
 	): DesignImplementationTask[][] {
-		const batches: DesignImplementationTask[][] = []
-
-		for (const task of tasks) {
-			let addedToExistingBatch = false
-			for (const batch of batches) {
-				if (batch.length >= maxConcurrency) continue
-
-				const hasOverlap = batch.some((bTask) => this.hasBoundaryOverlap(task, bTask))
-				if (!hasOverlap) {
-					batch.push(task)
-					addedToExistingBatch = true
-					break
-				}
-			}
-
-			if (!addedToExistingBatch) {
-				batches.push([task])
-			}
-		}
-
-		return batches
+		const planner = new SpeculativeTaskPlanner()
+		const waves = planner.partitionIntoWaves(tasks)
+		return waves.map((w) => w.tasks.slice(0, maxConcurrency))
 	}
 
 	private hasBoundaryOverlap(t1: DesignImplementationTask, t2: DesignImplementationTask): boolean {
@@ -654,67 +985,88 @@ Complete the code modifications carefully. Verify it works correctly and run att
 
 	private async runIntegratedValidation(): Promise<void> {
 		Logger.info("[MoD] Validating the integrated product modifications...")
+		const acceptedDecisions = this.state.decisions.filter((decision) => decision.status === "accepted")
 		const failedTasks = this.state.implementationTasks.filter((t) => t.status === "failed")
-		const implStatus = failedTasks.length > 0 ? "failed" : "passed"
+		const incompleteTasks = this.state.implementationTasks.filter(
+			(task) => task.status !== "completed" && task.status !== "validated" && task.status !== "failed",
+		)
+		const hasImplementationPlan = this.state.implementationTasks.length > 0
+		const hasAcceptedDecisions = acceptedDecisions.length > 0
+		const implStatus =
+			!hasImplementationPlan ||
+			failedTasks.length > 0 ||
+			(this.outcome === "plan-and-implement" && incompleteTasks.length > 0)
+				? "failed"
+				: "passed"
 		const implEvidence =
-			failedTasks.length > 0
-				? failedTasks.map((t) => `Task ${t.id} failed objective: ${t.objective}`)
-				: ["All implementation tasks completed successfully and builds passed."]
+			implStatus === "failed"
+				? [
+						...(hasImplementationPlan ? [] : ["No implementation task was generated."]),
+						...failedTasks.map((task) => `Task ${task.id} failed objective: ${task.objective}`),
+						...incompleteTasks.map((task) => `Task ${task.id} remains ${task.status}.`),
+					]
+				: this.outcome === "plan-only"
+					? ["Implementation is intentionally deferred because this is a plan-only run."]
+					: ["All scheduled MoD implementation tasks reported completion."]
+		const planningStatus = hasAcceptedDecisions ? "passed" : "failed"
+		const planningEvidence = hasAcceptedDecisions
+			? [`${acceptedDecisions.length} accepted design decision(s) were available for validation.`]
+			: ["No accepted design decision was available for validation."]
 
 		const validationResults: DesignValidationResult[] = [
 			{
 				dimension: "product",
-				status: "passed",
-				evidence: ["Goal addressed successfully."],
-				failedCriteria: [],
+				status: planningStatus,
+				evidence: planningEvidence,
+				failedCriteria: hasAcceptedDecisions ? [] : ["No design decision addresses the product intent."],
 				limitations: [],
 				requiredFollowUp: [],
 			},
 			{
 				dimension: "ux",
-				status: "passed",
-				evidence: ["Primary action clear and distinguishable."],
-				failedCriteria: [],
+				status: planningStatus,
+				evidence: planningEvidence,
+				failedCriteria: hasAcceptedDecisions ? [] : ["No validated UX recommendation was produced."],
 				limitations: [],
 				requiredFollowUp: [],
 			},
 			{
 				dimension: "visual",
-				status: "passed",
-				evidence: ["Hierarchy is deliberate and visual styling is consistent."],
-				failedCriteria: [],
+				status: planningStatus,
+				evidence: planningEvidence,
+				failedCriteria: hasAcceptedDecisions ? [] : ["No validated visual recommendation was produced."],
 				limitations: [],
 				requiredFollowUp: [],
 			},
 			{
 				dimension: "design-system",
-				status: "passed",
-				evidence: ["Component primitives and variants reused correctly."],
-				failedCriteria: [],
+				status: planningStatus,
+				evidence: planningEvidence,
+				failedCriteria: hasAcceptedDecisions ? [] : ["No validated design-system recommendation was produced."],
 				limitations: [],
 				requiredFollowUp: [],
 			},
 			{
 				dimension: "interaction",
-				status: "passed",
-				evidence: ["System state feedback verified."],
-				failedCriteria: [],
+				status: planningStatus,
+				evidence: planningEvidence,
+				failedCriteria: hasAcceptedDecisions ? [] : ["No validated interaction recommendation was produced."],
 				limitations: [],
 				requiredFollowUp: [],
 			},
 			{
 				dimension: "accessibility",
-				status: "passed",
-				evidence: ["Keyboard operations and focus states verified."],
-				failedCriteria: [],
+				status: planningStatus,
+				evidence: planningEvidence,
+				failedCriteria: hasAcceptedDecisions ? [] : ["No validated accessibility recommendation was produced."],
 				limitations: [],
 				requiredFollowUp: [],
 			},
 			{
 				dimension: "responsive",
-				status: "passed",
-				evidence: ["Mobile layout responsiveness verified."],
-				failedCriteria: [],
+				status: planningStatus,
+				evidence: planningEvidence,
+				failedCriteria: hasAcceptedDecisions ? [] : ["No validated responsive-design recommendation was produced."],
 				limitations: [],
 				requiredFollowUp: [],
 			},
@@ -722,17 +1074,30 @@ Complete the code modifications carefully. Verify it works correctly and run att
 				dimension: "implementation",
 				status: implStatus,
 				evidence: implEvidence,
-				failedCriteria: failedTasks.map((t) => `Implementation task ${t.id} failed`),
+				failedCriteria: implEvidence,
 				limitations: [],
 				requiredFollowUp: [],
 			},
 		]
 
+		const contractLedger = new ComponentContractLedger()
+		const sampleContract = contractLedger.auditComponentContract(
+			"CoreView",
+			["default", "hover", "focus-visible", "active", "disabled"],
+			["Enter", "Space", "Escape"],
+			["aria-expanded", "aria-busy"],
+		)
+		if (sampleContract.completenessScore < 100) {
+			Logger.info(
+				`[MoD Contract Ledger] CoreView interactive completeness: ${sampleContract.completenessScore}%. Missing: ${sampleContract.missingStates.join(", ")}`,
+			)
+		}
+
 		this.state.validationResults = validationResults
 	}
 
 	private async runCritique(workspaceDir: string): Promise<void> {
-		this.transitionTo("critique")
+		await this.transitionTo("critique")
 		this.state.critiqueFindings = await this.productCriticRunner.critique(
 			this.state.intent!,
 			this.state.decisions,
@@ -812,13 +1177,14 @@ Complete the code modifications carefully. Verify it works correctly and run att
 			limitationsSummary = `\n\n### Known Limitations\n${this.state.limitations.map((l) => `- ${l}`).join("\n")}`
 		}
 
+		const gateSummary = totalGates > 0 ? `${passedGates} / ${totalGates}` : "not evaluated"
 		const reportText = `### Mixture of Designers v1.3 Executive Summary
 
 - **Execution Status**: \`${this.state.stage}\`
 - **Product Intent**: ${this.state.intent?.request.interpretedGoal || "Design refinement"}
 - **Design Decisions**: ${acceptedDecisions.length} converged decision${acceptedDecisions.length === 1 ? "" : "s"} locked.
 - **Task Implementation**: ${completedTasks.length} / ${totalTasks} task${totalTasks === 1 ? "" : "s"} completed.
-- **Gate Validation**: ${passedGates} / ${totalGates > 0 ? totalGates : 8} quality gates passed.
+- **Gate Validation**: ${gateSummary} quality gates passed.
 
 ### Locked Design Decisions
 ${decisionsSummary}${limitationsSummary}`

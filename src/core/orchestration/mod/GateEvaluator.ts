@@ -4,13 +4,21 @@ export class GateEvaluator {
 	public evaluate(state: MoDRunState): DesignGateResult[] {
 		const results: DesignGateResult[] = []
 		const timestamp = new Date().toISOString()
+		const acceptedDecisionCount = state.decisions.filter((decision) => decision.status === "accepted").length
+		const hasAcceptedDecisions = acceptedDecisionCount > 0
 
 		// Gate 1: Product Intent
-		const intentPass = !!state.intent && !!state.intent.request.interpretedGoal
+		const intentPass = !!state.intent && !!state.intent.request.interpretedGoal && hasAcceptedDecisions
 		results.push({
 			gate: "product-intent",
 			passed: intentPass,
-			failureReasons: intentPass ? [] : ["Product intent analysis is incomplete or missing interpreted goal."],
+			failureReasons: intentPass
+				? []
+				: [
+						!state.intent || !state.intent.request.interpretedGoal
+							? "Product intent analysis is incomplete or missing interpreted goal."
+							: "No accepted design decision was produced from the product intent.",
+					],
 			timestamp,
 		})
 
@@ -68,13 +76,25 @@ export class GateEvaluator {
 
 		// Gate 6: Implementation Fidelity
 		const implementationResults = validationResults.filter((v) => v.dimension === "implementation")
+		const scheduledTasks = state.implementationTasks || []
+		const incompleteTasks = scheduledTasks.filter((task) => task.status !== "completed" && task.status !== "validated")
 		const implementationPass =
-			implementationResults.length === 0 ||
+			scheduledTasks.length > 0 &&
+			(state.outcome === "plan-only" || incompleteTasks.length === 0) &&
+			implementationResults.length > 0 &&
 			implementationResults.every((r) => r.status === "passed" || r.status === "passed-with-limitations")
 		results.push({
 			gate: "implementation-fidelity",
 			passed: implementationPass,
-			failureReasons: implementationPass ? [] : implementationResults.flatMap((r) => r.failedCriteria || []),
+			failureReasons: implementationPass
+				? []
+				: [
+						...(scheduledTasks.length === 0
+							? ["No implementation task was generated from accepted design decisions."]
+							: []),
+						...incompleteTasks.map((task) => `Implementation task ${task.id} did not complete.`),
+						...implementationResults.flatMap((result) => result.failedCriteria || []),
+					],
 			timestamp,
 		})
 

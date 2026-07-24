@@ -29,7 +29,7 @@ Last validated: 2026-07-18
 - Read/list/search/definition backends: `src/integrations/misc/`, `src/services/glob/`, `src/services/ripgrep/`, and `src/services/tree-sitter/`.
 - Reproducible I/O fixture: `scripts/meow-io-benchmark.ts` (`npm run benchmark:meow-io`).
 - Native sibling delta identity: `src/core/api/transform/tool-call-processor.ts`.
-- Mixture of Designers (MoD) v1.3 multi-agent design orchestration framework: `src/core/orchestration/mod/`. Implements capacity-aware Softmax Top-K gating (`SpecialistSelector`), 3-stage BFT filtering & 9-role priority lattice matrix (`ConvergenceEngine`), state receipt workspace checkpointing (`ReceiptStore`), and Hoare-logic write-boundary guards (`MixtureOfDesignersOrchestrator`).
+- Mixture of Designers (MoD) v1.3 & LUMI Designer-in-Residence: `src/core/orchestration/mod/`. Embedded senior designer agent architecture with 5-Whys recursive root-cause reasoning, Industry Pattern Library (`PatternLibrary.ts`), CSS Design Token Sensing & Codemod Sync Engine (`ContextBuilder.ts`, `TokenSyncEngine.ts`), Dynamic UX Health Index & Debt Graph (`DesignIntelligenceGraph.ts`), Design Decision Records (`DesignDecisionRecord.ts`), Design System Drift Guard (`DesignDriftDetector.ts`), 8-State Interactive UI Component Contract Ledger (`ComponentContractLedger.ts`), Predictive UX Regression Risk Calculator (`UXRegressionRiskCalculator.ts`), Speculative Task Wave Planner (`SpeculativeTaskPlanner.ts`), Adaptive Circuit Breaker (`DesignCircuitBreaker.ts`), In-Memory State Cache (`DesignStateCache.ts`), and Fast-Path Atomic Decision Locking (`MixtureOfDesignersOrchestrator.ts`).
 
 ## Orientation Loop
 

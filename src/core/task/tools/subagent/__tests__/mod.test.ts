@@ -5,13 +5,26 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, it } from "mocha"
 import sinon from "sinon"
 import { updateSettings } from "@/core/controller/state/updateSettings"
+import { ComponentContractLedger } from "@/core/orchestration/mod/ComponentContractLedger"
+import { ContextBuilder } from "@/core/orchestration/mod/ContextBuilder"
 import { ConvergenceEngine } from "@/core/orchestration/mod/ConvergenceEngine"
+import { DesignCircuitBreaker } from "@/core/orchestration/mod/DesignCircuitBreaker"
+import { DesignDecisionRecordBuilder } from "@/core/orchestration/mod/DesignDecisionRecord"
+import { DesignDriftDetector } from "@/core/orchestration/mod/DesignDriftDetector"
+import { DesignerInResidence } from "@/core/orchestration/mod/DesignerInResidence"
+import { DesignIntelligenceGraphBuilder } from "@/core/orchestration/mod/DesignIntelligenceGraph"
+import { DesignStateCache } from "@/core/orchestration/mod/DesignStateCache"
+import { GateEvaluator } from "@/core/orchestration/mod/GateEvaluator"
 import { IntentAnalyzer } from "@/core/orchestration/mod/IntentAnalyzer"
 import { MixtureOfDesignersOrchestrator } from "@/core/orchestration/mod/MixtureOfDesignersOrchestrator"
+import { PatternLibrary } from "@/core/orchestration/mod/PatternLibrary"
 import { ProblemClassifier } from "@/core/orchestration/mod/ProblemClassifier"
 import { ReceiptStore } from "@/core/orchestration/mod/ReceiptStore"
 import { SpecialistSelector } from "@/core/orchestration/mod/SpecialistSelector"
+import { SpeculativeTaskPlanner } from "@/core/orchestration/mod/SpeculativeTaskPlanner"
+import { TokenSyncEngine } from "@/core/orchestration/mod/TokenSyncEngine"
 import { ClassifiedProductProblem, DesignRefinement, MoDRunState, ProductDesignIntent } from "@/core/orchestration/mod/types"
+import { UXRegressionRiskCalculator } from "@/core/orchestration/mod/UXRegressionRiskCalculator"
 import * as disk from "@/core/storage/disk"
 import { SubagentRunner } from "@/core/task/tools/subagent/SubagentRunner"
 import { Logger } from "@/shared/services/Logger"
@@ -1790,6 +1803,550 @@ describe("Mixture of Designers v1.2 Orchestration", () => {
 			assert.equal(refs[0].role, "ux-architect")
 			assert.equal(refs[0].id, "ref-ux-architect-fallback")
 			assert.ok(refs[0].recommendation.proposedChange.length > 0)
+		})
+
+		it("keeps an actionable decision when a specialist stream fails", async () => {
+			const task = mockTask({
+				taskId: "specialist-stream-failure",
+				api: {
+					createMessage: sinon.stub().throws(new Error("provider temporarily unavailable")),
+				},
+			})
+			const orchestrator = new MixtureOfDesignersOrchestrator(task, "plan-and-implement")
+			sinon.stub(SubagentRunner.prototype, "run").resolves({ status: "completed", stats: {} as any })
+
+			await orchestrator.run([{ text: "Improve the image diffusion application's local workflow" }])
+
+			const state = await ReceiptStore.load("specialist-stream-failure")
+			assert.ok(state)
+			assert.ok(state.specialistResults.some((result) => !result.success))
+			assert.ok(state.decisions.some((decision) => decision.status === "accepted"))
+			assert.ok(state.implementationTasks.length > 0)
+			assert.notEqual(state.stage, "completed-with-limitations")
+		})
+
+		it("does not pass product and implementation gates when MoD produced no work", () => {
+			const results = new GateEvaluator().evaluate({
+				outcome: "plan-and-implement",
+				intent: { request: { interpretedGoal: "Improve the product" } },
+				decisions: [],
+				implementationTasks: [],
+				validationResults: [
+					{
+						dimension: "implementation",
+						status: "passed",
+						evidence: [],
+						failedCriteria: [],
+						limitations: [],
+						requiredFollowUp: [],
+					},
+				],
+				critiqueFindings: [],
+			} as unknown as MoDRunState)
+
+			assert.equal(results.find((result) => result.gate === "product-intent")?.passed, false)
+			assert.equal(results.find((result) => result.gate === "implementation-fidelity")?.passed, false)
+		})
+	})
+
+	describe("DesignerInResidence & Design Loop Capabilities", () => {
+		it("runs design investigation with internal lenses and returns coherent output", async () => {
+			const api = {
+				createMessage: sinon.stub().callsFake(async function* () {
+					yield {
+						type: "text",
+						text: JSON.stringify({
+							summary: "Unified progressive redesign for navigation hierarchy",
+							findings: [
+								{
+									id: "finding-1",
+									lens: "ux-architect",
+									target: "src/components/Header.tsx",
+									observation: "Primary workflow trigger is visual secondary",
+									userImpact: "Increases interaction time for core task",
+									evidence: ["src/components/Header.tsx"],
+									severity: "high",
+									status: "open",
+								},
+							],
+							hypotheses: [
+								{
+									id: "hyp-1",
+									findingId: "finding-1",
+									statement: "Legacy layout prioritized header density over workflow action",
+									evidence: ["Header.tsx:L12"],
+									alternatives: ["Insufficient color contrast"],
+									confidence: "high",
+								},
+							],
+							options: [
+								{
+									id: "opt-a",
+									title: "Conservative evolution",
+									approach: "Increase font weight of button",
+									pros: ["Minimal change"],
+									cons: ["Does not improve layout hierarchy"],
+									recommended: false,
+								},
+								{
+									id: "opt-b",
+									title: "Progressive redesign",
+									approach: "Reorder header actions to follow standard Linear/VS Code primary action pattern",
+									pros: ["Clear visual hierarchy", "Familiar convention"],
+									cons: ["Slightly wider header container"],
+									recommended: true,
+								},
+							],
+							refinements: [
+								{
+									id: "ref-1",
+									role: "ux-architect",
+									problem: {
+										problemId: "information-architecture",
+										target: "src/components/Header.tsx",
+										observedBehavior: "Hidden primary action",
+										userImpact: "Slow workflow execution",
+										severity: "high",
+										frequency: "frequent",
+									},
+									evidence: [],
+									recommendation: {
+										designStrategy: "Apply familiar primary action callout",
+										proposedChange: "Promote action button using primary accent token",
+										familiarPattern: "Linear / VS Code primary toolbar layout",
+										whyPatternFits: "Matches learned user mental model",
+										adaptationNotes: [],
+										alternativesConsidered: [],
+										tradeoffs: [],
+									},
+									implementation: {
+										affectedFiles: ["src/components/Header.tsx"],
+										affectedComponents: ["Header"],
+										affectedStates: [],
+										instructions: ["Move action to right-aligned primary group"],
+										dependencies: [],
+										riskLevel: "low",
+									},
+									validation: {
+										acceptanceCriteria: ["Primary action visible in <2 seconds"],
+										regressionRisks: [],
+										verificationMethods: [],
+									},
+									governance: {
+										confidence: "high",
+										scopeStatus: "in-scope",
+										mutationAuthorityRequired: false,
+										conflictsWith: [],
+									},
+								},
+							],
+						}),
+					}
+				}),
+			}
+
+			const resident = new DesignerInResidence(api as any)
+			const res = await resident.investigate({
+				request: "Elevate header hierarchy",
+				intent: {
+					request: {
+						originalRequest: "Header issue",
+						interpretedGoal: "Improve header UX",
+						explicitRequirements: [],
+						implicitRequirements: [],
+					},
+					product: {
+						productArea: "UI",
+						productPurpose: "Header navigation",
+						targetUsers: ["devs"],
+						userExperienceLevels: ["returning"],
+						primaryJobs: ["Navigate"],
+						secondaryJobs: [],
+					},
+					currentExperience: {
+						workflow: ["Open -> Click"],
+						strengths: [],
+						weaknesses: [],
+						frictionPoints: [],
+						existingPatterns: [],
+						unresolvedQuestions: [],
+					},
+					constraints: { technical: [], product: [], brand: [], accessibility: [], performance: [], platform: [] },
+					boundaries: { preserve: [], allowedToChange: [], outOfScope: [] },
+					success: { desiredOutcomes: [], measurableSignals: [], qualitativeSignals: [], failureConditions: [] },
+				},
+				graph: {
+					version: 1,
+					productSummary: "Test app",
+					users: ["dev"],
+					primaryJobs: ["work"],
+					nodes: [],
+					edges: [],
+					knownPatterns: [],
+					designDebt: [],
+					auditedLenses: ["ux-architect"],
+					lastAuditedAt: new Date().toISOString(),
+				},
+				lenses: ["ux-architect", "visual-systems-designer"],
+				workspaceFiles: [{ path: "src/components/Header.tsx", relevance: "high" }],
+			})
+
+			assert.equal(res.success, true)
+			assert.ok(res.rawResponse.includes("Progressive redesign"))
+		})
+
+		it("runs post-implementation audit against design intent contract", async () => {
+			const api = {
+				createMessage: sinon.stub().callsFake(async function* () {
+					yield {
+						type: "text",
+						text: JSON.stringify({
+							achievedIntent: true,
+							deviations: [],
+							recommendedCorrections: [],
+							designDebtAdjustments: [{ id: "debt-p1", status: "addressed" }],
+						}),
+					}
+				}),
+			}
+
+			const resident = new DesignerInResidence(api as any)
+			const audit = await resident.auditPostImplementation({
+				contract: {
+					decisionId: "dec-1",
+					goal: "Improve header visual hierarchy",
+					mustPreserve: ["Header layout"],
+					mustImprove: ["Button prominence"],
+					use: ["Button"],
+					avoid: ["Custom inline styles"],
+					successCriteria: ["Action visible in <2 seconds"],
+					validationPlan: ["Inspect render"],
+				},
+				changesMade: ["src/components/Header.tsx"],
+				workspaceDir: tempDir,
+			})
+
+			assert.equal(audit.success, true)
+			assert.equal(audit.achievedIntent, true)
+			assert.equal(audit.designDebtAdjustments[0].status, "addressed")
+		})
+
+		it("categorizes design debt across 7 explicit debt dimensions in graph builder", () => {
+			const builder = new DesignIntelligenceGraphBuilder()
+			const graph = builder.build({
+				intent: {
+					request: {
+						originalRequest: "audit",
+						interpretedGoal: "Debt audit",
+						explicitRequirements: [],
+						implicitRequirements: [],
+					},
+					product: {
+						productArea: "UI",
+						productPurpose: "App",
+						targetUsers: [],
+						userExperienceLevels: [],
+						primaryJobs: [],
+						secondaryJobs: [],
+					},
+					currentExperience: {
+						workflow: [],
+						strengths: [],
+						weaknesses: [],
+						frictionPoints: [],
+						existingPatterns: [],
+						unresolvedQuestions: [],
+					},
+					constraints: { technical: [], product: [], brand: [], accessibility: [], performance: [], platform: [] },
+					boundaries: { preserve: [], allowedToChange: [], outOfScope: [] },
+					success: { desiredOutcomes: [], measurableSignals: [], qualitativeSignals: [], failureConditions: [] },
+				},
+				problems: [
+					{
+						id: "p1",
+						dimension: "accessibility",
+						target: "src/Button.tsx",
+						observation: "Missing aria label",
+						userImpact: "Screen reader skip",
+						evidence: [],
+						severity: "critical",
+						confidence: "high",
+					},
+					{
+						id: "p2",
+						dimension: "visual-hierarchy",
+						target: "src/Header.tsx",
+						observation: "Low contrast ratio",
+						userImpact: "Hard to read",
+						evidence: [],
+						severity: "medium",
+						confidence: "high",
+					},
+				],
+				lenses: ["accessibility-reviewer", "visual-systems-designer"],
+			})
+
+			const a11yItem = graph.designDebt.find((d) => d.id === "debt:p1")
+			const visualItem = graph.designDebt.find((d) => d.id === "debt:p2")
+			assert.equal(a11yItem?.category, "Accessibility Debt")
+			assert.equal(visualItem?.category, "Visual Debt")
+		})
+
+		it("returns industry patterns from PatternLibrary registry", () => {
+			const patterns = PatternLibrary.getPatterns()
+			assert.ok(patterns.length >= 7)
+			const cmdPalette = PatternLibrary.getPatternById("command-palette")
+			assert.equal(cmdPalette?.name, "Command Palette / Action Launcher")
+			assert.ok(cmdPalette?.benchmarkProducts.includes("Linear"))
+
+			const navPatterns = PatternLibrary.findPatternsForDimension("accessibility")
+			assert.ok(navPatterns.some((p) => p.id === "keyboard-focus-trap-modal"))
+		})
+
+		it("extracts CSS design tokens in ContextBuilder", () => {
+			const builder = new ContextBuilder()
+			const css = `
+				:root {
+					--primary-color: #007acc;
+					--spacing-md: 16px;
+					--font-size-base: 14px;
+					--border-radius-lg: 8px;
+				}
+			`
+			const tokens = builder.extractDesignTokens(css, "src/index.css")
+			assert.equal(tokens.length, 4)
+			assert.equal(tokens.find((t) => t.name === "--primary-color")?.type, "color")
+			assert.equal(tokens.find((t) => t.name === "--spacing-md")?.type, "spacing")
+			assert.equal(tokens.find((t) => t.name === "--border-radius-lg")?.type, "radius")
+		})
+
+		it("calculates dynamic UX Health Index score and grade", () => {
+			const builder = new DesignIntelligenceGraphBuilder()
+			const health = builder.calculateUXHealthIndex([
+				{
+					id: "d1",
+					category: "Accessibility Debt",
+					dimension: "accessibility",
+					target: "Button",
+					description: "Aria missing",
+					severity: "critical", // -15
+					status: "open",
+					lastAuditedAt: new Date().toISOString(),
+				},
+				{
+					id: "d2",
+					category: "Visual Debt",
+					dimension: "visual-hierarchy",
+					target: "Header",
+					description: "Contrast low",
+					severity: "high", // -10
+					status: "open",
+					lastAuditedAt: new Date().toISOString(),
+				},
+			])
+
+			assert.equal(health.score, 75)
+			assert.equal(health.grade, "B")
+			assert.equal(health.openDebtCount, 2)
+			assert.equal(health.breakdown["Accessibility Debt"], 15)
+		})
+
+		it("generates structured Design Decision Records (DDR)", () => {
+			const ddr = DesignDecisionRecordBuilder.createDDR(1, {
+				id: "dec-1",
+				status: "accepted",
+				sourceRefinementIds: ["ref-1"],
+				problemIds: ["p1"],
+				decision: "Promote primary action in header",
+				rationale: "Align with Linear/VS Code primary action pattern",
+				evidence: ["Header.tsx:L12"],
+				tradeoffs: ["Slightly wider container"],
+				affectedAreas: ["src/Header.tsx"],
+				acceptanceCriteria: ["Visible in <2s"],
+				locked: true,
+				reopenConditions: [],
+			})
+
+			assert.equal(ddr.id, "DDR-001")
+			assert.equal(ddr.status, "accepted")
+			assert.equal(ddr.decision, "Promote primary action in header")
+			assert.ok(ddr.consequences.positive.includes("Visible in <2s"))
+		})
+
+		it("scans code for Design System Drift with DesignDriftDetector", () => {
+			const detector = new DesignDriftDetector()
+			const jsxCode = `
+				export function Header() {
+					return <div style={{ margin: '13px', backgroundColor: '#007acc' }}>Header</div>
+				}
+			`
+			const drift = detector.scanFileContent("src/components/Header.tsx", jsxCode)
+			assert.ok(drift.length >= 2)
+			assert.ok(drift.some((d) => d.type === "inline-style-leak"))
+			assert.ok(drift.some((d) => d.type === "hardcoded-color"))
+		})
+
+		it("executes fast-path decision lock and non-blocking pipeline seamlessly", async () => {
+			const task = mockTask({ taskId: "fast-path-task" })
+			const orchestrator = new MixtureOfDesignersOrchestrator(task, "plan-only")
+			await orchestrator.run([{ text: "Fast-path throughput test" }])
+
+			const state = await ReceiptStore.load("fast-path-task")
+			assert.ok(state)
+			assert.ok(state.decisions.length > 0)
+			assert.ok(state.decisions.every((d) => d.status !== "accepted" || d.locked === true))
+			assert.ok(state.designDecisionRecords && state.designDecisionRecords.length > 0)
+		})
+
+		it("partitions tasks into disjoint parallel waves with SpeculativeTaskPlanner", () => {
+			const planner = new SpeculativeTaskPlanner()
+			const waves = planner.partitionIntoWaves([
+				{
+					id: "t1",
+					decisionIds: ["d1"],
+					objective: "Task 1",
+					affectedFiles: ["src/a.ts"],
+					affectedComponents: [],
+					affectedStates: [],
+					instructions: [],
+					dependencies: [],
+					acceptanceCriteria: [],
+					validationCommands: [],
+					mutationBoundary: [],
+					preservedBehavior: [],
+					rollbackNotes: [],
+					status: "pending",
+				},
+				{
+					id: "t2",
+					decisionIds: ["d2"],
+					objective: "Task 2",
+					affectedFiles: ["src/b.ts"],
+					affectedComponents: [],
+					affectedStates: [],
+					instructions: [],
+					dependencies: [],
+					acceptanceCriteria: [],
+					validationCommands: [],
+					mutationBoundary: [],
+					preservedBehavior: [],
+					rollbackNotes: [],
+					status: "pending",
+				},
+				{
+					id: "t3",
+					decisionIds: ["d3"],
+					objective: "Task 3",
+					affectedFiles: ["src/a.ts"],
+					affectedComponents: [],
+					affectedStates: [],
+					instructions: [],
+					dependencies: [],
+					acceptanceCriteria: [],
+					validationCommands: [],
+					mutationBoundary: [],
+					preservedBehavior: [],
+					rollbackNotes: [],
+					status: "pending",
+				},
+			])
+
+			assert.equal(waves.length, 2)
+			assert.equal(waves[0].tasks.length, 2) // t1 and t2 in wave 1
+			assert.equal(waves[1].tasks.length, 1) // t3 in wave 2 due to src/a.ts overlap
+		})
+
+		it("triggers deterministic fallback with DesignCircuitBreaker on timeout", async () => {
+			const result = await DesignCircuitBreaker.executeWithFallback(
+				async () => {
+					return new Promise<string>((resolve) => setTimeout(() => resolve("slow"), 100))
+				},
+				{
+					name: "test-timeout",
+					timeoutMs: 10,
+					fallback: () => "fallback-value",
+				},
+			)
+
+			assert.equal(result, "fallback-value")
+		})
+
+		it("caches and retrieves run state instantly with DesignStateCache", () => {
+			DesignStateCache.clear()
+			const fakeState: any = { runId: "r1", stage: "completed" }
+			DesignStateCache.set("task-cache-test", fakeState)
+			const retrieved = DesignStateCache.get("task-cache-test")
+			assert.equal(retrieved?.runId, "r1")
+		})
+
+		it("generates codemod patch with TokenSyncEngine", () => {
+			const engine = new TokenSyncEngine()
+			const patch = engine.generateCodemodPatch("button { color: #007acc; padding: 16px; }", [
+				{ name: "--color-primary", type: "color", value: "#007acc", semanticMeaning: "", sourceFile: "" },
+				{ name: "--spacing-md", type: "spacing", value: "16px", semanticMeaning: "", sourceFile: "" },
+			])
+
+			assert.ok(patch.patchedSnippet.includes("var(--color-primary, #007acc)"))
+			assert.ok(patch.patchedSnippet.includes("var(--spacing-md, 16px)"))
+			assert.equal(patch.tokensApplied.length, 2)
+		})
+
+		it("audits 8-state interactive contract completeness with ComponentContractLedger", () => {
+			const ledger = new ComponentContractLedger()
+			const contract = ledger.auditComponentContract(
+				"Button",
+				["default", "hover", "focus-visible", "disabled"],
+				["Enter", "Space"],
+				["aria-disabled"],
+			)
+
+			assert.equal(contract.completenessScore, 50)
+			assert.equal(contract.missingStates.length, 4)
+			assert.ok(contract.missingStates.includes("loading"))
+		})
+
+		it("calculates predictive UX regression risk score with UXRegressionRiskCalculator", () => {
+			const calc = new UXRegressionRiskCalculator()
+			const report = calc.calculateRisk(
+				[
+					{
+						id: "d1",
+						status: "accepted",
+						sourceRefinementIds: [],
+						problemIds: [],
+						decision: "Remove legacy navigation drawer",
+						rationale: "",
+						evidence: [],
+						tradeoffs: [],
+						affectedAreas: [],
+						acceptanceCriteria: [],
+						locked: true,
+						reopenConditions: [],
+					},
+				],
+				[
+					{
+						id: "t1",
+						decisionIds: ["d1"],
+						objective: "Wipe drawer",
+						affectedFiles: ["a", "b", "c", "d", "e", "f"],
+						affectedComponents: [],
+						affectedStates: [],
+						instructions: [],
+						dependencies: [],
+						acceptanceCriteria: [],
+						validationCommands: [],
+						mutationBoundary: [],
+						preservedBehavior: [],
+						rollbackNotes: [],
+						status: "pending",
+					},
+				],
+			)
+
+			assert.ok(report.score >= 55)
+			assert.ok(["high", "critical"].includes(report.riskLevel))
+			assert.ok(report.riskFactors.length >= 2)
 		})
 	})
 })

@@ -60,7 +60,7 @@ code --install-extension CardSorting.lumi
 - [Documentation](#documentation)
 - [Governed subagent execution](#governed-subagent-execution)
 - [Workspace Knowledge System](#workspace-knowledge-system)
-- [Mixture of Designers (MoD) v1.2](#mixture-of-designers-mod-v12)
+- [LUMI Designer-in-Residence & MoD v3.0](#lumi-designer-in-residence--mod-v30)
 - [Plan & Act modes](#plan--act-modes)
 - [Built-in slash commands](#built-in-slash-commands)
 - [Lifecycle hooks](#lifecycle-hooks)
@@ -244,9 +244,9 @@ Tutorial: [your-first-project](docs/getting-started/your-first-project.mdx) · P
 | [MEOW philosophy](.wiki/meow-philosophy.md) | Normative reasoning and calm concurrency principles |
 | [MEOW whitepaper](.wiki/meow-whitepaper.md) | Canonical technical architecture for execution lane swarms |
 | [MEOW migration](.wiki/meow-migration.md) | Measured throughput evidence and naming evolution |
-| [MoD brief](.wiki/mod-executive-brief.md) | Executive brief for Mixture of Designers v1.2 orchestration |
-| [MoD philosophy](.wiki/mod-philosophy.md) | Cognitive specialization, bounded rationality, and priority consensus |
-| [MoD whitepaper](.wiki/mod-whitepaper.md) | Mathematical formalization, gating network, and Hoare-logic mutation governance |
+| [MoD brief](.wiki/mod-executive-brief.md) | Executive brief for LUMI Designer-in-Residence & MoD v3.0 architecture |
+| [MoD philosophy](.wiki/mod-philosophy.md) | Embedded senior design judgment, 5-Whys reasoning, and Familiarity Heuristic |
+| [MoD whitepaper](.wiki/mod-whitepaper.md) | Mathematical formulation, 8-state UI contracts, token codemods, and speculative task waves |
 | [Governed subagent execution](docs/governed-subagent-execution.md) | Swarm architecture and lifecycle |
 | [Governed execution authority](docs/governed-execution-authority.md) | SQLite lease authority, projection reconciliation, and deadlock safety |
 | [SQLite storage & memory architecture](docs/architecture/sqlite-storage-and-memory-lifecycle.md) | Multi-table retention, auto-vacuum PRAGMA sequence, statement handle disposal, and WAL checkpoint guardrails |
@@ -359,15 +359,24 @@ flowchart TD
 
 ---
 
-## Mixture of Designers (MoD) v1.2
+## LUMI Designer-in-Residence & MoD v3.0
 
-LUMI includes **Mixture of Designers (MoD) v1.2**, a toggleable cognitive-specialization orchestration runtime that models professional software product design organizations. Inspired by Mixture-of-Experts (MoE) architectures, MoD dynamically routes codebase problems to a council of specialized read-only design personas (such as UX Architect, Accessibility Reviewer, Design System Engineer), converges recommendations using a deterministic priority hierarchy, locks design decisions, and delegates codebase mutations to developer subagents bounded by strict file mutation scopes.
+LUMI includes **Designer-in-Residence (MoD v3.0)**, an embedded senior product designer agent architecture that continuously interrogates, improves, and elevates product design within the engineering environment. Replacing naive multi-persona voting, the Designer-in-Residence moves fluidly across internal evaluation lenses (UX Architecture, Accessibility, Visual Hierarchy, Interaction Patterns, System Engineering) while maintaining one coherent product vision.
+
+### Key Capabilities
+- **5-Whys Root-Cause Investigation**: Traces surface usability friction down to fundamental information architecture and mental model breakdowns.
+- **Industry Pattern Library Registry (`PatternLibrary.ts`)**: Benchmarks UI proposals against learned user conventions (Command Palette, Split Workspace, Contextual Action Toolbar, Optimistic Undo Toast, Guided Empty State, Focus-Trapped Modals).
+- **Design Token Sensing & Codemod Sync Engine (`TokenSyncEngine.ts`)**: Automatically extracts CSS custom properties and generates codemod patches mapping hardcoded CSS/HEX values to canonical variables (`var(--color-primary)`).
+- **Dynamic UX Health Index (0-100)**: Live scoring, letter grades (`A+` to `F`), and category breakdowns across 7 explicit design debt dimensions.
+- **Design Decision Records & System Drift Guard (`DesignDecisionRecord.ts`, `DesignDriftDetector.ts`)**: Formats immutable decision records (`DDR-001`) and scans source files for design system drift.
+- **8-State Interactive UI Contract Ledger & Predictive Risk Calculator (`ComponentContractLedger.ts`, `UXRegressionRiskCalculator.ts`)**: Audits UI components across all 8 interactive states and evaluates breaking layout/flow regression risk (`0-100`).
+- **High-Throughput Speculative Execution (`SpeculativeTaskPlanner.ts`, `DesignCircuitBreaker.ts`, `DesignStateCache.ts`)**: Partitions implementation tasks into parallel disjoint execution waves, enforces 30s LLM stream safety valves, and caches state in memory.
 
 | Paper / Guide | Target Audience / Purpose |
 |---------------|--------------------------|
-| **[MoD Executive Brief](.wiki/mod-executive-brief.md)** | Product strategy, persona mappings, and token efficiency models |
-| **[MoD Design Philosophy](.wiki/mod-philosophy.md)** | Bounded rationality, appraisal/execution separation, and priority consensus |
-| **[MoD Technical Whitepaper](.wiki/mod-whitepaper.md)** | Mathematical formulation, gating networks, DAG state resume, and Hoare logic |
+| **[MoD Executive Brief](.wiki/mod-executive-brief.md)** | Product strategy, Designer-in-Residence paradigm, and token efficiency models |
+| **[MoD Design Philosophy](.wiki/mod-philosophy.md)** | Embedded senior design judgment, 5-Whys reasoning, and Familiarity Heuristic |
+| **[MoD Technical Whitepaper](.wiki/mod-whitepaper.md)** | Mathematical formulation, 8-state UI contracts, token codemods, and speculative task waves |
 
 ---
 

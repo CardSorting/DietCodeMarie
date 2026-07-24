@@ -1,5 +1,16 @@
 # Execution Patterns
 
+## Designer-in-Residence Governance & Fast-Path Pipeline
+
+1. **Token Sensing & Codemod Sync**: Use `ContextBuilder.extractDesignTokens` to scan workspace style tokens and `TokenSyncEngine.generateCodemodPatch` to map raw CSS/HEX values to canonical variables (`var(--color-primary)`).
+2. **5-Whys Investigation**: Use `DesignerInResidence.investigate()` to trace surface friction down to fundamental IA and mental model mismatches before proposing options.
+3. **Pattern Library Matching**: Benchmark proposed UX options against learned user conventions in `PatternLibrary.ts` (Command Palette, Split Workspace, Contextual Action Toolbar, Optimistic Undo Toast, Guided Empty State, Focus-Trapped Modals).
+4. **Design Governance Logging**: Format immutable decision records (`DDR-001`) via `DesignDecisionRecordBuilder` and scan code for design system drift via `DesignDriftDetector`.
+5. **Interactive UI State Audit**: Verify UI components across all 8 interactive states (`default`, `hover`, `focus-visible`, `active`, `disabled`, `loading`, `error`, `empty`) via `ComponentContractLedger`.
+6. **Predictive Risk Assessment**: Calculate breaking layout/flow risk (`0-100`) via `UXRegressionRiskCalculator` before dispatching tasks.
+7. **Disjoint Wave Execution**: Partition implementation tasks into parallel execution waves via `SpeculativeTaskPlanner` based on file target disjunctions.
+8. **Fault Isolation & Latency Shielding**: Wrap model investigation streams in `DesignCircuitBreaker.executeWithFallback` with 30s timeouts and serve state checks via `DesignStateCache`.
+
 ## Transactional Task Lifecycle
 
 1. Construct one typed transition intent with task, exact generation, idempotency ID, causal source, and originating operation/event identity.

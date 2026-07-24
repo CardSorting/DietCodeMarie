@@ -32,7 +32,7 @@ Do not merge these narratives. LUMI owns IDE session behavior and approvals. Bro
 | Providers | `src/core/api/`, `src/shared/providers/providers.json` | Five active provider keys in current code/UI |
 | Prompts | `src/core/prompts/system-prompt/` | Variant-specific system prompts and tool descriptions |
 | Context/rules/skills | `src/core/context/`, `.dietcoderules/`, `.agents/skills/` | User/project instructions and optional skills |
-| Mixture of Designers (MoD) | `src/core/orchestration/mod/` | MoE Top-K Softmax routing, circuit breakers, BFT consensus, zero-stall heuristic fallbacks |
+| Mixture of Designers (MoD) | `src/core/orchestration/mod/` | Embedded senior Designer-in-Residence, 5-Whys recursive reasoning, Industry Pattern Library (`PatternLibrary.ts`), CSS Design Token Codemod Engine (`TokenSyncEngine.ts`), Dynamic UX Health Index (0-100), Design Decision Records (`DesignDecisionRecord.ts`), 8-State UI Contract Ledger (`ComponentContractLedger.ts`), Predictive UX Risk Calculator (`UXRegressionRiskCalculator.ts`), Speculative Task Wave Planner (`SpeculativeTaskPlanner.ts`), Adaptive Circuit Breaker (`DesignCircuitBreaker.ts`), In-Memory State Cache (`DesignStateCache.ts`) |
 | Webview UI | `webview-ui/` | React/Vite sidebar, settings, message rendering |
 | Protocol | `proto/`, `src/generated/` | Protobuf/gRPC contracts; generated outputs should not be hand-edited |
 | Roadmap/governance | `src/services/roadmap/`, `ROADMAP.md` | Steering, gates, roadmap lifecycle |

@@ -18,14 +18,14 @@ The production-grade lease reconciliation and execution-hardening pass is implem
 
 | Surface | Current behavior | Primary files |
 |---------|------------------|---------------|
-| Authority mode | Immutable `sqlite` production mode or explicit `local_test`; no dynamic fallback | `src/core/governance/LockAuthority.ts`, `src/shared/governance/lockTypes.ts` |
-| Lease allocation/release | `BEGIN IMMEDIATE`, monotonic string epoch/token, exact-tuple CAS delete | `src/core/swarm/SwarmMutexService.ts` |
-| Projections | File, Broccoli, and memory validate full identity; corrupt records fail closed | `src/shared/governance/fileLock.ts`, `src/core/governance/BroccoliFencingAdapter.ts` |
-| Administrative override | Separate reason-required cleaner outside runtime authority | `src/core/governance/AdministrativeLockCleaner.ts` |
-| Reconciliation | Database-available snapshot required; repair/reclaim decisions are ownership checked | `src/core/governance/LockAuthority.ts` |
-| Deadlock analysis | Typed wait edges, Tarjan SCC, timer/lease/owner/capacity escapes, version re-check | `src/core/task/tools/subagent/TarjanDeadlockDetector.ts`, `SubagentToolHandler.ts`, `LaneDAG.ts` |
-| Terminal completion | Canonical SHA-256 decision identity and durable `task_completions` CAS | `src/core/task/tools/handlers/AttemptCompletionHandler.ts`, `src/infrastructure/db/Config.ts` |
-| ACT prompt | Semantic next action, hard blockers, lane progress, completion condition only | `src/core/prompts/system-prompt/registry/PromptBuilder.ts` |
+| Designer-in-Residence | Single senior product designer agent architecture with 5-Whys root-cause reasoning | `src/core/orchestration/mod/DesignerInResidence.ts` |
+| Industry Pattern Registry | Benchmark UI patterns (Command Palette, Split Workspace, Contextual Action Toolbar, Optimistic Undo Toast, Guided Empty State, Focus-Trapped Modals) | `src/core/orchestration/mod/PatternLibrary.ts` |
+| Token Sensing & Codemod Sync | Extracts CSS custom properties and automatically patches hardcoded CSS/HEX values | `src/core/orchestration/mod/ContextBuilder.ts`, `TokenSyncEngine.ts` |
+| Dynamic UX Health Index | Scores UX health (0-100), letter grade (A+-F), and category breakdowns across 7 debt dimensions | `src/core/orchestration/mod/DesignIntelligenceGraph.ts` |
+| Design Decision Records & Drift Guard | Formats immutable DDR-001 decision records and scans code for design system drift | `src/core/orchestration/mod/DesignDecisionRecord.ts`, `DesignDriftDetector.ts` |
+| 8-State Interactive UI Contracts & Risk | Audits component state completeness across 8 core UI states and evaluates UX regression risk | `src/core/orchestration/mod/ComponentContractLedger.ts`, `UXRegressionRiskCalculator.ts` |
+| High-Throughput Speculative Execution | Partitions tasks into parallel disjoint waves, enforces 30s LLM timeouts, and caches state in memory | `src/core/orchestration/mod/SpeculativeTaskPlanner.ts`, `DesignCircuitBreaker.ts`, `DesignStateCache.ts` |
+| Orchestration Engine | Fast-path atomic decision locking and non-blocking background receipt saves | `src/core/orchestration/mod/MixtureOfDesignersOrchestrator.ts` |
 
 The working tree also contains earlier user changes across policy, audit, roadmap, subagent, and completion files. Preserve them; do not reset or rewrite unrelated modifications.
 

@@ -1,33 +1,31 @@
-# Mixture of Designers (MoD) v2.0: Design Philosophy
-**High-Throughput Cognitive Specialization, Resilient Fault Tolerance, and Deterministic Governance in Autonomous Codebase Evolution**
+# Mixture of Designers (MoD) & LUMI Designer-in-Residence v3.0: Design Philosophy
+**High-Throughput Cognitive Specialization, Embedded Senior Design Judgment, and Deterministic Governance in Autonomous Codebase Evolution**
 
 ---
 
 ## 1. Introduction
 The execution of codebase mutations by autonomous AI agents has historically been treated as a translation problem: converting text instructions into syntactically valid code changes. While this paradigm suffices for isolated algorithm repair, it fails systematically when applied to complex multi-file product refactoring. Codebases are socio-technical artifacts; their designs are governed by implicit human expectations, design systems, visual hierarchies, usability workflows, and legal compliance mandates (e.g. accessibility).
 
-The **Mixture of Designers (MoD) v2.0** paradigm is founded on the philosophy that **codebase mutations must be downstream effects of converged, resilient design plans**. Rather than allowing a single model to act as strategist, designer, architect, developer, and auditor simultaneously—or allowing single-point API failures to stall orchestration—MoD v2.0 enforces strict division of labor, MoE capacity balancing, specialist circuit-breaking, and zero-stall execution authority.
+The **LUMI Designer-in-Residence v3.0** paradigm is founded on the philosophy that **codebase mutations must be downstream effects of converged, resilient senior design plans**. Rather than attempting to simulate a council of personas voting on buttons—which causes deadlocks and fragmented product vision—a world-class designer is valuable because they move fluidly between internal specialized lenses (UX Architecture, Accessibility, Visual Hierarchy, Product Strategy, Interaction Patterns, System Engineering) while maintaining one coherent product vision.
 
 ---
 
 ## 2. Theoretical Foundations
 
-### 2.1 Bounded Rationality & Cognitive Overload
-Herbert Simon’s theory of **bounded rationality** posits that decision-makers are constrained by cognitive limitations, time, and information access. In LLMs, this manifests as prompt-context confusion and attention dilution. A single LLM attempting to implement a feature while concurrently optimizing for accessibility, performance, responsive reflow, and brand token usage will inevitably prioritize functional completion at the expense of design details.
+### 2.1 Senior Designer-in-Residence vs. Persona Councils
+Multi-persona councils introduce artificial debate overhead and design dilution. The **Designer-in-Residence** operates as an embedded senior product designer inside the engineering workspace. Specialized lenses are internal evaluation criteria within the resident's judgment, eliminating persona votes, negotiation, and competing designs.
 
-MoD addresses this by routing the request to independent specialized personas. Each persona is assigned a strict cognitive boundary:
-- An **Accessibility Reviewer** evaluates files *only* for screen reader compatibility, ARIA tags, and keyboard focus traps.
-- A **Design System Engineer** evaluates files *only* for reuse of visual primitives and variables.
+### 2.2 5-Whys Recursive Root-Cause Reasoning
+Surface usability symptoms (e.g. "button is hard to find") are rarely solved by superficial styling patches. The Designer-in-Residence applies **5-Whys recursive investigation** to trace surface friction down to fundamental information architecture and mental model breakdowns before proposing options.
 
-This focus alignment reduces the problem space for each model call, maximizing critical depth.
+### 2.3 The Familiarity Heuristic & Benchmark Pattern Library
+Users learn software conventions across popular tools (VS Code, Figma, Linear, Notion, GitHub, Stripe, Apple, Vercel). Innovation for its own sake creates cognitive friction. The Designer-in-Residence leverages an **Industry Pattern Library Registry (`PatternLibrary.ts`)** to match UX issues against established, learned user patterns.
 
-### 2.2 The Separation of Appraisal and Execution
-In classical architecture and civil engineering, the party that designs and audits a structure is structurally distinct from the party that builds it. This separation prevents conflict of interest and guarantees independent inspection.
-
-MoD implements this separation at the agent runtime level:
-1. **Appraisal Phase (Read-Only)**: The Intent Analyzer, Problem Classifier, and Specialist Council evaluate the codebase. They identify anomalies, formulate strategies, and propose refinements. They have *zero* write access to the filesystem.
-2. **Consensus Phase**: Recommendations are converged, conflicts resolved, and decisions locked by the parent orchestrator.
-3. **Execution Phase (Write-Only)**: Developer subagents receive the locked decisions and carry out the mutations. They do not formulate design directions; they are executors bound by acceptance criteria.
+### 2.4 Separation of Appraisal and Execution
+In classical architecture, the party that designs and audits a structure is structurally distinct from the party that builds it.
+1. **Appraisal Phase (Read-Only)**: The Designer-in-Residence investigates existing UI, workflows, design tokens, and interaction states.
+2. **Governance Phase**: Decisions are locked into formal Design Decision Records (`DDR-001`) and evaluated by a predictive UX Regression Risk Calculator.
+3. **Execution Phase (Write-Only)**: Developer subagents execute locked tasks in parallel disjoint waves (`SpeculativeTaskPlanner.ts`).
 
 ---
 
