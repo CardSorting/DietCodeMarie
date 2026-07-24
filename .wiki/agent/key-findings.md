@@ -1,5 +1,13 @@
 # Key Findings
 
+## 2026-07-24 MoD Upstream Grounded Investigation & Strict Downstream Resolution
+
+- **Golden Invariant Rule**: Implementation subagents must NEVER be handed arbitrary downstream file boundaries that were not explicitly inspected and selected during the design investigation phase.
+- **Zero Downstream Guessing (`MixtureOfDesignersOrchestrator.ts`)**: Reverted downstream target resolution probing. If an ungrounded decision (e.g. `target: "General"`) reaches task generation without evidence or refinement file bindings, the orchestrator acts as a strict invariant gatekeeper, throws `TargetResolutionException("TARGET_RESOLUTION_FAILED")`, and safely transitions state to `blocked`.
+- **Upstream Grounded Investigation (`ProblemClassifier.ts`, `DesignerInResidence.ts`)**: Embedded physical workspace file probing (`probeWorkspaceFile()`) directly into the Design Investigation Phase. Problem classifications and design decisions come out pre-attached to real inspected workspace files (`.tsx`, `.ts`, `.vue`, `.css`, etc.).
+- **Terminal State Leak Fix**: Added `"blocked"` to `MoDStage` union in `types.ts` and `SubagentStatusRow.tsx`, preventing target resolution blocks from leaking into `completed-with-limitations`.
+- **Verification Evidence**: 66 Mocha unit tests passed cleanly with 0 failures (`src/core/task/tools/subagent/__tests__/mod.test.ts`).
+
 ## 2026-07-24 LUMI Designer-in-Residence Enterprise Architecture Upgrade
 
 - **Designer-in-Residence vs. Persona Council**: Replaced multi-agent persona voting with an embedded senior product designer agent (`DesignerInResidence.ts`) that evaluates workspace UI through internal design lenses (UX Architecture, Accessibility, Visual Hierarchy, Interaction Patterns, System Engineering) to maintain one coherent product vision.

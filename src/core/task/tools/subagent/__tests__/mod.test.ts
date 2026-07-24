@@ -45,7 +45,7 @@ function mockTask(overrides?: any): any {
 		createMessage: sinon.stub().callsFake(async function* () {
 			yield {
 				type: "text",
-				text: `[{"id":"ref-1","role":"product-strategist","problem":{"problemId":"information-architecture","target":"src/a.ts","observedBehavior":"none","userImpact":"none","severity":"medium","frequency":"occasional"},"evidence":[],"recommendation":{"designStrategy":"strategy","proposedChange":"change","adaptationNotes":[],"alternativesConsidered":[],"tradeoffs":[]},"implementation":{"affectedFiles":["src/a.ts"],"affectedComponents":[],"affectedStates":[],"instructions":[],"dependencies":[],"riskLevel":"low"},"validation":{"acceptanceCriteria":[],"regressionRisks":[],"verificationMethods":[]},"governance":{"confidence":"high","scopeStatus":"in-scope","mutationAuthorityRequired":false,"conflictsWith":[]}}]`,
+				text: `{"summary":"Design direction","findings":[],"hypotheses":[],"options":[],"refinements":[{"id":"ref-1","role":"product-strategist","problem":{"problemId":"information-architecture","target":"src/a.ts","observedBehavior":"none","userImpact":"none","severity":"medium","frequency":"occasional"},"evidence":[],"recommendation":{"designStrategy":"strategy","proposedChange":"change","adaptationNotes":[],"alternativesConsidered":[],"tradeoffs":[]},"implementation":{"affectedFiles":["src/a.ts"],"affectedComponents":[],"affectedStates":[],"instructions":[],"dependencies":[],"riskLevel":"low"},"validation":{"acceptanceCriteria":[],"regressionRisks":[],"verificationMethods":[]},"governance":{"confidence":"high","scopeStatus":"in-scope","mutationAuthorityRequired":false,"conflictsWith":[]}}]}`,
 			}
 		}),
 	}
@@ -1813,14 +1813,15 @@ describe("Mixture of Designers v1.2 Orchestration", () => {
 				},
 			})
 			const orchestrator = new MixtureOfDesignersOrchestrator(task, "plan-and-implement")
+			sinon.stub(orchestrator as any, "probeWorkspaceTargetFile").returns("src/workflow/LocalDiffusion.tsx")
 			sinon.stub(SubagentRunner.prototype, "run").resolves({ status: "completed", stats: {} as any })
 
 			await orchestrator.run([{ text: "Improve the image diffusion application's local workflow" }])
 
-			const state = await ReceiptStore.load("specialist-stream-failure")
+			const state = (orchestrator as any).state
 			assert.ok(state)
-			assert.ok(state.specialistResults.some((result) => !result.success))
-			assert.ok(state.decisions.some((decision) => decision.status === "accepted"))
+			assert.ok(state.specialistResults.some((result: any) => !result.success))
+			assert.ok(state.decisions.some((decision: any) => decision.status === "accepted"))
 			assert.ok(state.implementationTasks.length > 0)
 			assert.notEqual(state.stage, "completed-with-limitations")
 		})
@@ -2347,6 +2348,70 @@ describe("Mixture of Designers v1.2 Orchestration", () => {
 			assert.ok(report.score >= 55)
 			assert.ok(["high", "critical"].includes(report.riskLevel))
 			assert.ok(report.riskFactors.length >= 2)
+		})
+
+		it("transitions state to 'blocked' when target resolution fails for all decisions", async () => {
+			const task = mockTask({
+				taskId: "target-resolution-blocked-test",
+				api: {
+					createMessage: sinon.stub().throws(new Error("investigation stream offline")),
+				},
+			})
+			const orchestrator = new MixtureOfDesignersOrchestrator(task, "plan-and-implement")
+			sinon.stub(orchestrator as any, "probeWorkspaceTargetFile").returns(undefined)
+			sinon.stub(ProblemClassifier.prototype, "getFallbackClassification").returns({
+				problems: [
+					{
+						id: "prob-1",
+						dimension: "workflow",
+						target: "General",
+						observation: "General issue",
+						userImpact: "Usability impacted",
+						evidence: [],
+						severity: "medium",
+						confidence: "low",
+					},
+				],
+				preservedStrengths: [],
+				insufficientEvidence: [],
+			})
+
+			await orchestrator.run([{ text: "General product optimization" }])
+
+			const state = (orchestrator as any).state
+			assert.ok(state)
+			assert.equal(state.stage, "blocked")
+			assert.ok(
+				state.limitations.some(
+					(l: string) => l.includes("[TARGET_RESOLUTION_FAILURE]") || l.includes("[DESIGN_INVESTIGATION_FAILED]"),
+				),
+			)
+		})
+
+		it("strictly rejects ungrounded 'General' decisions downstream during target resolution", () => {
+			const task = mockTask()
+			const orchestrator = new MixtureOfDesignersOrchestrator(task, "plan-and-implement")
+
+			assert.throws(
+				() =>
+					(orchestrator as any).resolveTargetFilesForDecision({
+						id: "dec-general-1",
+						decision: "Improve UI experience",
+						rationale: "Enhance visual hierarchy",
+						affectedAreas: ["General"],
+					}),
+				/could not be grounded/,
+			)
+		})
+
+		it("grounds fallback targets in concrete workspace files when probed", () => {
+			const task = mockTask()
+			const orchestrator = new MixtureOfDesignersOrchestrator(task, "plan-and-implement")
+			sinon.stub(orchestrator as any, "probeWorkspaceTargetFile").returns("src/components/ArtCanvas.tsx")
+
+			const ref = (orchestrator as any).getFallbackRefinement("product-strategist", "Improve experience")
+			assert.equal(ref.problem.target, "src/components/ArtCanvas.tsx")
+			assert.deepEqual(ref.implementation.affectedFiles, ["src/components/ArtCanvas.tsx"])
 		})
 	})
 })

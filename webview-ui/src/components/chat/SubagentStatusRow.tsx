@@ -138,6 +138,7 @@ const MOD_STAGE_DESCRIPTIONS: Record<string, string> = {
 	completed: "Mixture of Designers pass completed successfully.",
 	"completed-with-limitations": "Mixture of Designers pass completed with limitations.",
 	failed: "Mixture of Designers run failed.",
+	blocked: "Implementation blocked: workspace target resolution failure.",
 }
 
 const statusIcon = (status: DisplayStatus, isMod = false) => {

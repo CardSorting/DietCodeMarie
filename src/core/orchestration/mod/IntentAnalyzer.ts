@@ -198,7 +198,7 @@ Codebase Context: ${codebaseContext}`
 			},
 			boundaries: {
 				preserve: [],
-				allowedToChange: ["Target feature components"],
+				allowedToChange: [],
 				outOfScope: [],
 			},
 			success: {

@@ -1,5 +1,6 @@
 # Common Pitfalls
 
+- Do not guess or auto-assign downstream file boundaries (e.g. `src/App.tsx`) when MoD target resolution encounters ungrounded targets like `"General"`. Force upstream design investigation (`ProblemClassifier.ts`, `DesignerInResidence.ts`) to ground target decisions in physical inspected workspace files.
 - Do not switch production coordination to memory when SQLite fails. `local_test` is a startup mode, not a recovery mode.
 - Do not infer lock ownership from PID, mtime, owner ID alone, or the existence/absence of a projection file. Compare the complete owner/epoch/token/mode identity against SQLite.
 - Do not convert `leaseEpoch` or `fencingToken` to JavaScript `number`; use the decimal string or `bigint`.

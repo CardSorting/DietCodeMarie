@@ -4,7 +4,7 @@
 > **When do I use it?** At task start to understand the active developer landscape, blockers, and orientation paths.
 > **What is the source of truth?** The live workspace layout, manifests, package files, and the active task requirements.
 
-Last audited: 2026-07-18
+Last audited: 2026-07-24
 
 ## Current Status
 
@@ -37,6 +37,7 @@ The active work now includes production authority and terminalization hardening:
 - `src/core/task/tools/subagent/SubagentRunner.ts` implements repetition detection to break tool repetition loops with self-correction nudges and signal toxic hotspots.
 - `src/core/task/tools/subagent/SubagentTranscriptRecorder.ts` writes JSONL logs atomically using temporary files to prevent corruption, and supports deferred write-behind scheduling.
 - `src/infrastructure/db/Config.ts` & `SQLiteMaintenanceEngine.ts`: Re-ordered PRAGMAs (`auto_vacuum = INCREMENTAL` before WAL mode) and automated `VACUUM` header migration; multi-table retention policies covering all 35 system tables (`task_lifecycle_records`, ephemeral `branches`, `swarm_lock_generations`, CAS `files`, `telemetry`, `audit_events`); prepared statement handle `.dispose()` lifecycle and LRU caching; and exponential backoff retry loop for 32MB WAL truncation.
+- `src/core/orchestration/mod/`: Mixture of Designers (MoD) v1.3 Upstream Grounded Investigation (`ProblemClassifier.ts`, `DesignerInResidence.ts`) and Strict Invariant Downstream Target Resolution (`MixtureOfDesignersOrchestrator.ts`). Implementation subagents are never given arbitrary downstream guessed file boundaries; ungrounded decisions halt safely at the `blocked` stage.
 
 ## First 10 Minutes For A New Agent
 

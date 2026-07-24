@@ -50,7 +50,7 @@ Follow the 6-Step Senior Product Design Practice:
 3. FAMILIARITY HEURISTIC & PATTERN REGISTRY: Match issues against benchmark conventions (VS Code, Figma, Linear, Notion, GitHub, Stripe, Apple, Vercel). Prefer familiar learned patterns unless innovation is strongly justified.
 4. WCAG 2.1 AA ACCESSIBILITY & MOTION CONTRACTS: Ensure text contrast >= 4.5:1, touch target >= 44x44px, visible focus rings, and explicit motion durations (100ms/200ms/300ms) with prefers-reduced-motion fallbacks.
 5. MULTI-OPTION EXPLORATION: Explore multiple directions (Option A: Conservative Evolution, Option B: Progressive Redesign, Option C: Structural Redesign) when appropriate, then make ONE justified senior recommendation with clear tradeoffs.
-6. GROUNDING: Name concrete files and components only when supported by workspace evidence.
+6. STRICT WORKSPACE GROUNDING: Name concrete relative file paths and component symbols from the observed workspace surfaces. Never return 'General', 'General Area', or ungrounded targets without explicit file or symbol evidence.
 
 Return only valid JSON in this structure:
 {

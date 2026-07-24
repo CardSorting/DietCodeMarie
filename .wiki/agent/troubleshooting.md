@@ -1,5 +1,17 @@
 # Troubleshooting
 
+## MoD Run Enters 'blocked' Terminal State with [TARGET_RESOLUTION_FAILURE]
+
+Symptom: MoD run state transitions to `blocked` with limitations containing `[TARGET_RESOLUTION_FAILURE]` or `[DESIGN_INVESTIGATION_FAILED]`.
+
+Meaning: The design investigation phase emitted decisions targeting generic scopes (`"General"`) that could not be grounded in concrete workspace files. The orchestrator strictly refused to guess file boundaries downstream.
+
+Response:
+1. Inspect `ProblemClassifier.ts` and `DesignerInResidence.ts` fallback output.
+2. Verify physical workspace file probing (`probeWorkspaceFile()`) is active during classification and investigation.
+3. Ensure the workspace physically contains source/UI files (`.tsx`, `.ts`, `.vue`, `.css`, etc.).
+4. Do NOT bypass target resolution by guessing files in `resolveTargetFilesForDecision()`; force upstream investigation to produce concrete file evidence.
+
 ## Task Lifecycle Status Disagrees or Never Settles
 
 Symptom: one surface says active or complete while another remains pending, cancellation never settles, or an old resumed callback changes the current task.

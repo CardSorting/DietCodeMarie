@@ -1,4 +1,6 @@
 import * as crypto from "node:crypto"
+import * as fs from "node:fs"
+import * as path from "node:path"
 import { Task } from "@/core/task"
 import { SUBAGENT_DEFAULT_ALLOWED_TOOLS, SubagentBuilder } from "@/core/task/tools/subagent/SubagentBuilder"
 import { SubagentRunner } from "@/core/task/tools/subagent/SubagentRunner"
@@ -74,6 +76,7 @@ export const STAGE_DESCRIPTIONS: Record<MoDStage, string> = {
 	completed: "Mixture of Designers pass completed successfully.",
 	"completed-with-limitations": "Mixture of Designers pass completed with limitations.",
 	failed: "Mixture of Designers run failed.",
+	blocked: "Implementation blocked by workspace target resolution failure.",
 }
 
 export const MOD_DEFAULTS = {
@@ -270,6 +273,20 @@ export class MixtureOfDesignersOrchestrator {
 			void ReceiptStore.save(this.task.taskId, this.state)
 		}
 
+		const hasTargetResolutionFailures = this.state.limitations.some(
+			(lim) => lim.includes("[TARGET_RESOLUTION_FAILURE]") || lim.includes("[DESIGN_INVESTIGATION_FAILED]"),
+		)
+		const acceptedDecisionsCount = (this.state.decisions || []).filter((d) => d.status === "accepted").length
+
+		if (this.state.implementationTasks.length === 0 && (hasTargetResolutionFailures || acceptedDecisionsCount > 0)) {
+			Logger.warn("[MoD Execution State] Implementation blocked: All design decisions failed workspace target resolution.")
+			await this.transitionTo("blocked", "All design decisions failed workspace target resolution")
+			this.emitTelemetry("mod.failed")
+			await ReceiptStore.save(this.task.taskId, this.state)
+			await this.reportFinalResult()
+			return
+		}
+
 		// Dynamic outcome discernment based on request intent and grounded task availability
 		const effectiveOutcome = this.determineEffectiveOutcome(requestText)
 		this.state.outcome = effectiveOutcome
@@ -428,7 +445,7 @@ export class MixtureOfDesignersOrchestrator {
 	}
 
 	private getStageProgressPercent(stage: MoDStage): number {
-		if (stage === "completed-with-limitations") {
+		if (stage === "completed-with-limitations" || stage === "blocked") {
 			return 100
 		}
 
@@ -541,6 +558,12 @@ export class MixtureOfDesignersOrchestrator {
 		]
 		this.state.refinements = refinements
 		if (!investigationResult.success) {
+			const isGrounded = refinements.some((r) => (r.implementation?.affectedFiles || []).length > 0)
+			if (!isGrounded) {
+				this.state.limitations.push(
+					"[DESIGN_INVESTIGATION_FAILED] Design investigation could not be grounded in concrete workspace files.",
+				)
+			}
 			this.state.limitations.push(
 				"The Designer-in-Residence used an evidence-backed fallback because the primary design investigation was unavailable.",
 			)
@@ -861,6 +884,63 @@ Output JSON array only.`
 		return this.state?.problemClassification?.problems.find((problem) => problemIds.has(problem.id))
 	}
 
+	private probeWorkspaceTargetFiles(workspaceDir?: string): string[] {
+		// 1. Check problem classification for concrete file targets
+		const problemFiles: string[] = []
+		for (const prob of this.state?.problemClassification?.problems || []) {
+			if (
+				prob.target &&
+				prob.target !== "General" &&
+				prob.target !== "General Area" &&
+				prob.target !== "General UI" &&
+				prob.target !== "Interactive Components" &&
+				(prob.target.includes("/") || prob.target.includes("."))
+			) {
+				problemFiles.push(prob.target)
+			}
+		}
+		if (problemFiles.length > 0) {
+			return Array.from(new Set(problemFiles))
+		}
+
+		// 2. Synchronous workspace probe for source/UI files
+		const targetDir = workspaceDir || (this.task as any)?.cwd || process.cwd()
+		if (!targetDir) return []
+
+		try {
+			const candidateExtensions = [".tsx", ".ts", ".jsx", ".js", ".vue", ".svelte", ".css", ".html"]
+			const ignoreDirs = new Set(["node_modules", ".git", "dist", "build", ".next", ".dietcode", ".gemini", "out"])
+			const foundFiles: string[] = []
+
+			const scanDir = (dir: string, depth = 0): void => {
+				if (depth > 4 || foundFiles.length >= 10) return
+				const entries = fs.readdirSync(dir, { withFileTypes: true })
+				for (const entry of entries) {
+					if (ignoreDirs.has(entry.name)) continue
+					const fullPath = path.join(dir, entry.name)
+					if (entry.isFile()) {
+						const ext = path.extname(entry.name).toLowerCase()
+						if (candidateExtensions.includes(ext)) {
+							foundFiles.push(path.relative(targetDir, fullPath))
+						}
+					} else if (entry.isDirectory()) {
+						scanDir(fullPath, depth + 1)
+					}
+				}
+			}
+
+			scanDir(targetDir)
+			return Array.from(new Set(foundFiles))
+		} catch {
+			return []
+		}
+	}
+
+	private probeWorkspaceTargetFile(workspaceDir?: string): string | undefined {
+		const files = this.probeWorkspaceTargetFiles(workspaceDir)
+		return files[0]
+	}
+
 	private getFallbackRefinement(
 		role: DesignerRole,
 		text: string,
@@ -871,11 +951,31 @@ Output JSON array only.`
 	): DesignRefinement {
 		const cleanText = text.replace(/```[\s\S]*?```/g, "").trim()
 		const firstLine = cleanText.split("\n").filter((l) => l.trim().length > 0)[0]
-		const target = problem?.target || "General Area"
+		let target = problem?.target || "General Area"
+		if (
+			!target ||
+			target === "General" ||
+			target === "General Area" ||
+			target === "General UI" ||
+			target === "Interactive Components" ||
+			(!target.includes("/") && !target.includes("."))
+		) {
+			const groundedCandidate = this.probeWorkspaceTargetFile()
+			if (groundedCandidate) {
+				target = groundedCandidate
+			}
+		}
+
 		const proposedChange =
 			firstLine || `Address ${problem?.observation || "the requested product experience issue"} in ${target}.`
 		const affectedFiles =
-			target !== "General" && target !== "General Area" && (target.includes("/") || target.includes(".")) ? [target] : []
+			target !== "General" &&
+			target !== "General Area" &&
+			target !== "General UI" &&
+			target !== "Interactive Components" &&
+			(target.includes("/") || target.includes("."))
+				? [target]
+				: []
 
 		return {
 			id: `ref-${role}-fallback`,
@@ -950,9 +1050,9 @@ Output JSON array only.`
 
 				// Filter affected areas against preserve list (Hoare logic precondition)
 				const validMutationBoundary = resolvedAreas.filter((file) => {
-					const isPreserved = preserveBoundaries.some((p) => file.includes(p))
+					const isPreserved = preserveBoundaries.some((p) => p && file.includes(p))
 					if (allowedToChange.length > 0) {
-						return !isPreserved && allowedToChange.some((a) => file.includes(a))
+						return !isPreserved && allowedToChange.some((a) => !a || file.includes(a) || a.includes(file))
 					}
 					return !isPreserved
 				})
@@ -1019,7 +1119,7 @@ Output JSON array only.`
 
 		// 2. Attempt deterministic extraction (explicit paths in evidence, AST references, or refinements)
 		const refFiles: string[] = []
-		const refinements = (this.state.refinements || []).filter((r) => dec.sourceRefinementIds?.includes(r.id))
+		const refinements = (this.state?.refinements || []).filter((r) => dec.sourceRefinementIds?.includes(r.id))
 		for (const r of refinements) {
 			for (const file of r.implementation?.affectedFiles || []) {
 				if (file && file !== "General" && file !== "General Area" && (file.includes("/") || file.includes("."))) {
@@ -1039,7 +1139,7 @@ Output JSON array only.`
 
 		// 3. Attempt deterministic extraction from problem classification evidence
 		const problemFiles: string[] = []
-		for (const p of this.state.problemClassification?.problems || []) {
+		for (const p of this.state?.problemClassification?.problems || []) {
 			if (
 				p.target &&
 				p.target !== "General" &&
@@ -1138,7 +1238,7 @@ Output JSON array only.`
 		return false
 	}
 
-	private async executeSingleTask(task: DesignImplementationTask, workspaceDir: string): Promise<void> {
+	private async executeSingleTask(task: DesignImplementationTask, _workspaceDir: string): Promise<void> {
 		task.status = "in-progress"
 		Logger.info(`[MoD Task Execution] Executing task ${task.id}: ${task.objective}`)
 

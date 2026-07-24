@@ -23,6 +23,7 @@ export type MoDStage =
 	| "completed"
 	| "completed-with-limitations"
 	| "failed"
+	| "blocked"
 
 export interface ProductDesignIntent {
 	request: {

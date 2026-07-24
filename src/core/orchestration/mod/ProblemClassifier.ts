@@ -1,3 +1,5 @@
+import * as fs from "fs"
+import * as path from "path"
 import { ApiHandler } from "@/core/api"
 import { Logger } from "@/shared/services/Logger"
 import { ProductProblemClassification, ProductProblemDimension } from "./types"
@@ -109,9 +111,46 @@ Codebase Context: ${codebaseContext}`
 		}
 	}
 
-	public getFallbackClassification(requestText = ""): ProductProblemClassification {
+	private probeWorkspaceFile(cwd?: string): string | undefined {
+		const targetDir = cwd || process.cwd()
+		if (!targetDir) return undefined
+
+		try {
+			const candidateExtensions = [".tsx", ".ts", ".jsx", ".js", ".vue", ".svelte", ".css", ".html"]
+			const ignoreDirs = new Set(["node_modules", ".git", "dist", "build", ".next", ".dietcode", ".gemini", "out"])
+
+			const scanDir = (dir: string, depth = 0): string | undefined => {
+				if (depth > 4) return undefined
+				const entries = fs.readdirSync(dir, { withFileTypes: true })
+				for (const entry of entries) {
+					if (ignoreDirs.has(entry.name)) continue
+					const fullPath = path.join(dir, entry.name)
+					if (entry.isFile()) {
+						const ext = path.extname(entry.name).toLowerCase()
+						if (candidateExtensions.includes(ext)) {
+							return path.relative(targetDir, fullPath)
+						}
+					} else if (entry.isDirectory()) {
+						const found = scanDir(fullPath, depth + 1)
+						if (found) return found
+					}
+				}
+				return undefined
+			}
+
+			return scanDir(targetDir)
+		} catch {
+			return undefined
+		}
+	}
+
+	public getFallbackClassification(requestText = "", codebaseContext = "", cwd?: string): ProductProblemClassification {
 		const lower = requestText.toLowerCase()
 		const problems: ProductProblemClassification["problems"] = []
+
+		const combinedText = `${requestText} ${codebaseContext}`
+		const filePathMatch = combinedText.match(/\b[a-zA-Z0-9_\-./]+\.(tsx?|jsx?|vue|svelte|css|html)\b/i)
+		const groundedTarget = filePathMatch ? filePathMatch[0] : this.probeWorkspaceFile(cwd) || "General"
 
 		if (
 			lower.includes("accessibility") ||
@@ -122,7 +161,7 @@ Codebase Context: ${codebaseContext}`
 			problems.push({
 				id: "prob-fallback-1",
 				dimension: "accessibility",
-				target: "General UI",
+				target: groundedTarget,
 				observation: "Accessibility or screen reader compliance requires auditing",
 				userImpact: "Assisted tech users experience barriers",
 				evidence: [requestText],
@@ -141,7 +180,7 @@ Codebase Context: ${codebaseContext}`
 			problems.push({
 				id: "prob-fallback-2",
 				dimension: "visual-hierarchy",
-				target: "General UI",
+				target: groundedTarget,
 				observation: "Visual structure, spacing, or visual hierarchy needs refinement",
 				userImpact: "Visual scanning efficiency is impaired",
 				evidence: [requestText],
@@ -160,7 +199,7 @@ Codebase Context: ${codebaseContext}`
 			problems.push({
 				id: "prob-fallback-3",
 				dimension: "interaction",
-				target: "Interactive Components",
+				target: groundedTarget,
 				observation: "Interaction state feedback or control response needs auditing",
 				userImpact: "User action feedback is ambiguous",
 				evidence: [requestText],
@@ -174,7 +213,7 @@ Codebase Context: ${codebaseContext}`
 			problems.push({
 				id: "prob-fallback-0",
 				dimension: "workflow",
-				target: "General Area",
+				target: groundedTarget,
 				observation: "Overall experience workflow structure needs optimization",
 				userImpact: "Workflow clarity and efficiency can be improved",
 				evidence: [requestText],
