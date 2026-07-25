@@ -30,8 +30,27 @@ import {
 import { STATE_MANAGER_NOT_INITIALIZED } from "./error-messages"
 import { filterAllowedRemoteConfigFields } from "./remote-config/field-filter"
 import { readGlobalStateFromStorage, readSecretsFromStorage, readWorkspaceStateFromStorage } from "./utils/state-helpers"
+import { writeCoalescer } from "./WriteCoalescer"
 export interface PersistenceErrorEvent {
 	error: Error
+}
+
+function isValueEqual(a: unknown, b: unknown): boolean {
+	if (a === b) {
+		return true
+	}
+	if (Array.isArray(a) && Array.isArray(b)) {
+		if (a.length !== b.length) {
+			return false
+		}
+		for (let i = 0; i < a.length; i++) {
+			if (a[i] !== b[i]) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 /**
@@ -109,6 +128,7 @@ export class StateManager {
 	private pendingSecrets = new Set<SecretKey>()
 	private pendingWorkspaceState = new Set<LocalStateKey>()
 	private persistenceTimeout: NodeJS.Timeout | null = null
+	private autoPurgeTimer: NodeJS.Timeout | null = null
 	private readonly PERSISTENCE_DELAY_MS = 500
 	private taskHistoryWatcher: FSWatcher | null = null
 
@@ -120,6 +140,24 @@ export class StateManager {
 
 	private constructor(storage: StorageContext) {
 		this.storage = storage
+	}
+
+	/**
+	 * Start unref'd periodic background purge for expired model info caches
+	 */
+	private startAutoCachePurge(): void {
+		if (this.autoPurgeTimer) {
+			return
+		}
+		this.autoPurgeTimer = setInterval(
+			() => {
+				this.purgeExpiredCaches()
+			},
+			15 * 60 * 1000,
+		)
+		if (this.autoPurgeTimer.unref) {
+			this.autoPurgeTimer.unref()
+		}
 	}
 
 	/**
@@ -156,6 +194,7 @@ export class StateManager {
 
 			// Start watcher for taskHistory.json so external edits update cache (no persist loop)
 			await StateManager.instance.setupTaskHistoryWatcher()
+			StateManager.instance.startAutoCachePurge()
 
 			StateManager.instance.isInitialized = true
 
@@ -198,6 +237,10 @@ export class StateManager {
 			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
 		}
 
+		if (isValueEqual(this.globalStateCache[key], value)) {
+			return
+		}
+
 		// Update cache immediately for instant access
 		this.globalStateCache[key] = value
 
@@ -214,17 +257,19 @@ export class StateManager {
 			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
 		}
 
-		// Update cache in one go
-		// Using object.assign to because typescript is not able to infer the type of the updates object when using Object.entries
-		Object.assign(this.globalStateCache, updates)
+		let hasChanges = false
+		for (const [key, value] of Object.entries(updates)) {
+			const stateKey = key as GlobalStateAndSettingsKey
+			if (!isValueEqual((this.globalStateCache as any)[stateKey], value)) {
+				;(this.globalStateCache as any)[stateKey] = value
+				this.pendingGlobalState.add(stateKey)
+				hasChanges = true
+			}
+		}
 
-		// Then track the keys for persistence
-		Object.keys(updates).forEach((key) => {
-			this.pendingGlobalState.add(key as GlobalStateAndSettingsKey)
-		})
-
-		// Schedule debounced persistence
-		this.scheduleDebouncedPersistence()
+		if (hasChanges) {
+			this.scheduleDebouncedPersistence()
+		}
 	}
 
 	private setRemoteConfigState(updates: Partial<GlobalStateAndSettings>): void {
@@ -247,6 +292,10 @@ export class StateManager {
 			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
 		}
 
+		if (isValueEqual(this.taskStateCache[key], value)) {
+			return
+		}
+
 		// Update cache immediately for instant access
 		this.taskStateCache[key] = value
 
@@ -266,19 +315,22 @@ export class StateManager {
 			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
 		}
 
-		// Update cache in one go
-		Object.assign(this.taskStateCache, updates)
-
-		// Then track the keys for persistence
-		if (!this.pendingTaskState.has(taskId)) {
-			this.pendingTaskState.set(taskId, new Set())
+		let hasChanges = false
+		for (const [key, value] of Object.entries(updates)) {
+			const settingsKey = key as SettingsKey
+			if (!isValueEqual((this.taskStateCache as any)[settingsKey], value)) {
+				;(this.taskStateCache as any)[settingsKey] = value
+				if (!this.pendingTaskState.has(taskId)) {
+					this.pendingTaskState.set(taskId, new Set())
+				}
+				this.pendingTaskState.get(taskId)?.add(settingsKey)
+				hasChanges = true
+			}
 		}
-		Object.keys(updates).forEach((key) => {
-			this.pendingTaskState.get(taskId)?.add(key as SettingsKey)
-		})
 
-		// Schedule debounced persistence
-		this.scheduleDebouncedPersistence()
+		if (hasChanges) {
+			this.scheduleDebouncedPersistence()
+		}
 	}
 
 	/**
@@ -367,6 +419,10 @@ export class StateManager {
 			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
 		}
 
+		if (this.workspaceStateCache[key] === value) {
+			return
+		}
+
 		// Update cache immediately for instant access
 		this.workspaceStateCache[key] = value
 
@@ -383,14 +439,19 @@ export class StateManager {
 			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
 		}
 
-		// Update cache immediately for all keys
-		Object.entries(updates).forEach(([key, value]) => {
-			this.workspaceStateCache[key as keyof LocalState] = value
-			this.pendingWorkspaceState.add(key as LocalStateKey)
-		})
+		let hasChanges = false
+		for (const [key, value] of Object.entries(updates)) {
+			const localKey = key as LocalStateKey
+			if ((this.workspaceStateCache as any)[localKey] !== value) {
+				;(this.workspaceStateCache as any)[localKey] = value
+				this.pendingWorkspaceState.add(localKey)
+				hasChanges = true
+			}
+		}
 
-		// Schedule debounced persistence
-		this.scheduleDebouncedPersistence()
+		if (hasChanges) {
+			this.scheduleDebouncedPersistence()
+		}
 	}
 
 	/**
@@ -467,6 +528,20 @@ export class StateManager {
 		this.modelInfoCache[cacheKey] = { data: models, timestamp: Date.now() }
 	}
 
+	/**
+	 * Purge expired model info caches and stale storage hashes to free heap memory
+	 */
+	public purgeExpiredCaches(): void {
+		const now = Date.now()
+		for (const key of Object.keys(this.modelInfoCache) as Array<keyof typeof this.modelInfoCache>) {
+			const entry = this.modelInfoCache[key]
+			if (entry && now - entry.timestamp > this.MODEL_CACHE_TTL_MS) {
+				this.modelInfoCache[key] = null
+			}
+		}
+		writeCoalescer.purgeStaleHashes()
+	}
+
 	getModelsCache(
 		provider:
 			| "dietcode"
@@ -481,16 +556,11 @@ export class StateManager {
 			| "liteLlm"
 			| "vercel",
 	): Record<string, ModelInfo> | null {
+		this.purgeExpiredCaches()
 		const cacheKey = `${provider}Models` as keyof typeof this.modelInfoCache
 		const cached = this.modelInfoCache[cacheKey]
 
 		if (!cached) {
-			return null
-		}
-
-		// Check if cache has expired
-		if (Date.now() - cached.timestamp > this.MODEL_CACHE_TTL_MS) {
-			this.modelInfoCache[cacheKey] = null
 			return null
 		}
 
@@ -513,16 +583,11 @@ export class StateManager {
 			| "liteLlm",
 		modelId: string,
 	): ModelInfo | undefined {
+		this.purgeExpiredCaches()
 		const cacheKey = `${provider}Models` as keyof typeof this.modelInfoCache
 		const cached = this.modelInfoCache[cacheKey]
 
 		if (!cached) {
-			return undefined
-		}
-
-		// Check if cache has expired
-		if (Date.now() - cached.timestamp > this.MODEL_CACHE_TTL_MS) {
-			this.modelInfoCache[cacheKey] = null
 			return undefined
 		}
 
@@ -556,8 +621,11 @@ export class StateManager {
 						return
 					}
 					const onDisk = await readTaskHistoryFromState()
-					const cached = this.globalStateCache.taskHistory
-					if (JSON.stringify(onDisk) !== JSON.stringify(cached)) {
+					const cached = this.globalStateCache.taskHistory || []
+					if (
+						onDisk.length !== cached.length ||
+						(onDisk.length > 0 && (onDisk[0]?.id !== cached[0]?.id || onDisk[0]?.ts !== cached[0]?.ts))
+					) {
 						this.globalStateCache.taskHistory = onDisk
 						await this.onSyncExternalChange?.()
 					}
@@ -747,6 +815,10 @@ export class StateManager {
 		if (this.persistenceTimeout) {
 			clearTimeout(this.persistenceTimeout)
 			this.persistenceTimeout = null
+		}
+		if (this.autoPurgeTimer) {
+			clearInterval(this.autoPurgeTimer)
+			this.autoPurgeTimer = null
 		}
 		// Close file watcher if active
 		if (this.taskHistoryWatcher) {

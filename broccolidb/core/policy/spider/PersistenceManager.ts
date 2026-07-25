@@ -12,6 +12,7 @@ const isSpiderSnapshot = (value: unknown): value is SpiderSnapshot => {
 
 export class PersistenceManager {
 	private snapshots: Buffer[] = [] // V190: Binary Snapshot Buffer (Industrial Fidelity)
+	private cachedHistory: SpiderSnapshot[] | null = null
 
 	constructor(private metrics: MetricsEngine) {}
 
@@ -20,6 +21,7 @@ export class PersistenceManager {
 	 */
 	public dispose() {
 		this.snapshots = [] // Clear binary residual
+		this.cachedHistory = null
 	}
 
 	public getSnapshots(): Buffer[] {
@@ -27,6 +29,10 @@ export class PersistenceManager {
 	}
 
 	public getSnapshotHistory(): SpiderSnapshot[] {
+		if (this.cachedHistory !== null) {
+			return this.cachedHistory
+		}
+
 		const history: SpiderSnapshot[] = []
 		const healthySnapshots: Buffer[] = []
 
@@ -45,6 +51,7 @@ export class PersistenceManager {
 			this.snapshots = healthySnapshots
 		}
 
+		this.cachedHistory = history
 		return history
 	}
 
@@ -70,6 +77,7 @@ export class PersistenceManager {
 	 * Preserves the entire structural state in a compressed V8 binary format.
 	 */
 	public async takeSnapshot(nodes: Map<string, SpiderNode>): Promise<SpiderSnapshot> {
+		this.cachedHistory = null
 		const report = this.metrics.computeEntropy(nodes)
 		const snapshot: SpiderSnapshot = {
 			timestamp: new Date().toISOString(),

@@ -3,6 +3,7 @@ import * as crypto from 'node:crypto';
 import type { BufferedDbPool } from '../infrastructure/db/BufferedDbPool.js';
 import { AgentGitError, PathSanitizer } from './errors.js';
 import { AgentIgnore } from './ignore.js';
+import { LRUCache } from './lru-cache.js';
 import { TaskMutex } from './mutex.js';
 import type { Repository, TreeEntry } from './repository.js';
 
@@ -25,7 +26,7 @@ export interface FileEntry {
 export class FileTree {
   private db: BufferedDbPool;
   private repo: Repository;
-  private ignoreCache: Map<string, { rules: AgentIgnore; head: string }> = new Map();
+  private ignoreCache = new LRUCache<string, { rules: AgentIgnore; head: string }>(100);
 
   constructor(db: BufferedDbPool, repo: Repository) {
     this.db = db;
@@ -746,5 +747,12 @@ export class FileTree {
     const rules = await AgentIgnore.load(this, branch);
     this.ignoreCache.set(branch, { rules, head: headId });
     return rules;
+  }
+
+  /**
+   * Clears internal ignore rule LRU cache.
+   */
+  public clearCache(): void {
+    this.ignoreCache.clear();
   }
 }

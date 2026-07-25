@@ -1,6 +1,7 @@
 import * as crypto from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { writeCoalescer } from "../../core/storage/WriteCoalescer"
 import { Logger } from "../services/Logger"
 import { DietCodeSyncStorage } from "./DietCodeStorage"
 
@@ -17,7 +18,7 @@ export interface DietCodeFileStorageOptions {
  * Stores any JSON-serializable values with sync read and write.
  * Used for VSCode Memento compatibility and CLI environments.
  */
-export class DietCodeFileStorage<T = any> extends DietCodeSyncStorage<T> {
+export class DietCodeFileStorage<T = unknown> extends DietCodeSyncStorage<T> {
 	protected name: string
 	private data: Record<string, T>
 	private readonly fsPath: string
@@ -33,6 +34,14 @@ export class DietCodeFileStorage<T = any> extends DietCodeSyncStorage<T> {
 
 	protected _get(key: string): T | undefined {
 		return this.data[key]
+	}
+
+	public override set(key: string, value: T | undefined): void {
+		try {
+			this.setBatch({ [key]: value })
+		} catch (error) {
+			Logger.error(`[${this.name}] failed to set '${key}':`, error)
+		}
 	}
 
 	protected _set(key: string, value: T | undefined): void {
@@ -58,8 +67,10 @@ export class DietCodeFileStorage<T = any> extends DietCodeSyncStorage<T> {
 					changedKeys.push(key)
 				}
 			} else {
-				this.data[key] = value
-				changedKeys.push(key)
+				if (this.data[key] !== value) {
+					this.data[key] = value
+					changedKeys.push(key)
+				}
 			}
 		}
 		if (changedKeys.length > 0) {
@@ -97,43 +108,21 @@ export class DietCodeFileStorage<T = any> extends DietCodeSyncStorage<T> {
 	}
 
 	private writeToDisk(): void {
-		try {
-			const dir = path.dirname(this.fsPath)
-			fs.mkdirSync(dir, { recursive: true })
-			const content = JSON.stringify(this.data, null, 2)
-			atomicWriteFileSync(this.fsPath, content, this.fileMode)
-
-			// Create a backup file
-			try {
-				fs.writeFileSync(`${this.fsPath}.bak`, content, { mode: this.fileMode })
-			} catch (bakError) {
-				Logger.debug(`[${this.name}] failed to create backup file:`, bakError)
-			}
-		} catch (error) {
-			Logger.error(`[${this.name}] failed to write to ${this.fsPath}:`, error)
-		}
-	}
-}
-
-/**
- * Synchronously, atomically write data to a file using temp file + rename pattern.
- * Prefer core/storage's async atomicWriteFile to this.
- */
-function atomicWriteFileSync(filePath: string, data: string, mode?: fs.Mode | undefined): void {
-	const tmpPath = `${filePath}.${Date.now()}.${crypto.randomBytes(4).toString("hex")}.tmp`
-	try {
-		fs.writeFileSync(tmpPath, data, {
-			flag: "wx",
-			encoding: "utf-8",
-			mode,
-		})
-		// Rename temp file to target (atomic in most cases)
-		fs.renameSync(tmpPath, filePath)
-	} catch (error) {
-		// Clean up temp file if it exists
-		try {
-			fs.unlinkSync(tmpPath)
-		} catch {}
-		throw error
+		writeCoalescer.coalesceWriteWithPayload(
+			this.fsPath,
+			() => JSON.stringify(this.data),
+			async (content) => {
+				try {
+					const dir = path.dirname(this.fsPath)
+					await fs.promises.mkdir(dir, { recursive: true })
+					const tmpPath = `${this.fsPath}.${Date.now()}.${crypto.randomBytes(4).toString("hex")}.tmp`
+					await fs.promises.writeFile(tmpPath, content, { encoding: "utf-8", mode: this.fileMode })
+					await fs.promises.rename(tmpPath, this.fsPath)
+				} catch (error) {
+					Logger.error(`[${this.name}] failed to write to ${this.fsPath}:`, error)
+				}
+			},
+			500,
+		)
 	}
 }

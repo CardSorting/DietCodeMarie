@@ -1,6 +1,7 @@
 import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
+import { writeCoalescer } from "@/core/storage/WriteCoalescer"
 import { Logger } from "@/shared/services/Logger"
 import { formatWatchSteeringLine } from "./RoadmapAgentSteering"
 import {
@@ -82,7 +83,15 @@ export async function emitProgress(
 		await fs.mkdir(path.dirname(jsonl), { recursive: true })
 		await fs.appendFile(jsonl, `${line}\n`, "utf8")
 		await trimJsonl(jsonl)
-		await fs.writeFile(current, JSON.stringify(event, null, 2), "utf8")
+		const getPayload = () => JSON.stringify(event)
+		writeCoalescer.coalesceWriteWithPayload(
+			current,
+			getPayload,
+			async (payload) => {
+				await fs.writeFile(current, payload, "utf8")
+			},
+			500,
+		)
 	} catch (error) {
 		// Progress telemetry is advisory. A read-only home directory must not
 		// prevent roadmap admission, completion, or finalization.

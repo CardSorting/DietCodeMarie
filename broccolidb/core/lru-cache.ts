@@ -63,4 +63,18 @@ export class LRUCache<K, V> {
   get misses(): number {
     return this._misses;
   }
+
+  /**
+   * Evicts oldest LRU entries until cache size <= targetCapacity
+   */
+  prune(targetCapacity: number): number {
+    let evicted = 0;
+    while (this.cache.size > targetCapacity && this.cache.size > 0) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey === undefined) break;
+      this.cache.delete(oldestKey);
+      evicted++;
+    }
+    return evicted;
+  }
 }

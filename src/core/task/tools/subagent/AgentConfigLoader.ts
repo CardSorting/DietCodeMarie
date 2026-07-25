@@ -263,6 +263,7 @@ export class AgentConfigLoader {
 		}
 
 		this.watcher = chokidar.watch(this.directoryPath, {
+			ignored: [/(^|[/\\])\../, /[/\\](node_modules|dist|out|build)[/\\]/],
 			persistent: true,
 			ignoreInitial: true,
 			awaitWriteFinish: {

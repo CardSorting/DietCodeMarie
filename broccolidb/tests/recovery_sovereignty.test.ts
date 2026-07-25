@@ -2,7 +2,7 @@
 import assert from 'node:assert';
 import fs from 'node:fs';
 import { dbPool } from '../infrastructure/db/BufferedDbPool.js';
-import { setDbPath } from '../infrastructure/db/Config.js';
+import { cleanupSqliteFiles, setDbPath } from '../infrastructure/db/Config.js';
 
 async function runTest() {
   const dbPath = './test-warmup.db';
@@ -71,7 +71,7 @@ async function runTest() {
     console.info('✅ TEST PASSED: Sovereign Recovery (Level 9) verified.');
   } finally {
     await dbPool.stop();
-    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+    cleanupSqliteFiles(dbPath);
   }
 }
 

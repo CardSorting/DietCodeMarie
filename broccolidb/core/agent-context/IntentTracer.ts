@@ -225,6 +225,14 @@ export class IntentTracer {
     };
   }
 
+  clear(): void {
+    this.buffer.length = 0;
+    this.intents.clear();
+    this.activeStarts.clear();
+    this.perCapabilityCounts.clear();
+    this.persistedIntentIds.clear();
+  }
+
   private pushTrace(trace: IntentTrace): void {
     this.buffer.push(trace);
     if (this.buffer.length > DEFAULT_BUFFER_SIZE) {

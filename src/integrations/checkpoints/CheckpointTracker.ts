@@ -245,6 +245,19 @@ class CheckpointTracker {
 				Logger.error("Failed to add at least one file(s) to checkpoints shadow git")
 			}
 
+			const status = await git.status()
+			if (status.isClean()) {
+				const headCommit = await git.revparse(["HEAD"]).catch(() => "")
+				if (headCommit) {
+					const cleanHash = headCommit.trim()
+					Logger.info(`Shadow git working tree is clean. Reusing commit: ${cleanHash}`)
+					const durationMs = Math.round(performance.now() - startTime)
+					await this.sendCheckpointSubscriptionEvent("CHECKPOINT_COMMIT", false, cleanHash)
+					telemetryService.captureCheckpointUsage(this.taskId, "commit_created", durationMs)
+					return cleanHash
+				}
+			}
+
 			const commitMessage = `checkpoint-${this.cwdHash}-${this.taskId}`
 
 			Logger.info(`Creating checkpoint commit with message: ${commitMessage}`)

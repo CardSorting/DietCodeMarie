@@ -2,6 +2,7 @@ import * as crypto from "crypto"
 import * as fs from "fs"
 import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
+import { writeCoalescer } from "../storage/WriteCoalescer"
 
 export interface Anomaly {
 	id: string
@@ -251,9 +252,17 @@ export class AnomalyRegistry {
 	}
 
 	private save() {
-		const dir = path.dirname(this.storePath)
-		if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-		fs.writeFileSync(this.storePath, JSON.stringify(this.getAnomalies(), null, 2))
+		const getPayload = () => JSON.stringify(this.getAnomalies())
+		writeCoalescer.coalesceWriteWithPayload(
+			this.storePath,
+			getPayload,
+			async (payload) => {
+				const dir = path.dirname(this.storePath)
+				await fs.promises.mkdir(dir, { recursive: true })
+				await fs.promises.writeFile(this.storePath, payload, "utf-8")
+			},
+			500,
+		)
 	}
 
 	/**

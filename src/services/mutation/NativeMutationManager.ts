@@ -3,6 +3,7 @@ import { execa } from "execa"
 import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
+import { writeCoalescer } from "@/core/storage/WriteCoalescer"
 
 // Helper to check if a file path is safely within the workspace boundary, resolving all symlinks
 export async function isPathInWorkspace(workspace: string, targetPath: string): Promise<boolean> {
@@ -824,7 +825,15 @@ export class NativeMutationManager {
 				} catch {}
 			}
 			wsHistory.push(sessionReceipts)
-			await fs.writeFile(wsHistoryFile, JSON.stringify(wsHistory, null, 2), "utf8")
+			const getWsPayload = () => JSON.stringify(wsHistory)
+			writeCoalescer.coalesceWriteWithPayload(
+				wsHistoryFile,
+				getWsPayload,
+				async (payload) => {
+					await fs.writeFile(wsHistoryFile, payload, "utf8")
+				},
+				1000,
+			)
 		} catch {}
 
 		const homeReceiptsFile = path.join(os.homedir(), ".dietcode", "session", "mutation-receipts.json")
@@ -839,7 +848,15 @@ export class NativeMutationManager {
 				} catch {}
 			}
 			homeHistory.push(sessionReceipts)
-			await fs.writeFile(homeReceiptsFile, JSON.stringify(homeHistory, null, 2), "utf8")
+			const getHomePayload = () => JSON.stringify(homeHistory)
+			writeCoalescer.coalesceWriteWithPayload(
+				homeReceiptsFile,
+				getHomePayload,
+				async (payload) => {
+					await fs.writeFile(homeReceiptsFile, payload, "utf8")
+				},
+				1000,
+			)
 		} catch {}
 
 		const state = await this.readMutationState(workspace)

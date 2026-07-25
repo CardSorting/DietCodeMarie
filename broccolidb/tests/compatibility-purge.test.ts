@@ -67,6 +67,7 @@ async function runTest() {
     'tasks',
     'scratchpad',
     'mailbox',
+    'runtime',
   ]);
 
   const internalRuntimeMembers = new Set([

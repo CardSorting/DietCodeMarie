@@ -54,6 +54,8 @@ export class MessageStateHandler extends EventEmitter<MessageStateHandlerEvents>
 	private taskId: string
 	private ulid: string
 	private taskState: TaskState
+	private cachedTaskDirSize = 0
+	private lastTaskDirSizeCheckTime = 0
 
 	// Mutex to prevent concurrent state modifications (RC-4)
 	// Protects against data loss from race conditions when multiple
@@ -133,14 +135,16 @@ export class MessageStateHandler extends EventEmitter<MessageStateHandlerEvents>
 				]
 			const lastModelInfo = [...this.apiConversationHistory].reverse().find((msg) => msg.modelInfo !== undefined)
 			const taskDir = await ensureTaskDirectoryExists(this.taskId)
-			let taskDirSize = 0
-			try {
-				// getFolderSize.loose silently ignores errors
-				// returns # of bytes, size/1000/1000 = MB
-				taskDirSize = await getFolderSize.loose(taskDir)
-			} catch (error) {
-				Logger.error("Failed to get task directory size:", taskDir, error)
+			const now = Date.now()
+			if (now - this.lastTaskDirSizeCheckTime > 60000) {
+				try {
+					this.cachedTaskDirSize = await getFolderSize.loose(taskDir)
+					this.lastTaskDirSizeCheckTime = now
+				} catch (error) {
+					Logger.error("Failed to get task directory size:", taskDir, error)
+				}
 			}
+			const taskDirSize = this.cachedTaskDirSize
 			const cwd = await getCwd(getDesktopDir())
 			await this.updateTaskHistory({
 				id: this.taskId,
@@ -287,5 +291,21 @@ export class MessageStateHandler extends EventEmitter<MessageStateHandlerEvents>
 			// Save changes and update history
 			await this.saveDietCodeMessagesAndUpdateHistoryInternal()
 		})
+	}
+
+	/**
+	 * Explicitly clears transient in-memory array references during extended idle periods to assist V8 garbage collection.
+	 */
+	public clearMemoryBuffers(): void {
+		this.apiConversationHistory = []
+		this.dietcodeMessages = []
+	}
+
+	/**
+	 * Disposes message state handler resources and frees internal memory arrays for V8 GC.
+	 */
+	async dispose(): Promise<void> {
+		this.removeAllListeners()
+		this.clearMemoryBuffers()
 	}
 }

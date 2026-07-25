@@ -23,7 +23,11 @@ export class LocalWatcher {
     }
 
     this.watcher = chokidar.watch(this.localDirPath, {
-      ignored: /(^|[/\\])\../, // ignore dotfiles mapping
+      ignored: [
+        /(^|[/\\])\../, // ignore dotfiles mapping
+        /\.db(-wal|-shm)?$/, // ignore sqlite database files to prevent write loops
+        /[/\\](node_modules|dist|out|build|\.broccolidb)[/\\]/,
+      ],
       persistent: true,
       ignoreInitial: true,
       awaitWriteFinish: {
@@ -49,6 +53,9 @@ export class LocalWatcher {
   }
 
   private enqueue(type: 'add' | 'change' | 'unlink', filePath: string) {
+    if (filePath.endsWith('.db') || filePath.endsWith('.db-wal') || filePath.endsWith('.db-shm') || filePath.includes('.broccolidb')) {
+      return;
+    }
     this.queue.push({ type, filePath });
     this.processQueue();
   }

@@ -35,6 +35,7 @@ const ALLOWED_PUBLIC_MEMBERS = new Set([
   'tasks',
   'scratchpad',
   'mailbox',
+  'runtime',
 ]);
 
 async function runTest() {

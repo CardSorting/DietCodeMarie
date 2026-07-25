@@ -16,6 +16,8 @@ export interface AuditEntry {
 export class AuditLogService {
 	private static instance: AuditLogService
 	private logPath: string | null = null
+	private buffer: string[] = []
+	private flushTimer: NodeJS.Timeout | null = null
 
 	public static getInstance(): AuditLogService {
 		if (!AuditLogService.instance) {
@@ -50,10 +52,34 @@ export class AuditLogService {
 		}
 
 		const line = JSON.stringify(fullEntry) + "\n"
+		this.buffer.push(line)
+
+		if (this.buffer.length >= 20) {
+			await this.flush()
+		} else if (!this.flushTimer) {
+			this.flushTimer = setTimeout(() => {
+				void this.flush()
+			}, 1000)
+		}
+	}
+
+	public async flush(): Promise<void> {
+		if (this.flushTimer) {
+			clearTimeout(this.flushTimer)
+			this.flushTimer = null
+		}
+
+		if (this.buffer.length === 0 || !this.logPath) {
+			return
+		}
+
+		const payload = this.buffer.join("")
+		this.buffer = []
+
 		try {
-			await fs.appendFile(this.logPath, line, "utf8")
+			await fs.appendFile(this.logPath, payload, "utf8")
 		} catch {
-			// Fail silently to avoid interrupting the main flow
+			// Fail silently to avoid interrupting main flow
 		}
 	}
 }

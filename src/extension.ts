@@ -834,6 +834,14 @@ export async function deactivate() {
 	} catch (error) {
 		Logger.warn("[JoyRide] Extension shutdown cache flush skipped:", error)
 	}
+	try {
+		const { writeCoalescer } = await import("./core/storage/WriteCoalescer")
+		await writeCoalescer.flushAll()
+		const { AuditLogService } = await import("./services/logging/AuditLogService")
+		await AuditLogService.getInstance().flush()
+	} catch (error) {
+		Logger.warn("[Shutdown] Extension shutdown flush error:", error)
+	}
 	// Dispose Non-VSCode-specific services
 	tearDown()
 

@@ -777,6 +777,17 @@ export async function destroyDb(): Promise<void> {
   }
 }
 
+export function cleanupSqliteFiles(filePath: string): void {
+  for (const ext of ['', '-wal', '-shm', '-journal']) {
+    const target = `${filePath.replace(/(-wal|-shm|-journal)$/, '')}${ext}`;
+    if (fs.existsSync(target)) {
+      try {
+        fs.unlinkSync(target);
+      } catch {}
+    }
+  }
+}
+
 export interface DbStorageMetrics {
   dbPath: string;
   fileSizeBytes: number;

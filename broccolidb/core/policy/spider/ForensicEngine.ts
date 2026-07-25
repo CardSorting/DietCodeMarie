@@ -135,7 +135,7 @@ export class ForensicEngine {
 	 * V200: Cache Saturation & Generational GC.
 	 */
 	private checkCacheSaturation() {
-		const MAX_ENTRIES = 5000
+		const MAX_ENTRIES = 500
 		const MAX_AGE = 5 // Turns
 
 		if (this.ghostVerificationCache.size > MAX_ENTRIES) {
@@ -155,6 +155,10 @@ export class ForensicEngine {
 		if (purged > 0) {
 			Logger.info(`[ForensicEngine] Generational GC: Purged ${purged} stale ghost entries.`)
 		}
+	}
+
+	public clearCache(): void {
+		this.ghostVerificationCache.clear()
 	}
 
 	public findGhosts(nodes: Map<string, SpiderNode>, sessionBuffer?: Map<string, string>): Set<string> {

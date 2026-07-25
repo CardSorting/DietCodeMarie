@@ -146,6 +146,20 @@ export class StorageManager {
 
 			const tempResult = await DietCodeTempManager.cleanup()
 			freed += tempResult.freedBytes
+
+			// Sweep orphaned .tmp write-behind files across tasks, cache, and checkpoints directories
+			const { cleanStaleTempFiles } = await import("@/core/storage/disk")
+			const tasksDir = path.join(globalPath, "tasks")
+			const checkpointsDir = path.join(globalPath, "checkpoints")
+			const stateDir = path.join(globalPath, "state")
+
+			const [freedTasksTmp, freedCacheTmp, freedCheckpointsTmp, freedStateTmp] = await Promise.all([
+				cleanStaleTempFiles(tasksDir),
+				cleanStaleTempFiles(cacheDir),
+				cleanStaleTempFiles(checkpointsDir),
+				cleanStaleTempFiles(stateDir),
+			])
+			freed += freedTasksTmp + freedCacheTmp + freedCheckpointsTmp + freedStateTmp
 		} catch (error) {
 			Logger.error("Error cleaning cache and temp:", error)
 		}

@@ -219,7 +219,7 @@ export class BufferedDbPool {
   private rawDb: Database.Database | null = null;
   private totalTransactions = 0;
   private stmtCache = new Map<string, Database.Statement>();
-  private parameterBuffer = new Array(2000); // Pre-allocated for chunked inserts
+  private parameterBuffer = Array.from({ length: 2000 }); // Pre-allocated for chunked inserts
   private activeBufferSize = 0;
   private inFlightSize = 0;
   // Level 7: Event Horizon Status Index (O(1) Query Mapping)
@@ -962,7 +962,8 @@ export class BufferedDbPool {
       if (!isWarmed) {
         let query = db.selectFrom(table).selectAll();
         for (const cond of conditions) {
-          const opStr = cond.operator || '=';
+          const rawOp = cond.operator || '=';
+          const opStr = typeof rawOp === 'string' ? rawOp.toLowerCase() : rawOp;
           if (Array.isArray(cond.value)) {
             query = (query as any).where(cond.column, 'in', cond.value);
           } else {
@@ -1531,14 +1532,17 @@ export class BufferedDbPool {
           ? 'stopped'
           : 'new';
 
-    return lifecycleHealth('db', lifecycle, {
+    const health = lifecycleHealth('db', lifecycle, {
       metrics: {
         dbPath: getDbPath(),
         pendingWriteCount: metrics.pendingWriteCount,
         activeBufferSize: metrics.activeBufferSize,
         inFlightOpsSize: metrics.inFlightOpsSize,
+        lastSuccessfulFlush: this.lastSuccessfulFlush,
       },
-    });
+    }) as ServiceHealth & { lastSuccessfulFlush?: number | null };
+    health.lastSuccessfulFlush = this.lastSuccessfulFlush;
+    return health;
   }
 
   public reportIntegrityIssue(type: 'brokenImport' | 'orphanedNode', count: number = 1) {
@@ -1686,6 +1690,15 @@ export class BufferedDbPool {
       }
       this.stmtCache.clear();
       this.parameterBuffer.fill(undefined);
+      this.bufferA.clear();
+      this.bufferB.clear();
+      this.inFlightOps.clear();
+      this.activeIndex.clear();
+      this.inFlightIndex.clear();
+      this.agentShadows.clear();
+      this.deadLetterQueue.length = 0;
+      this.activeBufferSize = 0;
+      this.inFlightSize = 0;
       this.db = null;
       this.rawDb = null;
       this.activeFlushPromise = null;
@@ -1693,6 +1706,36 @@ export class BufferedDbPool {
       await destroyDb();
       this.lifecycleState = 'stopped';
     }
+  }
+
+  /**
+   * Complete multi-stage compaction of database storage and in-memory caches.
+   * Flushes writes, truncates WAL logs, executes incremental vacuum, and clears dead-letter queues.
+   */
+  public async compactStorageAndMemory(): Promise<{ freedWalBytes: number; deadLettersCleared: number }> {
+    await this.flush();
+    const deadLettersCleared = this.deadLetterQueue.length;
+    this.deadLetterQueue.length = 0;
+
+    const rawDb = this.rawDb;
+    let freedWalBytes = 0;
+
+    if (rawDb) {
+      const walPath = `${getDbPath()}-wal`;
+      try {
+        if (fs.existsSync(walPath)) {
+          const sizeBefore = fs.statSync(walPath).size;
+          rawDb.pragma('wal_checkpoint(TRUNCATE)');
+          const sizeAfter = fs.existsSync(walPath) ? fs.statSync(walPath).size : 0;
+          freedWalBytes = Math.max(0, sizeBefore - sizeAfter);
+        }
+        rawDb.pragma('incremental_vacuum(100)');
+      } catch (err) {
+        Logger.warn('[DbPool] Compact storage exception:', err);
+      }
+    }
+
+    return { freedWalBytes, deadLettersCleared };
   }
 
   public selectFrom<T extends keyof Schema>(table: T): QueryBuilder<T> {

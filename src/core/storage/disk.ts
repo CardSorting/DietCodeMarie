@@ -16,6 +16,7 @@ import { telemetryService } from "@/services/telemetry"
 import { McpMarketplaceCatalog } from "@/shared/mcp"
 import { Logger } from "@/shared/services/Logger"
 import { syncWorker } from "@/shared/services/worker/sync"
+import { writeCoalescer } from "./WriteCoalescer"
 
 /**
  * NOTE: `reconstructTaskHistory` (../commands/reconstructTaskHistory) and
@@ -36,11 +37,11 @@ import { syncWorker } from "@/shared/services/worker/sync"
  * @param filePath - The target file path
  * @param data - The data to write
  */
-async function atomicWriteFile(filePath: string, data: string, updateChecksum = false): Promise<void> {
+async function atomicWriteFile(filePath: string, data: string, updateChecksum = false, createBackup = false): Promise<void> {
 	const tmpPath = `${filePath}.${Date.now()}.${crypto.randomBytes(4).toString("hex")}.tmp`
 	try {
-		// Create backup for recovery
-		if (await fileExistsAtPath(filePath)) {
+		// Create backup for recovery if explicitly requested
+		if (createBackup && (await fileExistsAtPath(filePath))) {
 			const backupDir = path.join(path.dirname(filePath), "backups")
 			await fs.mkdir(backupDir, { recursive: true })
 			await fs.copyFile(filePath, path.join(backupDir, `${path.basename(filePath)}.bak`))
@@ -52,7 +53,8 @@ async function atomicWriteFile(filePath: string, data: string, updateChecksum = 
 		await fs.rename(tmpPath, filePath)
 
 		if (updateChecksum) {
-			await recordChecksum(filePath)
+			const hash = crypto.createHash("sha256").update(data).digest("hex")
+			await recordChecksumWithHash(filePath, hash)
 		}
 	} catch (error) {
 		// Clean up temp file if it exists
@@ -61,18 +63,79 @@ async function atomicWriteFile(filePath: string, data: string, updateChecksum = 
 	}
 }
 
-async function recordChecksum(filePath: string): Promise<void> {
-	const checksumPath = path.join(path.dirname(filePath), ".checksums.json")
-	let checksums: Record<string, string> = {}
-	if (await fileExistsAtPath(checksumPath)) {
-		try {
-			checksums = JSON.parse(await fs.readFile(checksumPath, "utf8"))
-		} catch {
-			/* ignore */
+const MAX_CHECKSUM_CACHE_SIZE = 50
+const checksumCacheMap = new Map<string, Record<string, string>>()
+
+function setChecksumCache(checksumPath: string, checksums: Record<string, string>): void {
+	checksumCacheMap.delete(checksumPath)
+	if (checksumCacheMap.size >= MAX_CHECKSUM_CACHE_SIZE) {
+		const oldestKey = checksumCacheMap.keys().next().value
+		if (oldestKey !== undefined) {
+			checksumCacheMap.delete(oldestKey)
 		}
 	}
-	checksums[path.basename(filePath)] = await calculateFileChecksum(filePath)
-	await fs.writeFile(checksumPath, JSON.stringify(checksums, null, 2))
+	checksumCacheMap.set(checksumPath, checksums)
+}
+
+async function recordChecksumWithHash(filePath: string, checksum: string): Promise<void> {
+	const dirPath = path.dirname(filePath)
+	const checksumPath = path.join(dirPath, ".checksums.json")
+	let checksums = checksumCacheMap.get(checksumPath)
+	if (!checksums) {
+		const newChecksums: Record<string, string> = {}
+		if (await fileExistsAtPath(checksumPath)) {
+			try {
+				Object.assign(newChecksums, JSON.parse(await fs.readFile(checksumPath, "utf8")))
+			} catch {
+				/* ignore */
+			}
+		}
+		checksums = newChecksums
+	}
+	checksums[path.basename(filePath)] = checksum
+	setChecksumCache(checksumPath, checksums)
+
+	const getPayload = () => JSON.stringify(checksums)
+	writeCoalescer.coalesceWriteWithPayload(
+		checksumPath,
+		getPayload,
+		async (payload) => {
+			await fs.writeFile(checksumPath, payload)
+		},
+		200,
+	)
+}
+
+async function recordChecksum(filePath: string): Promise<void> {
+	const checksum = await calculateFileChecksum(filePath)
+	await recordChecksumWithHash(filePath, checksum)
+}
+
+/**
+ * Sweeps orphaned .tmp write-behind files created during interrupted atomic writes to halt disk erosion.
+ */
+export async function cleanStaleTempFiles(dirPath: string, maxAgeMs = 10 * 60 * 1000): Promise<number> {
+	let freedBytes = 0
+	try {
+		if (!(await fileExistsAtPath(dirPath))) return 0
+		const entries = await fs.readdir(dirPath)
+		const now = Date.now()
+		for (const entry of entries) {
+			if (entry.endsWith(".tmp") || entry.includes(".tmp.")) {
+				const fullPath = path.join(dirPath, entry)
+				try {
+					const stat = await fs.stat(fullPath)
+					if (now - stat.mtimeMs > maxAgeMs) {
+						freedBytes += stat.size
+						await fs.unlink(fullPath)
+					}
+				} catch {}
+			}
+		}
+	} catch (error) {
+		Logger.debug(`[Disk] Error cleaning stale temp files in ${dirPath}:`, error)
+	}
+	return freedBytes
 }
 
 export async function calculateFileChecksum(filePath: string): Promise<string> {
@@ -285,7 +348,7 @@ export async function getMcpSettingsFilePath(settingsDirectoryPath: string): Pro
 	const mcpSettingsFilePath = path.join(settingsDirectoryPath, GlobalFileNames.mcpSettings)
 	const fileExists = await fileExistsAtPath(mcpSettingsFilePath)
 	if (!fileExists) {
-		await fs.writeFile(mcpSettingsFilePath, JSON.stringify({ mcpServers: {} }, null, 2))
+		await fs.writeFile(mcpSettingsFilePath, JSON.stringify({ mcpServers: {} }))
 	}
 	return mcpSettingsFilePath
 }
@@ -299,16 +362,31 @@ export async function getSavedApiConversationHistory(taskId: string): Promise<An
 	return []
 }
 
-export async function saveApiConversationHistory(taskId: string, apiConversationHistory: Anthropic.MessageParam[]) {
+export async function saveApiConversationHistory(
+	taskId: string,
+	apiConversationHistory: Anthropic.MessageParam[],
+	immediate = false,
+) {
 	try {
 		if (apiConversationHistory.length > 0) {
 			const fileName = GlobalFileNames.apiConversationHistory
-			const data = JSON.stringify(apiConversationHistory)
-			// Queue for remote sync without blocking
-			syncWorker().enqueue(taskId, fileName, data)
-			// Store locally
 			const filePath = path.join(await ensureTaskDirectoryExists(taskId), fileName)
-			await atomicWriteFile(filePath, data)
+			const getPayload = () => JSON.stringify(apiConversationHistory)
+			if (immediate) {
+				const data = getPayload()
+				syncWorker().enqueue(taskId, fileName, data)
+				await atomicWriteFile(filePath, data)
+			} else {
+				writeCoalescer.coalesceWriteWithPayload(
+					filePath,
+					getPayload,
+					async (payload) => {
+						syncWorker().enqueue(taskId, fileName, payload)
+						await atomicWriteFile(filePath, payload)
+					},
+					500,
+				)
+			}
 		}
 	} catch (error) {
 		// in the off chance this fails, we don't want to stop the task
@@ -331,11 +409,23 @@ export async function getSavedDietCodeMessages(taskId: string): Promise<DietCode
 	return []
 }
 
-export async function saveDietCodeMessages(taskId: string, uiMessages: DietCodeMessage[]) {
+export async function saveDietCodeMessages(taskId: string, uiMessages: DietCodeMessage[], immediate = false) {
 	try {
 		const taskDir = await ensureTaskDirectoryExists(taskId)
 		const filePath = path.join(taskDir, GlobalFileNames.uiMessages)
-		await atomicWriteFile(filePath, JSON.stringify(uiMessages))
+		const getPayload = () => JSON.stringify(uiMessages)
+		if (immediate) {
+			await atomicWriteFile(filePath, getPayload())
+		} else {
+			writeCoalescer.coalesceWriteWithPayload(
+				filePath,
+				getPayload,
+				async (payload) => {
+					await atomicWriteFile(filePath, payload)
+				},
+				500,
+			)
+		}
 	} catch (error) {
 		Logger.error("Failed to save ui messages:", error)
 	}
@@ -384,11 +474,23 @@ export async function getTaskMetadata(taskId: string): Promise<TaskMetadata> {
 	return { files_in_context: [], model_usage: [], environment_history: [] }
 }
 
-export async function saveTaskMetadata(taskId: string, metadata: TaskMetadata) {
+export async function saveTaskMetadata(taskId: string, metadata: TaskMetadata, immediate = false) {
 	try {
 		const taskDir = await ensureTaskDirectoryExists(taskId)
 		const filePath = path.join(taskDir, GlobalFileNames.taskMetadata)
-		await fs.writeFile(filePath, JSON.stringify(metadata, null, 2))
+		const getPayload = () => JSON.stringify(metadata)
+		if (immediate) {
+			await fs.writeFile(filePath, getPayload())
+		} else {
+			writeCoalescer.coalesceWriteWithPayload(
+				filePath,
+				getPayload,
+				async (payload) => {
+					await fs.writeFile(filePath, payload)
+				},
+				500,
+			)
+		}
 	} catch (error) {
 		Logger.error("Failed to save task metadata:", error)
 	}
@@ -514,7 +616,7 @@ export async function writeTaskSettingsToStorage(taskId: string, settings: Parti
 		}
 
 		const updatedSettings = { ...existingSettings, ...settings }
-		await fs.writeFile(settingsFilePath, JSON.stringify(updatedSettings, null, 2))
+		await fs.writeFile(settingsFilePath, JSON.stringify(updatedSettings))
 	} catch (error) {
 		Logger.error("[Disk] Failed to write task settings:", error)
 		throw error
@@ -636,7 +738,7 @@ export async function writeConversationHistoryJson(
 	const tempFilePath = path.join(taskDir, tempFileName)
 
 	try {
-		await atomicWriteFile(tempFilePath, JSON.stringify(apiConversationHistory, null, 2))
+		await atomicWriteFile(tempFilePath, JSON.stringify(apiConversationHistory))
 		return tempFilePath
 	} catch (error) {
 		Logger.error("Failed to write conversation history JSON for hook:", error)
@@ -683,49 +785,48 @@ export async function writeConversationHistoryText(
 
 	try {
 		// Build the formatted conversation history (excluding system prompt)
-		let fullContext = "=== CONVERSATION HISTORY ===\n\n"
+		const parts: string[] = ["=== CONVERSATION HISTORY ===\n\n"]
 
 		// Format each message in the conversation
 		for (let i = 0; i < conversationHistory.length; i++) {
 			const message = conversationHistory[i]
-			fullContext += `--- Message ${i + 1} (${message.role.toUpperCase()}) ---\n`
+			parts.push(`--- Message ${i + 1} (${message.role.toUpperCase()}) ---\n`)
 
 			// Handle content which can be a string or array
 			if (typeof message.content === "string") {
-				fullContext += message.content
+				parts.push(message.content)
 			} else if (Array.isArray(message.content)) {
 				for (const block of message.content) {
 					if (block.type === "text") {
-						fullContext += block.text
+						parts.push(block.text)
 					} else if (block.type === "image") {
-						fullContext += `[IMAGE: ${block.source?.type || "unknown"}]`
+						parts.push(`[IMAGE: ${block.source?.type || "unknown"}]`)
 					} else if (block.type === "tool_use") {
-						fullContext += `[TOOL USE: ${block.name}]\n`
-						fullContext += `Input: ${JSON.stringify(block.input, null, 2)}`
+						parts.push(`[TOOL USE: ${block.name}]\nInput: ${JSON.stringify(block.input)}`)
 					} else if (block.type === "tool_result") {
-						fullContext += `[TOOL RESULT: ${block.tool_use_id}]\n`
+						parts.push(`[TOOL RESULT: ${block.tool_use_id}]\n`)
 						if (typeof block.content === "string") {
-							fullContext += block.content
+							parts.push(block.content)
 						} else if (Array.isArray(block.content)) {
 							for (const resultBlock of block.content) {
 								if (resultBlock.type === "text") {
-									fullContext += resultBlock.text
+									parts.push(resultBlock.text)
 								} else if (resultBlock.type === "image") {
-									fullContext += `[IMAGE]`
+									parts.push(`[IMAGE]`)
 								}
 							}
 						}
 					}
-					fullContext += "\n\n"
+					parts.push("\n\n")
 				}
 			}
 
-			fullContext += "\n"
+			parts.push("\n")
 		}
 
-		fullContext += "=== END OF CONTEXT ===\n"
+		parts.push("=== END OF CONTEXT ===\n")
 
-		await atomicWriteFile(tempFilePath, fullContext)
+		await atomicWriteFile(tempFilePath, parts.join(""))
 		return tempFilePath
 	} catch (error) {
 		Logger.error("Failed to write conversation history text for hook:", error)

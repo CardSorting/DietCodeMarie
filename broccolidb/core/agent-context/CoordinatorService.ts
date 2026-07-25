@@ -100,7 +100,7 @@ export class CoordinatorService {
 
     // REAL EXECUTION: In a production app, this would fork a new process or container.
     // Here, we trigger the agent context to begin the sub-session.
-    this.executeWorkerLoop(workerId, params.prompt, params.subagentType);
+    this.executeWorkerLoop(workerId, params.prompt, params.subagentType, params.parentTaskId);
 
     return workerId;
   }
@@ -115,8 +115,8 @@ export class CoordinatorService {
     ]);
 
     for (const task of activeTasks) {
-        console.log(`[Coordinator] 🕯️ Recovering active worker ${task.agentId} (Task: ${task.id})`);
-        this.activeWorkers.set(task.agentId as string, { 
+        const workerId = task.agentId || `recovered-worker-${task.id}`;
+        this.activeWorkers.set(workerId, { 
             taskId: task.id as string, 
             lastHeartbeat: Date.now() 
         });
@@ -127,7 +127,7 @@ export class CoordinatorService {
   /**
    * Actual execution loop for the worker.
    */
-  private async executeWorkerLoop(workerId: string, prompt: string, type?: string) {
+  private async executeWorkerLoop(workerId: string, prompt: string, type?: string, parentTaskId?: string) {
       this.assertOperational('executeWorkerLoop');
       try {
           console.log(`[Coordinator] 🚀 Launching real worker process for ${workerId}: ${prompt.slice(0, 50)}...`);
@@ -137,7 +137,7 @@ export class CoordinatorService {
               'broccolidb/worker_cli.ts',
               '--worker-id', workerId,
               '--prompt', prompt,
-              '--swarm-id', params.parentTaskId || 'swarm',
+              '--swarm-id', parentTaskId || 'swarm',
               '--lane-id', `worker-lane:${workerId}`,
               '--workspace', process.cwd(),
           ], {

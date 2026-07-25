@@ -194,7 +194,7 @@ export class CleanupService {
                 pruned++;
             }
         }
-    } catch (err) {
+    } catch {
         // tasks dir might not exist
     }
     return pruned;

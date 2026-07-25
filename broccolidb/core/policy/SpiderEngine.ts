@@ -213,6 +213,7 @@ export class SpiderEngine {
 		this.nodes.clear()
 		this.ghosts.clear()
 		this.sessionBuffer.clear()
+		this.registry.clear()
 		this.substrateCheckpoint = null
 		Logger.info("[SpiderEngine] Industrial Disposal Complete. Memory Substrate Released.")
 	}

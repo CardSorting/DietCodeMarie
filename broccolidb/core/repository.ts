@@ -742,6 +742,17 @@ export class Repository {
   }
 
   /**
+   * Force clear all internal LRU caches to free heap memory immediately
+   */
+  clearAllCaches() {
+    this.treeCache.clear();
+    this.rawTreeCache.clear();
+    this.fileCache.clear();
+    this.nodeCache.clear();
+    this.refCache.clear();
+  }
+
+  /**
    * Deterministic hash for a tree snapshot.
    */
   private treeHash(entries: Record<string, TreeEntry>): string {

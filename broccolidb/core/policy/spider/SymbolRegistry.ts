@@ -59,13 +59,16 @@ export class SymbolRegistry {
       return null;
   }
 
-  /**
-   * Records a transitional move to assist in distinguishing renames from removals.
-   */
+  private transitionTimers: Set<NodeJS.Timeout> = new Set();
+
   public recordTransition(symbolName: string, from: string, to: string) {
       this.transitions.set(symbolName, { from, to, timestamp: Date.now() });
       // TTL: Expire transitions after 5 seconds to keep the context localized to the current task
-      setTimeout(() => this.transitions.delete(symbolName), 5000);
+      const timer = setTimeout(() => {
+          this.transitions.delete(symbolName);
+          this.transitionTimers.delete(timer);
+      }, 5000);
+      this.transitionTimers.add(timer);
   }
 
   public getTransition(symbolName: string) {
@@ -87,8 +90,17 @@ export class SymbolRegistry {
   }
 
   public clear() {
+      for (const timer of this.transitionTimers) {
+          clearTimeout(timer);
+      }
+      this.transitionTimers.clear();
       this.providers.clear();
       this.exportsByFile.clear();
+      this.transitions.clear();
+  }
+
+  public dispose() {
+      this.clear();
   }
 
   public serialize(): string {

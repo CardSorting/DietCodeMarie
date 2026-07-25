@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import fs from 'node:fs';
 import { dbPool } from '../infrastructure/db/BufferedDbPool.js';
-import { setDbPath } from '../infrastructure/db/Config.js';
+import { cleanupSqliteFiles, setDbPath } from '../infrastructure/db/Config.js';
 
 async function runTest() {
   const dbPath = './test-builder.db';
@@ -120,7 +120,7 @@ async function runTest() {
     console.info('✅ ALL QUERY BUILDER TESTS PASSED.');
   } finally {
     await dbPool.stop();
-    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+    cleanupSqliteFiles(dbPath);
   }
 }
 

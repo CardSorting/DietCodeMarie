@@ -408,11 +408,12 @@ export class MetricsEngine {
 
 		let crossLayerEdges = 0
 		let totalEdges = 0
+		const nodeIds = new Set(nodes.keys())
 		for (const node of nodesArray) {
 			const imports = node.imports || []
 			for (const imp of imports) {
 				totalEdges++
-				const targetId = this.resolver.resolveImportToNodeId(node.id, imp, new Set(nodes.keys()))
+				const targetId = this.resolver.resolveImportToNodeId(node.id, imp, nodeIds)
 				const targetLayer = targetId ? this.resolver.resolveLayer(targetId) : null
 
 				if (targetLayer && targetLayer !== node.layer && targetLayer !== "plumbing") {

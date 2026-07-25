@@ -2193,6 +2193,7 @@ export class Task {
 			if (this.FocusChainManager) {
 				this.FocusChainManager.dispose()
 			}
+			await this.messageStateHandler.dispose()
 		} finally {
 			const currentLifecycle = lifecycle.readProjection(this.taskState)
 			if (
