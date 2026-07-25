@@ -804,7 +804,11 @@ export class SpiderEngine {
 	}
 
 	public detectCycles(): string[][] {
-		return this.metrics.detectCycles(this.nodes)
+		if (this.lastCycleRevision !== this.graphRevision) {
+			this.cachedCycles = this.metrics.detectCycles(this.nodes)
+			this.lastCycleRevision = this.graphRevision
+		}
+		return this.cachedCycles
 	}
 
 	public getViolations(monitor?: StabilityMonitor): SpiderViolation[] {

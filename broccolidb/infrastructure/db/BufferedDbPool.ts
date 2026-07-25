@@ -531,7 +531,7 @@ export class BufferedDbPool {
   private recordLatency(target: number[], value: number) {
     target.push(value);
     if (target.length > this.MAX_METRICS_SAMPLES) {
-      target.shift();
+      target.splice(0, target.length - Math.floor(this.MAX_METRICS_SAMPLES / 2));
     }
   }
 

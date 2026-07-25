@@ -368,6 +368,9 @@ export async function getDb(): Promise<Kysely<Schema>> {
       await execute('PRAGMA auto_vacuum = INCREMENTAL;');
       await execute('PRAGMA wal_autocheckpoint = 1000;');
       await execute('PRAGMA journal_size_limit = 67108864;');
+      await execute('PRAGMA temp_store = MEMORY;');
+      await execute('PRAGMA cache_size = -64000;');
+      await execute('PRAGMA mmap_size = 268435456;');
       await execute('PRAGMA foreign_keys = ON;');
 
       // Schema Initialization

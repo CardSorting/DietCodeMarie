@@ -21,8 +21,9 @@ export class ForensicEngine {
 		for (const node of nodes.values()) {
 			const reachable = new Set<string>()
 			const queue = [node.id]
-			while (queue.length > 0) {
-				const current = queue.shift()
+			let head = 0
+			while (head < queue.length) {
+				const current = queue[head++]
 				if (!current) continue
 				const currNode = nodes.get(current)
 				if (currNode) {

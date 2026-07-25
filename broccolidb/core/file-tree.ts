@@ -755,4 +755,12 @@ export class FileTree {
   public clearCache(): void {
     this.ignoreCache.clear();
   }
+
+  public clearCaches(): void {
+    this.ignoreCache.clear();
+  }
+
+  public dispose(): void {
+    this.clearCaches();
+  }
 }
