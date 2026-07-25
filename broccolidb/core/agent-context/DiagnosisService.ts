@@ -40,28 +40,32 @@ export class DiagnosisService {
     );
     const validNodes = nodes.filter((n): n is KnowledgeBaseItem => n !== null);
 
-    for (const node of validNodes) {
-      // 1. Check Staleness
-      const ageMs = Date.now() - (node.createdAt || Date.now());
-      if (ageMs > 7 * 86_400_000) {
-        staleCount++;
-      }
-
-      // 2. Check Sovereignty (Epistemic Verification)
-      const sov = await this.reasoning.verifySovereignty(node.itemId);
-      if (!sov.isValid) {
-        unverifiedCount++;
-        if ((sov.metrics?.finalProb as number) < 0.2) {
-          highEntropyNodes.push(node.itemId);
+    await Promise.all(
+      validNodes.map(async (node) => {
+        // 1. Check Staleness
+        const ageMs = Date.now() - (node.createdAt || Date.now());
+        if (ageMs > 7 * 86_400_000) {
+          staleCount++;
         }
-      }
 
-      // 3. Check Contradictions
-      const conflicts = await this.reasoning.detectContradictions(node.itemId, 1);
-      if (conflicts.length > 0) {
-        contradictionCount++;
-      }
-    }
+        // 2. Check Sovereignty & 3. Contradictions concurrently
+        const [sov, conflicts] = await Promise.all([
+          this.reasoning.verifySovereignty(node.itemId),
+          this.reasoning.detectContradictions(node.itemId, 1),
+        ]);
+
+        if (!sov.isValid) {
+          unverifiedCount++;
+          if ((sov.metrics?.finalProb as number) < 0.2) {
+            highEntropyNodes.push(node.itemId);
+          }
+        }
+
+        if (conflicts.length > 0) {
+          contradictionCount++;
+        }
+      })
+    );
 
     // Calculate Health Score
     let score = 100;

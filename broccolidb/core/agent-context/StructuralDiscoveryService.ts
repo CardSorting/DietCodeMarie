@@ -215,4 +215,9 @@ export class StructuralDiscoveryService {
     }
     return `🍃 LEAF: Zero incoming dependencies. Low-risk isolation.`;
   }
+
+  public dispose(): void {
+    this.cache.clear();
+    this.inverseGraph.clear();
+  }
 }

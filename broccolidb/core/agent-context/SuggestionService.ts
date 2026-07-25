@@ -168,4 +168,13 @@ Output format: JSON array of EXACTLY 3 objects with "text" and "type" (one of fi
       { text: 'What should be the next feature to implement?', type: 'feature' },
     ];
   }
+
+  public clear(): void {
+    this.suggestionCache.clear();
+    this.lastSuggestions = [];
+  }
+
+  public dispose(): void {
+    this.clear();
+  }
 }
