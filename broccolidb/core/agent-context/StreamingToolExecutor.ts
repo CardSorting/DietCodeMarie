@@ -125,6 +125,14 @@ export class StreamingToolExecutor {
     return Array.from(this.inProgress);
   }
 
+  public clear(): void {
+    this.inProgress.clear();
+  }
+
+  public dispose(): void {
+    this.clear();
+  }
+
   /**
    * Parses common model-emitted tool-call envelopes:
    * - OpenAI-style {"tool_calls":[{"function":{"name":"x","arguments":"{}"}}]}

@@ -38,6 +38,7 @@ export class CleanupService {
         this.lastError = error?.message || String(error);
       });
     }, 30000);
+    this.cleanupInterval.unref();
   }
 
   async stop(): Promise<void> {
