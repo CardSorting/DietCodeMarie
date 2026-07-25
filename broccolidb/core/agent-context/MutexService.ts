@@ -154,8 +154,8 @@ export class MutexService {
           } catch (err) {
               console.error(`[Mutex] ❌ Heartbeat failed for ${resource}`, err);
           }
-      }, 20000); // Pulse every 20s
-
+      }, 20000);
+      interval.unref();
       this._heartbeats.set(resource, interval);
   }
 

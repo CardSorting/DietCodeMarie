@@ -75,6 +75,7 @@ export class LifecycleRegistry {
         }
       }
     }
+    this.registry.clear();
   }
 
   public async flushAll(): Promise<void> {
