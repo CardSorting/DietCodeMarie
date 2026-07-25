@@ -79,6 +79,19 @@ export class SystemGuardrails {
 			if (freeSpace < this.DISK_SPACE_THRESHOLD_WARNING) {
 				Logger.warn(`Low disk space in DietCode home: ${Math.round(freeSpace / 1024 / 1024)}MB remaining.`)
 			}
+
+			// Extension storage size check (1.5GB threshold trigger)
+			const { StorageManager } = await import("@/services/storage/StorageManager")
+			const breakdown = await StorageManager.getInstance().getStorageBreakdown()
+			const STORAGE_WARNING_THRESHOLD_BYTES = 1.5 * 1024 * 1024 * 1024 // 1.5GB
+			if (breakdown.totalBytes > STORAGE_WARNING_THRESHOLD_BYTES) {
+				Logger.warn(
+					`Extension storage footprint is high (${Math.round(breakdown.totalBytes / 1024 / 1024)}MB). Triggering background optimization...`,
+				)
+				StorageManager.getInstance()
+					.optimizeStorage()
+					.catch((err) => Logger.error("Auto storage optimization failed:", err))
+			}
 		} catch {
 			// Ignore if statfs fails
 		}

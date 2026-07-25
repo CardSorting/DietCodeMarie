@@ -30,6 +30,7 @@ const DietCodeCommands = {
 	GenerateCommit: `${prefix}.generateGitCommitMessage`,
 	AbortCommit: `${prefix}.abortGitCommitMessage`,
 	ReconstructTaskHistory: `${prefix}.reconstructTaskHistory`,
+	ClearCache: `${prefix}.clearCache`,
 	// Jupyter Notebook commands
 	JupyterGenerateCell: `${prefix}.jupyterGenerateCell`,
 	JupyterExplainCell: `${prefix}.jupyterExplainCell`,

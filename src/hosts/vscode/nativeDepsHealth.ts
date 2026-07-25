@@ -2,6 +2,7 @@ import fs from "node:fs"
 import { createRequire } from "node:module"
 import path from "node:path"
 import * as vscode from "vscode"
+import { HostProvider } from "@/hosts/host-provider"
 
 export const REQUIRED_PACKAGES = ["better-sqlite3", "bindings", "file-uri-to-path"] as const
 
@@ -144,6 +145,20 @@ export function auditCurrentInstallation(extensionPath: string): InstallationHea
 		detail: fs.existsSync(nodeModulesPath) ? undefined : "Install appears incomplete (common with broken Open VSX builds)",
 		fix: fs.existsSync(nodeModulesPath) ? undefined : ["Install from VSIX instead of a broken marketplace copy"],
 	})
+
+	try {
+		const globalStoragePath = HostProvider.get().globalStorageFsPath
+		if (fs.existsSync(globalStoragePath)) {
+			checks.push({
+				id: "storage",
+				status: "pass",
+				title: "Global storage directory ready",
+				detail: `Path: ${globalStoragePath}`,
+			})
+		}
+	} catch {
+		// Ignore if HostProvider is uninitialized during standalone test runs
+	}
 
 	return checks
 }

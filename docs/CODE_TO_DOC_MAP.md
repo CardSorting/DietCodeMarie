@@ -40,6 +40,8 @@ Use this when you change code and need to update the matching doc.
 | `src/services/roadmap/` | [Roadmap steering](features/roadmap-steering.mdx) · [Auto-governance post-mortem](features/roadmap-auto-governance-postmortem.mdx) |
 | `src/services/roadmap/RoadmapAutoGovernance.ts` | [Auto-governance post-mortem](features/roadmap-auto-governance-postmortem.mdx) |
 | `src/services/roadmap/RoadmapCompletionGate.ts` | [Roadmap steering](features/roadmap-steering.mdx) · [Auto-governance post-mortem](features/roadmap-auto-governance-postmortem.mdx) |
+| `src/services/storage/StorageManager.ts` | [Storage & cache management](features/storage-and-cache-management.md) |
+| `src/integrations/checkpoints/CheckpointExclusions.ts` | [Storage & cache management](features/storage-and-cache-management.md) |
 | `src/shared/golden-cartridge.ts` | [Golden Cartridge](tools-reference/golden-cartridge.mdx) · [Skills](customization/skills.mdx) |
 | `src/core/task/tools/handlers/GoldenCartridgeToolHandler.ts` | [Golden Cartridge](tools-reference/golden-cartridge.mdx) |
 | `optional-skills/dietcode/golden-cartridge-protocol/` | [Golden Cartridge](tools-reference/golden-cartridge.mdx) · [Skills](customization/skills.mdx) |

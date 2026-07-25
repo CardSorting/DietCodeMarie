@@ -11,5 +11,13 @@ export async function clearTask(controller: Controller, _request: EmptyRequest):
 	// clearTask is called here when the user closes the task
 	await controller.clearTask()
 	await controller.postStateToWebview()
+
+	// Asynchronously trigger lightweight storage vacuuming
+	import("@/services/storage/StorageManager").then(({ StorageManager }) => {
+		StorageManager.getInstance()
+			.vacuumCheckpoints()
+			.catch(() => {})
+	})
+
 	return Empty.create()
 }

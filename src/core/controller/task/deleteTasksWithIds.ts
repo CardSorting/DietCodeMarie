@@ -62,30 +62,18 @@ async function deleteTaskWithId(controller: Controller, id: string): Promise<voi
 		// Remove task from state
 		const updatedTaskHistory = await controller.deleteTaskFromState(id)
 
-		// Delete the task files
-		for (const filePath of [
-			apiConversationHistoryFilePath,
-			uiMessagesFilePath,
-			contextHistoryFilePath,
-			taskMetadataFilePath,
-		]) {
-			await fs.rm(filePath, { force: true })
-		}
-
-		// Remove empty task directory
-		try {
-			await fs.rmdir(taskDirPath) // succeeds if the dir is empty
-		} catch (error) {
-			Logger.debug("Could not remove task directory (may not be empty):", error)
+		// Remove task directory and all its contents (images, checkpoints, logs, sub-folders)
+		if (await fileExistsAtPath(taskDirPath)) {
+			await fs.rm(taskDirPath, { recursive: true, force: true })
 		}
 
 		// If no tasks remain, clean up everything
 		if (updatedTaskHistory.length === 0) {
-			const taskDirPath = path.join(HostProvider.get().globalStorageFsPath, "tasks")
+			const globalTasksPath = path.join(HostProvider.get().globalStorageFsPath, "tasks")
 			const checkpointsDirPath = path.join(HostProvider.get().globalStorageFsPath, "checkpoints")
 
-			if (await fileExistsAtPath(taskDirPath)) {
-				await fs.rm(taskDirPath, { recursive: true, force: true })
+			if (await fileExistsAtPath(globalTasksPath)) {
+				await fs.rm(globalTasksPath, { recursive: true, force: true })
 			}
 			if (await fileExistsAtPath(checkpointsDirPath)) {
 				await fs.rm(checkpointsDirPath, { recursive: true, force: true })

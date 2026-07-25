@@ -33,6 +33,7 @@ Do not merge these narratives. LUMI owns IDE session behavior and approvals. Bro
 | Prompts | `src/core/prompts/system-prompt/` | Variant-specific system prompts and tool descriptions |
 | Context/rules/skills | `src/core/context/`, `.dietcoderules/`, `.agents/skills/` | User/project instructions and optional skills |
 | Master of Design (MoD) | `src/core/prompts/system-prompt/components/mod_designer_steering.ts` | Unified System Prompt Steering Toggle. Runs through the standard coding task loop with 100% tool parity (`read_file`, `replace_in_file`, `execute_command`, `browser_action`, subagents, MCP tools), automatically steered by senior design engineering instincts (tokens, 7-state UI matrix, WCAG 2.1 AA, responsive grid ergonomics, 5-Whys). |
+| Storage & Cache Manager | `src/services/storage/StorageManager.ts` | Multi-tiered storage engine, shadow Git vacuuming (`git gc --prune=now`), dynamic exclusions, and background maintenance |
 | Webview UI | `webview-ui/` | React/Vite sidebar, settings, message rendering |
 | Protocol | `proto/`, `src/generated/` | Protobuf/gRPC contracts; generated outputs should not be hand-edited |
 | Roadmap/governance | `src/services/roadmap/`, `ROADMAP.md` | Steering, gates, roadmap lifecycle |

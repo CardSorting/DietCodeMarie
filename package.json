@@ -248,6 +248,12 @@
 				"category": "LUMI"
 			},
 			{
+				"command": "lumi.clearCache",
+				"title": "Clear Cache & Optimize Storage",
+				"category": "LUMI",
+				"icon": "$(trash)"
+			},
+			{
 				"command": "lumi.reviewComment.reply",
 				"title": "Reply",
 				"category": "LUMI",
@@ -421,6 +427,26 @@
 					],
 					"default": "advisory",
 					"description": "Control how potentially interactive terminal commands are validated. 'blocking' rejects execution; 'advisory' permits execution but logs warnings; 'disabled' bypasses check."
+				},
+				"lumi.storage.maxCheckpointMB": {
+					"type": "number",
+					"default": 1024,
+					"description": "Target storage limit in MB for shadow Git checkpoints before triggering automatic vacuuming and compaction."
+				},
+				"lumi.storage.autoMaintenance": {
+					"type": "boolean",
+					"default": true,
+					"description": "Enable periodic background storage optimization and shadow Git vacuuming."
+				},
+				"lumi.storage.maxCacheAgeDays": {
+					"type": "number",
+					"default": 7,
+					"description": "Maximum age in days for temporary cache files before automatic deletion during storage optimization."
+				},
+				"lumi.storage.maxTaskCount": {
+					"type": "number",
+					"default": 100,
+					"description": "Maximum number of non-favorited tasks retained in history before automatically purging oldest task data."
 				}
 			}
 		}

@@ -103,7 +103,8 @@
 							"features/jupyter-notebooks",
 							"features/deep-planning",
 							"features/web-tools",
-							"features/worktrees"
+							"features/worktrees",
+							"features/storage-and-cache-management"
 						]
 					},
 					{

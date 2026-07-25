@@ -570,6 +570,91 @@ ${ctx.cellJson || "{}"}
 		}),
 	)
 
+	// Register the clearCache command handler
+	context.subscriptions.push(
+		vscode.commands.registerCommand(commands.ClearCache, async () => {
+			const { StorageManager } = await import("./services/storage/StorageManager")
+			const mgr = StorageManager.getInstance()
+
+			interface StorageActionItem extends vscode.QuickPickItem {
+				id: string
+			}
+
+			const items: StorageActionItem[] = [
+				{
+					label: "$(zap) Quick Storage Cleanup",
+					detail: "Vacuum shadow Git repos, purge temporary cache & system temp files (preserves task history).",
+					id: "quick",
+				},
+				{
+					label: "$(trash) Full Storage Optimization",
+					detail: "Vacuum repos, clear browser caches, purge non-favorited task history, truncate WAL files.",
+					id: "full",
+				},
+				{
+					label: "$(graph) View Storage Space Breakdown",
+					detail: "Show size breakdown for Checkpoints, Tasks, Cache, Puppeteer, and Temp.",
+					id: "breakdown",
+				},
+			]
+
+			const selection = await vscode.window.showQuickPick(items, {
+				title: "LUMI Storage & Cache Manager",
+				placeHolder: "Select storage optimization action",
+			})
+
+			if (!selection) return
+
+			if (selection.id === "breakdown") {
+				const bd = await mgr.getStorageBreakdown()
+				const fmt = (b: number) => (b / 1024 / 1024).toFixed(1)
+				vscode.window.showInformationMessage(
+					`LUMI Storage Breakdown:\n` +
+						`• Checkpoints: ${fmt(bd.checkpointsBytes)} MB\n` +
+						`• Tasks: ${fmt(bd.tasksBytes)} MB\n` +
+						`• Cache: ${fmt(bd.cacheBytes)} MB\n` +
+						`• Puppeteer: ${fmt(bd.puppeteerBytes)} MB\n` +
+						`• System Temp: ${fmt(bd.systemTempBytes)} MB\n` +
+						`• Total: ${fmt(bd.totalBytes)} MB`,
+					{ modal: true },
+				)
+				return
+			}
+
+			await vscode.window.withProgress(
+				{
+					location: vscode.ProgressLocation.Notification,
+					title: "LUMI: Optimizing storage & clearing cache...",
+					cancellable: false,
+				},
+				async () => {
+					const activeHistory = storageContext.globalState.get<any[]>("taskHistory") || []
+					const validTaskIds =
+						selection.id === "full"
+							? activeHistory.filter((t) => t.isFavorited).map((t) => t.id)
+							: activeHistory.map((t) => t.id)
+					const result = await mgr.optimizeStorage(validTaskIds)
+					const freedMb = (result.freedBytes / 1024 / 1024).toFixed(1)
+					const totalMb = (result.breakdownAfter.totalBytes / 1024 / 1024).toFixed(1)
+					vscode.window.showInformationMessage(
+						`LUMI Storage Optimization Complete: Freed ${freedMb} MB. Current total: ${totalMb} MB.`,
+					)
+				},
+			)
+			telemetryService.captureButtonClick("command_clearCache")
+		}),
+	)
+
+	// Start background storage maintenance
+	import("./services/storage/StorageManager").then(({ StorageManager }) => {
+		const autoMaint = vscode.workspace.getConfiguration("lumi").get<boolean>("storage.autoMaintenance", true)
+		if (autoMaint) {
+			const activeHistory = storageContext.globalState.get<any[]>("taskHistory") || []
+			const validTaskIds = activeHistory.map((t) => t.id)
+			StorageManager.getInstance().startBackgroundMaintenance(validTaskIds)
+		}
+	})
+
 	// Register the generateGitCommitMessage command handler
 	context.subscriptions.push(
 		vscode.commands.registerCommand(commands.GenerateCommit, async (scm) => {

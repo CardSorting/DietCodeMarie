@@ -69,6 +69,7 @@ Provider handlers are in **`src/core/api/providers/`**, not `src/services/provid
 | State keys | `src/shared/storage/state-keys.ts` |
 | Slash commands | `src/core/slash-commands/index.ts` |
 | System prompts | `src/core/prompts/system-prompt/` |
+| Storage & Cache Manager | `src/services/storage/StorageManager.ts` |
 | Package metadata | `package.json` (name: `lumi`, publisher: `CardSorting`) |
 
 ## Architectural patterns

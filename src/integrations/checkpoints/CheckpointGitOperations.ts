@@ -213,6 +213,26 @@ export class GitOperations {
 			await this.renameNestedGitRepos(false)
 		}
 	}
+
+	/**
+	 * Vacuums and compacts a shadow Git repository to reclaim disk space.
+	 * Executes `git gc --prune=now` and `git pack-refs --all`.
+	 *
+	 * @param gitPath - Absolute path to the shadow .git directory
+	 */
+	public async vacuumRepository(gitPath: string): Promise<void> {
+		try {
+			if (!(await fileExistsAtPath(gitPath))) return
+			const gitDir = path.dirname(gitPath)
+			const git = simpleGit(gitDir)
+			Logger.info(`Vacuuming shadow Git repository at ${gitDir}...`)
+			await git.raw(["gc", "--prune=now", "--quiet"])
+			await git.raw(["pack-refs", "--all"])
+			Logger.info(`Vacuum completed for shadow Git repository at ${gitDir}`)
+		} catch (error) {
+			Logger.warn(`Shadow Git vacuum encountered non-fatal error at ${gitPath}:`, error)
+		}
+	}
 }
 
 // Re-exported for backward compatibility; canonical home is ./constants.
