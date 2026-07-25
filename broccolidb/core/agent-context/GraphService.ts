@@ -258,6 +258,36 @@ export class GraphService {
           ]),
         ]);
 
+        const outboundMap = new Map<string, GraphEdge[]>();
+        for (const r of outboundRows) {
+          const srcId = r.sourceId as string;
+          let list = outboundMap.get(srcId);
+          if (!list) {
+            list = [];
+            outboundMap.set(srcId, list);
+          }
+          list.push({
+            targetId: r.targetId as string,
+            type: r.type as GraphEdge['type'],
+            weight: r.weight as number,
+          });
+        }
+
+        const inboundMap = new Map<string, GraphEdge[]>();
+        for (const r of inboundRows) {
+          const tgtId = r.targetId as string;
+          let list = inboundMap.get(tgtId);
+          if (!list) {
+            list = [];
+            inboundMap.set(tgtId, list);
+          }
+          list.push({
+            targetId: r.sourceId as string,
+            type: r.type as GraphEdge['type'],
+            weight: r.weight as number,
+          });
+        }
+
         for (const row of rows) {
           const kbId = row.id as string;
           const nodeData: KnowledgeBaseItem = {
@@ -265,20 +295,8 @@ export class GraphService {
             type: row.type as KnowledgeBaseItem['type'],
             content: row.content as string,
             tags: JSON.parse((row.tags as string) || '[]'),
-            edges: outboundRows
-              .filter((r) => r.sourceId === kbId)
-              .map((r) => ({
-                targetId: r.targetId as string,
-                type: r.type as GraphEdge['type'],
-                weight: r.weight as number,
-              })),
-            inboundEdges: inboundRows
-              .filter((r) => r.targetId === kbId)
-              .map((r) => ({
-                targetId: r.sourceId as string,
-                type: r.type as GraphEdge['type'],
-                weight: r.weight as number,
-              })),
+            edges: outboundMap.get(kbId) || [],
+            inboundEdges: inboundMap.get(kbId) || [],
             embedding: row.embedding ? JSON.parse(row.embedding as string) : undefined,
             confidence: row.confidence as number,
             hubScore: row.hubScore as number,

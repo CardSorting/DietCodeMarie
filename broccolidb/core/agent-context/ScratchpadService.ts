@@ -47,6 +47,13 @@ export class ScratchpadService {
       } catch (err: any) {
         if (err.code === 'EEXIST') {
           retries++;
+          try {
+            const stats = await fs.stat(lockPath);
+            if (Date.now() - stats.mtimeMs > 60000) {
+              await fs.unlink(lockPath);
+              continue;
+            }
+          } catch {}
           await new Promise(r => setTimeout(r, 10 + Math.random() * 20));
           continue;
         }
