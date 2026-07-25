@@ -26,7 +26,7 @@ Last audited: 2026-07-24
 
 ## ADR-015: LUMI Designer-in-Residence Enterprise Architecture & Governance
 
-**Status:** Accepted
+**Status:** Superseded by ADR-016
 
 **Context:** The Mixture of Designers framework originally modeled design expertise as five isolated voting personas. World-class product design requires a Designer-in-Residence: a single senior product designer embedded in the workspace who moves fluidly across internal design lenses (UX Architecture, Accessibility, Visual Hierarchy, Interaction Patterns, System Engineering) while maintaining one coherent product vision.
 
