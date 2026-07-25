@@ -1,156 +1,42 @@
-# Mixture of Designers (MoD) & LUMI Designer-in-Residence v3.0: Executive Brief
-**An Embedded Senior Product Designer Agent Architecture with Automated Design System Governance, 8-State UI Contracts, and High-Throughput Execution Authority**
+# Master of Design (MoD) Architecture: Executive Brief
+**A Prompt-Steered Senior Design Engineering Runtime for LUMI Task Execution**
 
 ---
 
 ## 1. Executive Summary
 
-### The Evolution from Persona Councils to Designer-in-Residence
-While early multi-agent experiments modeled design expertise as five persona bots voting on UI decisions, world-class product design requires a **Designer-in-Residence**: an agent that behaves like an exceptionally senior product designer embedded inside the engineering workspace. The specialized personas become internal lenses available to the resident (UX Architecture, Accessibility, Visual Hierarchy, Product Strategy, Interaction Patterns, System Engineering). The lenses don't talk to each other, don't vote, don't negotiate, and don't produce competing designs.
+### Unified Architecture: Prompt Steering Toggle
+The **Master of Design (MoD)** mode in LUMI centralizes design engineering capabilities directly within the primary coding agent task loop (`initiateTaskLoop` in `src/core/task/index.ts`). Rather than using isolated backend orchestrator bypasses, MoD operates as a system prompt steering toggle (`modEnabled`) with 100% tool parity (`read_file`, `replace_in_file`, `execute_command`, `browser_action`, subagents, MCP tools).
 
-### The Solution: LUMI Designer-in-Residence v3.0
-LUMI Designer-in-Residence v3.0 provides an enterprise-grade product design governance runtime featuring:
-- **5-Whys Recursive Investigation**: Traces surface symptoms down to underlying information architecture and mental model breakdowns.
-- **Industry Pattern Library Registry (`PatternLibrary.ts`)**: Benchmarks UI friction against learned user conventions (Command Palette, Split Workspace, Contextual Action Toolbar, Optimistic Undo Toast, Guided Empty State, Focus-Trapped Modals).
-- **Design Token Sensing & Codemod Sync Engine (`TokenSyncEngine.ts`)**: Automatically converts legacy CSS/HEX values into canonical design tokens (`var(--color-primary)`).
-- **Dynamic UX Health Index (0-100)**: Live scoring, letter grades (`A+` to `F`), and category breakdowns across 7 explicit design debt categories.
-- **Design Decision Records & Drift Guard (`DesignDecisionRecord.ts`, `DesignDriftDetector.ts`)**: Formats immutable decision records (`DDR-001`) and scans source files for design system drift.
-- **8-State Interactive UI Contract Ledger & Predictive Risk Calculator (`ComponentContractLedger.ts`, `UXRegressionRiskCalculator.ts`)**: Audits UI components across all 8 interactive states and evaluates breaking layout/flow regression risk (`0-100`).
-- **High-Throughput Speculative Execution (`SpeculativeTaskPlanner.ts`, `DesignCircuitBreaker.ts`, `DesignStateCache.ts`)**: Partitions implementation tasks into parallel disjoint execution waves, enforces 30s LLM stream safety valves, and caches state in memory.
+### Core Principles
+When `modEnabled` is active, the agent automatically evaluates every code edit, architecture decision, and subagent task against 6 Senior Design Engineering Pillars:
+1. **Design Token Sensing & System Hierarchy**: Custom property sensing (`var(--primary)`, Tailwind tokens) before modifying markup.
+2. **Complete 7-State UI Matrix**: Idle, Hover, Active, Disabled, Loading, Empty, and Error boundaries.
+3. **WCAG 2.1 AA Accessibility & Motion**: Contrast ratios >= 4.5:1, touch targets >= 44x44px, visible keyboard focus rings, and reduced motion fallbacks.
+4. **Visual Aesthetics & Spatial Harmony**: Typographic scales, dark/light mode balance, glassmorphism, and micro-transitions.
+5. **Responsive Layouts & Grid Ergonomics**: Mobile-first flex/grid layouts without horizontal scrollbar leaks.
+6. **5-Whys Cognitive Ergonomics**: Root usability friction analysis and prominent call-to-action (CTA) paths.
 
-```
-       [ User Refinement Request ]
-                    │
-                    ▼
-       [ Intent & Weakness Analysis ]
- (Self-Healing Heuristic Intent Extraction Recovery)
-                    │
-                    ▼
-     [ Smallest Useful Specialist Mixture ]
- (UX Architect, A11y Reviewer, Visual Designer...)
-  (MoE Capacity Balancing & Fallback Mapping)
-                    │
-                    ▼
-     [ Parallel Bounded Appraisals ]
- (Circuit-Breaker Wrapped Promise.allSettled Runs)
-                    │
-                    ▼
-     [ Priority-Driven BFT Convergence ]
-   (Deduplication, Lattice Conflict Resolution, Utility Scoring)
-                    │
-                    ▼
-       [ Locked Design Decisions ]
-                    │
-                    ▼
-    [ Bounded Developer Subagent Mutation ]
- (Disjoint Mutation Batches with Direct I/O Authority)
-                    │
-                    ▼
-       [ Multi-Layer Gate Audit ]
- (A11y, Layout, Contrast & Product Critique)
-                    │
-                    ▼
-    [ Incremental Gate Revision Isolation ]
- (Re-runs ONLY responsible roles; preserves locked decisions)
-                    │
-                    ▼
-        [ Signed Playbook Release ]
+```text
+[ User Prompt ]
+      │
+      ▼ (modEnabled: true)
+[ System Prompt Steering Component: MOD_DESIGNER_STEERING ]
+      │ (Inserted right after AGENT_ROLE_SECTION)
+      ▼
+[ Unified Task Loop Execution with 100% Tool Parity ]
+      │
+      ├─► Direct Code Edits & Refactoring
+      ├─► Terminal Command Execution & Build Tests
+      ├─► Browser Action Verification
+      └─► Subagent Task Swarm (Propagates modEnabled: true)
 ```
 
 ---
 
-## 2. Key Business & Engineering Benefits
+## 2. Key Architecture Benefits
 
-- **Zero-Stall Resilient Flow**: Employs **Specialist Execution Circuit Breakers** (`Promise.allSettled`) and **Keyword-Driven Heuristic Problem Sensing**. If an individual specialist or LLM stream fails, the pipeline automatically re-routes to fallback experts (`FALLBACK_ROLE_MAP`) without crashing or stalling.
-- **Resilient Output Parsing & Fallback Synthesis**: Strips markdown codeblocks automatically and synthesizes structured fallback refinements if an LLM returns unformatted text output.
-- **Universal Implementation Task Mapping**: Maps all accepted design decisions directly into disjoint implementation tasks, eliminating decision-dropping string filters.
-- **Complementary Property Fusion**: Merges non-conflicting visual tokens, typography notes, and acceptance criteria across superseded refinements during conflict resolution.
-- **UX & Branding Consistency**: Guarantees that UI code changes match design system guidelines and reuse existing primitives, eliminating style leakage.
-- **Strict Accessibility Compliance**: Enforces keyboard accessibility, ARIA compliance, and contrast ratios by routing A11y problems through a dedicated reviewer with priority veto power.
-- **High-Throughput Compute Efficiency**: Uses Softmax Top-K MoE routing combined with an **In-Memory TTL Context Cache** to eliminate duplicate disk reads across prefetching passes.
-- **Fail-Safe Mutation Fences & Incremental Revision**: Separates design appraisal from code writes. Developer subagents are restricted to approved file scopes. During gate revisions, previously locked/accepted decisions remain untouched.
-- **Durable Lifecycle Continuance**: Employs state receipts (`mod_run_state.json`) with checkpoint hashing to allow seamless resumes across restarts.
-
----
-
-## 3. Specialist Personas & Fallback Mapping Space
-
-The MoD v2.0 runtime supports 10 specialized personas mapped to codebase problem dimensions, equipped with dynamic fallback mapping:
-
-| Persona | Primary Dimension | Fallback Expert Role | Target Audit Areas |
-|---|---|---|---|
-| **Product Strategist** | Product Strategy | `ux-architect` | User goals, Jobs-to-be-Done (JTBD), user flows. |
-| **UX Architect** | Information Architecture | `product-strategist` | Navigation structures, layouts, view hierarchies. |
-| **Interaction Designer** | Interaction & State | `ux-architect` | Transitions, feedback indicators, loading states. |
-| **Visual Systems Designer** | Visual Hierarchy | `design-system-engineer` | Grids, spacing, typography scale, brand colors. |
-| **Content Designer** | Content & Copywriting | `ux-architect` | Vocabulary, labeling, input placeholders, error text. |
-| **Design System Engineer** | Design System Integration | `visual-systems-designer` | CSS variables, component primitive reuse, tokens. |
-| **Accessibility Reviewer** | Accessibility (A11y) | `ux-architect` | ARIA properties, screen reader support, tab order. |
-| **Responsive Design Reviewer**| Responsive Design | `visual-systems-designer` | Viewport adaptation, liquid layouts, touch targets. |
-| **Frontend Implementation Designer**| Technical Quality | `design-system-engineer` | Code elegance, complexity metrics, bundle impact. |
-| **Product Critic** | Final Product Critique | `product-strategist` | Post-execution adversarial critique & flow audit. |
-
----
-
-## 4. Execution Modes & Outcomes
-
-The orchestrator operates in two modes configured via user settings:
-1. **Plan-Only**: Evaluates codebase problems, runs the specialist council, converges findings, locks decisions, and presents a complete implementation checklist. File write APIs are disabled.
-2. **Plan-And-Implement**: Extends Plan-Only by spawning developer subagents to execute code changes within authorized boundaries, followed by integrated validation and final critique.
-
----
-
-## 5. Standard vs MoD v2.0 Runtime Metrics
-
-| Feature | Standard Mode | MoD v1.0 Mode | MoD v2.0 High-Throughput Mode |
-|---|---|---|---|
-| **Orchestration Loop** | Single-Agent Sequential | Multi-Agent Sequential | Multi-Agent Parallel Circuit-Breaker |
-| **Fault Resilience** | Low (Single-Point Halt) | Moderate (Exception Crash) | Zero-Stall (`Promise.allSettled` + Heuristic Sensing) |
-| **Context Scope** | Generalist Codebase | Role Bounded Scopes | Role Bounded + In-Memory TTL Content Caching |
-| **MoE Load Balancing** | None | Static Selection (`maxSpecialists`) | Dynamic Softmax Top-K + Auxiliary Offloading |
-| **Conflict Resolution** | First-Generated Output | Priority Matrix | BFT Priority Lattice Matrix & Utility Scoring |
-| **Gate Revision Pass** | Full Restart | Re-run All Specialists | Fine-Grained Incremental Revision Isolation |
-| **Durable Continuation** | None | Receipt Resume | State Receipts + Checkpoint Hashing |
-
----
-
-## 6. Quantitative Performance Model
-
-MoD v2.0 optimizes token consumption, execution throughput, and quality:
-
-```
-Quality / Compliance Rate (%)
-100% |                                      * (MoD v2.0 Zero-Stall)
-     |
- 80% |                                      * (MoD v1.0)
-     |                     * (Standard Mode)
- 60% |
-     +--------------------------------------------
-     Low                                        High
-                   Compute / Token Cost
-```
-
-### 6.1 Token Consumption & Context Caching
-Context is isolated per specialist, and `ContextBuilder` caches workspace file contents with a 1-minute TTL. Developer subagents receive only locked decisions and mutation boundary files:
-$$\text{Cost}_{\text{MoD v2.0}} = \sum_{s \in S} \mathcal{O}(L_s) + \mathcal{O}(N_{\text{subagent}} \cdot l_{\text{boundary}})$$
-where $L_s \ll L$ is the role-bounded context length, resulting in a **45-65% token reduction** on complex monorepos.
-
-### 6.2 Latency and Concurrency
-Because specialist appraisals run in parallel with `Promise.allSettled` circuit breakers, total appraisal latency is bounded by the fastest healthy specialist responses:
-$$\text{Latency}_{\text{appraisal}} = \max_{s \in S_{\text{healthy}}} \{ \text{Time}(s) \}$$
-
----
-
-## 7. Industry Standard & Production Readiness Matrix
-
-| Dimension | Standard Single-Agent | Unstructured Swarms | Mixture of Designers (MoD v2.0) |
-|---|---|---|---|
-| **Cognitive Routing** | None | Dynamic Message Passing | Softmax Top-K Gating with MoE Capacity Offloading |
-| **Fault Tolerance** | Single-Point Halt | Variable / Infinite Loop | Zero-Stall (`Promise.allSettled` + Heuristic Sensing) |
-| **Context Performance**| Disk Reads per Step | Unbounded Re-reads | In-Memory TTL File Content Cache |
-| **Conflict Resolution**| First Output | Conversational Debate | BFT Priority Lattice Matrix & Utility Scoring |
-| **Mutation Scope** | Unbounded | Tool Allowlist | Hoare-Logic Guarded Disjoint Mutation Boundaries |
-| **Gate Revisions** | Full Re-execution | Full Re-execution | Fine-Grained Incremental Decision Preservation |
-| **State Receipts** | In-Memory | Log Replay | Durable `mod_run_state.json` with Checkpoint Hashes |
-
-
+- **Zero Pipeline Fragmentation**: Single unified task loop eliminates backend orchestration drift and redundant code paths.
+- **Subagent Swarm Inheritance**: Primary tasks pass `modEnabled: true` context to child subagent swarms via `SubagentRunner.ts`.
+- **Slash Command Integration**: Threads design steering into slash commands like `/deep-planning`.
+- **Non-Technical UX Ergonomics**: Segmented control pill (`ModModeSwitcher.tsx`) in the chat composer bar with zero-jargon copy, keyboard navigation (`ArrowLeft` / `ArrowRight`), popover guides, and visual feedback.

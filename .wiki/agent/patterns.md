@@ -1,15 +1,12 @@
 # Execution Patterns
 
-## Designer-in-Residence Governance & Fast-Path Pipeline
+## Master of Design (MoD) Steering & Execution Patterns
 
-1. **Token Sensing & Codemod Sync**: Use `ContextBuilder.extractDesignTokens` to scan workspace style tokens and `TokenSyncEngine.generateCodemodPatch` to map raw CSS/HEX values to canonical variables (`var(--color-primary)`).
-2. **5-Whys Investigation**: Use `DesignerInResidence.investigate()` to trace surface friction down to fundamental IA and mental model mismatches before proposing options.
-3. **Pattern Library Matching**: Benchmark proposed UX options against learned user conventions in `PatternLibrary.ts` (Command Palette, Split Workspace, Contextual Action Toolbar, Optimistic Undo Toast, Guided Empty State, Focus-Trapped Modals).
-4. **Design Governance Logging**: Format immutable decision records (`DDR-001`) via `DesignDecisionRecordBuilder` and scan code for design system drift via `DesignDriftDetector`.
-5. **Interactive UI State Audit**: Verify UI components across all 8 interactive states (`default`, `hover`, `focus-visible`, `active`, `disabled`, `loading`, `error`, `empty`) via `ComponentContractLedger`.
-6. **Predictive Risk Assessment**: Calculate breaking layout/flow risk (`0-100`) via `UXRegressionRiskCalculator` before dispatching tasks.
-7. **Disjoint Wave Execution**: Partition implementation tasks into parallel execution waves via `SpeculativeTaskPlanner` based on file target disjunctions.
-8. **Fault Isolation & Latency Shielding**: Wrap model investigation streams in `DesignCircuitBreaker.executeWithFallback` with 30s timeouts and serve state checks via `DesignStateCache`.
+1. **System Prompt Steering Toggle**: Set `modEnabled: true` in global settings. `PromptBuilder` injects `MOD_DESIGNER_STEERING` right after `AGENT_ROLE_SECTION`.
+2. **6 Senior Design Engineering Pillars**: Automatically steers every task loop execution with Design Token Sensing, Complete 7-State UI Matrix, WCAG 2.1 AA Accessibility, Visual Aesthetics, Responsive Layout Ergonomics, and 5-Whys Cognitive Analysis.
+3. **Unified Task Execution Path**: Executes on the standard task loop with 100% tool parity (`read_file`, `replace_in_file`, `execute_command`, `browser_action`, subagents, MCP tools).
+4. **Subagent Swarm Inheritance**: `SubagentRunner.ts` propagates `modEnabled: true` context down to subagent task swarms.
+5. **Non-Technical UX Switcher**: Segmented control bar (`ModModeSwitcher.tsx`) with zero-jargon copy, keyboard navigation (`ArrowLeft` / `ArrowRight`), and popover guides.
 
 ## Transactional Task Lifecycle
 

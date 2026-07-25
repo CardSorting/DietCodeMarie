@@ -359,28 +359,21 @@ flowchart TD
 
 ---
 
-## LUMI Designer-in-Residence & MoD v3.0
+## Master of Design (MoD) Architecture
 
-LUMI includes **Designer-in-Residence (MoD v3.0)**, an embedded senior product designer agent architecture that continuously interrogates, improves, and elevates product design within the engineering environment. Replacing naive multi-persona voting, the Designer-in-Residence moves fluidly across internal evaluation lenses (UX Architecture, Accessibility, Visual Hierarchy, Interaction Patterns, System Engineering) while maintaining one coherent product vision.
+LUMI includes **Master of Design (MoD)**, a prompt-steered execution mode that injects senior product design engineering instincts directly into the standard coding task loop. Rather than bypassing the core agent pipeline with isolated orchestrators, MoD Mode mirrors the unified coding agent path with 100% tool parity (`read_file`, `replace_in_file`, `execute_command`, `browser_action`, subagents, MCP tools), automatically steering every code edit, architecture decision, and subagent task with senior design engineering principles.
 
 ### Key Capabilities
-- **5-Whys Root-Cause Investigation**: Traces surface usability friction down to fundamental information architecture and mental model breakdowns.
-- **Industry Pattern Library Registry (`PatternLibrary.ts`)**: Benchmarks UI proposals against learned user conventions (Command Palette, Split Workspace, Contextual Action Toolbar, Optimistic Undo Toast, Guided Empty State, Focus-Trapped Modals).
-- **Design Token Sensing & Codemod Sync Engine (`TokenSyncEngine.ts`)**: Automatically extracts CSS custom properties and generates codemod patches mapping hardcoded CSS/HEX values to canonical variables (`var(--color-primary)`).
-- **Dynamic UX Health Index (0-100)**: Live scoring, letter grades (`A+` to `F`), and category breakdowns across 7 explicit design debt dimensions.
-- **Upstream Grounded Investigation & Strict Invariant Target Resolution (`TargetResolutionException`)**: Hard invariant boundary enforcing zero-hallucination target grounding before code mutations. Upstream investigation (`ProblemClassifier.ts`, `DesignerInResidence.ts`) probes physical workspace files (`.tsx`, `.ts`, `.vue`, `.css`) during design analysis, ensuring emitted decisions are pre-grounded in concrete inspected files. Eliminates downstream file boundary guessing and halts ungrounded tasks safely at the `blocked` terminal stage.
-- **Automatic Execution Strategy (`"auto"`)**: Orchestrator automatically discerns whether requests require `plan-only` review vs `plan-and-implement` execution without requiring manual UI outcome toggle buttons.
-- **Glassbox MoD Live Council Inspector**: Replaced generic loading spinners with a live Council Inspector Card in the webview, streaming active persona lenses, locked decision drawers (`🔒`), mutation checklists (`⚡`), 8-gate audit matrices (`🛡️`), and a 5-step visual pipeline indicator.
-- **Design Decision Records & System Drift Guard (`DesignDecisionRecord.ts`, `DesignDriftDetector.ts`)**: Formats immutable decision records (`DDR-001`) and scans source files for design system drift.
-- **8-State Interactive UI Contract Ledger & Predictive Risk Calculator (`ComponentContractLedger.ts`, `UXRegressionRiskCalculator.ts`)**: Audits UI components across all 8 interactive states and evaluates breaking layout/flow regression risk (`0-100`).
-- **High-Throughput Speculative Execution (`SpeculativeTaskPlanner.ts`, `DesignCircuitBreaker.ts`, `DesignStateCache.ts`)**: Partitions implementation tasks into parallel disjoint execution waves, enforces 30s LLM stream safety valves, and caches state in memory.
+- **6 Senior Design Engineering Steering Pillars**: Injects Design Token Sensing, Complete 7-State UI Matrix, WCAG 2.1 AA Accessibility, Visual Aesthetics, Responsive Layout Ergonomics, and 5-Whys Cognitive Analysis directly into system prompts.
+- **Dynamic Prompt Position & Weighting**: Injected right after `AGENT_ROLE_SECTION` for maximum model attention weighting across all prompt variants.
+- **Subagent Swarm Propagation**: Child subagent tasks created via `use_subagents` automatically inherit `modEnabled: true` context in `SubagentRunner.ts`.
+- **Slash Command Integration**: Threads `modEnabled` steering into slash commands such as `/deep-planning`.
+- **World-Class UX Ergonomics Bar**: Segmented control pill (`ModModeSwitcher.tsx`) in the chat composer bar with zero-jargon copy, keyboard navigation (`ArrowLeft` / `ArrowRight`), popover mode guides, and visual feedback inspired by Vercel v0 and Cursor.
 
-| Paper / Guide | Target Audience / Purpose |
-|---------------|--------------------------|
-| **[MoD Executive Architecture Document](docs/mixture-of-designers.md)** | Technical specification, circuit breakers, consensus, and Glassbox UI engine |
-| **[MoD Executive Brief](.wiki/mod-executive-brief.md)** | Product strategy, Designer-in-Residence paradigm, and token efficiency models |
-| **[MoD Design Philosophy](.wiki/mod-philosophy.md)** | Embedded senior design judgment, 5-Whys reasoning, and Familiarity Heuristic |
-| **[MoD Technical Whitepaper](.wiki/mod-whitepaper.md)** | Mathematical formulation, 8-state UI contracts, token codemods, and speculative task waves |
+| Document | Target Audience / Purpose |
+|----------|--------------------------|
+| **[MoD Architecture Document](docs/mixture-of-designers.md)** | Technical specification, 6 steering pillars, subagent inheritance, and UX switcher ergonomics |
+| **[ADR-016](DECISIONS.md#adr-016-unified-mod-prompt-steering-toggle-architecture)** | Architectural decision record for unified MoD prompt steering toggle |
 
 ---
 

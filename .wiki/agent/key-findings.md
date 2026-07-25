@@ -8,16 +8,15 @@
 - **Terminal State Leak Fix**: Added `"blocked"` to `MoDStage` union in `types.ts` and `SubagentStatusRow.tsx`, preventing target resolution blocks from leaking into `completed-with-limitations`.
 - **Verification Evidence**: 66 Mocha unit tests passed cleanly with 0 failures (`src/core/task/tools/subagent/__tests__/mod.test.ts`).
 
-## 2026-07-24 LUMI Designer-in-Residence Enterprise Architecture Upgrade
+## 2026-07-25 Master of Design (MoD) System Prompt Steering Toggle Architecture
 
-- **Designer-in-Residence vs. Persona Council**: Replaced multi-agent persona voting with an embedded senior product designer agent (`DesignerInResidence.ts`) that evaluates workspace UI through internal design lenses (UX Architecture, Accessibility, Visual Hierarchy, Interaction Patterns, System Engineering) to maintain one coherent product vision.
-- **Industry Pattern Library Registry (`PatternLibrary.ts`)**: Built-in benchmark pattern registry (Command Palette, Split Workspace, Contextual Action Toolbar, Optimistic Undo Toast, Guided Empty State, Focus-Trapped Modals, Interactive Filter Bar) matching UI issues against learned user conventions from Figma, Linear, VS Code, Notion, Stripe, Apple, and Vercel.
-- **Design Token Sensing & Codemod Sync Engine (`ContextBuilder.ts`, `TokenSyncEngine.ts`)**: Automatically extracts CSS custom properties (`--color-*`, `--spacing-*`, `--radius-*`) and generates codemod patches converting hardcoded CSS values (`#007acc`, `16px`) into canonical token usages.
-- **Dynamic UX Health Index (0-100) & Debt Graph (`DesignIntelligenceGraph.ts`)**: Computes live health scores, letter grades (`A+` to `F`), and category breakdowns across 7 explicit design debt dimensions (`UX Debt`, `Visual Debt`, `Interaction Debt`, `Accessibility Debt`, `Consistency Debt`, `IA Debt`, `Pattern Debt`).
-- **Design Decision Records & System Drift Guard (`DesignDecisionRecord.ts`, `DesignDriftDetector.ts`)**: Formats immutable decision records (`DDR-001`) with problem context, rationale, non-goals, and positive/negative trade-offs. Scans workspace files for inline style leaks, unaligned pixel grid spacing, and hardcoded colors.
-- **8-State Interactive UI Contract Ledger & Predictive UX Risk Calculator (`ComponentContractLedger.ts`, `UXRegressionRiskCalculator.ts`)**: Audits UI components across all 8 core interactive states (`default`, `hover`, `focus-visible`, `active`, `disabled`, `loading`, `error`, `empty`) and computes a predictive UX regression risk score (`0-100`) to prevent breaking user flows.
-- **High-Throughput Execution Authority (`SpeculativeTaskPlanner.ts`, `DesignCircuitBreaker.ts`, `DesignStateCache.ts`)**: Partitions implementation tasks into parallel disjoint execution waves, enforces 30s LLM stream safety valves with deterministic fallbacks, and caches state in memory to eliminate disk read latency.
-- **Verification Evidence**: `npm run check-types` passed cleanly with 0 errors; all 53 unit tests in `mod.test.ts` passed cleanly.
+- **Unified Task Loop & 100% Tool Parity**: Centralized MoD execution into a system prompt steering toggle (`modEnabled`). MoD Mode runs through the standard task loop with 100% tool parity (`read_file`, `replace_in_file`, `execute_command`, `browser_action`, subagents, MCP tools).
+- **6 Senior Design Engineering Steering Pillars**: Automatically injects Design Token Sensing, Complete 7-State UI Matrix, WCAG 2.1 AA Accessibility, Visual Aesthetics, Responsive Layout Ergonomics, and 5-Whys Cognitive Analysis directly into system prompts via `mod_designer_steering.ts`.
+- **Optimal Attention Placement**: `PromptBuilder.ts` dynamically places `MOD_DESIGNER_STEERING` right after `AGENT_ROLE_SECTION` across all model prompt variants for maximum model attention weighting.
+- **Subagent Swarm Propagation**: `SubagentRunner.ts` extracts `modEnabled` from state settings and threads `modEnabled: true` into subagent `SystemPromptContext`, enabling subagent swarms to inherit senior designer instincts.
+- **Slash Command Integration**: Threads `modEnabled` context into slash commands such as `/deep-planning`.
+- **Non-Technical UX Ergonomics**: Switcher pill (`ModModeSwitcher.tsx`) with zero-jargon copy, keyboard arrow navigation (`ArrowLeft` / `ArrowRight`), popover mode guides, and Vercel v0 / Cursor style design tokens.
+- **Verification Evidence**: `npx tsc --noEmit` passed with 0 errors; Mocha unit tests (`mod.test.ts`) and Vitest UI tests (`ModModeSwitcher.test.tsx`) passed 100%.
 
 ## 2026-07-18 Transaction-Split Completion Saga and Committed Boundary Migration
 
