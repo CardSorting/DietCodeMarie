@@ -57,6 +57,7 @@ export async function parseSlashCommands(
 	providerInfo?: ApiProviderInfo,
 	mcpPromptFetcher?: McpPromptFetcher,
 	workspace?: string,
+	modEnabled?: boolean,
 ): Promise<{ processedText: string; needsDietCoderulesFileCheck: boolean }> {
 	const SUPPORTED_DEFAULT_COMMANDS = [
 		"newtask",
@@ -80,7 +81,7 @@ export async function parseSlashCommands(
 		compact: condenseToolResponse(focusChainSettings),
 		newrule: newRuleToolResponse(),
 		reportbug: reportBugToolResponse(),
-		"deep-planning": deepPlanningToolResponse(focusChainSettings, providerInfo, willUseNativeTools),
+		"deep-planning": deepPlanningToolResponse(focusChainSettings, providerInfo, willUseNativeTools, modEnabled),
 		replan: replanToolResponse(),
 		"explain-changes": explainChangesToolResponse(),
 		document: documentToolResponse(),

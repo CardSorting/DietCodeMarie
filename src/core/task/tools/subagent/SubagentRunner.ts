@@ -665,6 +665,7 @@ export class SubagentRunner {
 				isSubagentRun: true,
 				mode: mode as "plan" | "act", // Subagents inherit the parent's mode context
 				parentMode: mode as "plan" | "act",
+				modEnabled: this.baseConfig.services.stateManager.getGlobalSettingsKey("modEnabled") ?? false,
 			}
 
 			const promptRegistry = PromptRegistry.getInstance()

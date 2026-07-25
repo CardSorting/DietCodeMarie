@@ -18,12 +18,14 @@ export function getDeepPlanningPrompt(
 	focusChainSettings?: { enabled: boolean },
 	providerInfo?: ApiProviderInfo,
 	enableNativeToolCalls?: boolean,
+	modEnabled?: boolean,
 ): string {
 	// Create context for variant selection
 	const context: SystemPromptContext = {
 		providerInfo: providerInfo || ({} as ApiProviderInfo),
 		ide: "vscode",
 		mode: "plan",
+		modEnabled,
 	}
 
 	// Get the appropriate variant from registry

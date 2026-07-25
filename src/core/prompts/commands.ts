@@ -328,8 +328,9 @@ export const deepPlanningToolResponse = (
 	focusChainSettings?: { enabled: boolean },
 	providerInfo?: ApiProviderInfo,
 	enableNativeToolCalls?: boolean,
+	modEnabled?: boolean,
 ) => {
-	return getDeepPlanningPrompt(focusChainSettings, providerInfo, enableNativeToolCalls)
+	return getDeepPlanningPrompt(focusChainSettings, providerInfo, enableNativeToolCalls, modEnabled)
 }
 
 export const documentToolResponse = () =>

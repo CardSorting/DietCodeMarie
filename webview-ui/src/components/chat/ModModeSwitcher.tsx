@@ -97,7 +97,7 @@ export const ModModeSwitcher: React.FC<ModModeSwitcherProps> = memo(({ className
 					data-testid="design-mode-button"
 					onClick={handleSetDesignMode}
 					role="tab"
-					title="Design Mode (MoD): Mixture of Designers council review before building"
+					title="Design Mode (MoD): Direct coding steered by senior design instincts (tokens, WCAG, UI states, visual polish)"
 					type="button">
 					<Palette
 						className={cn(
@@ -151,11 +151,11 @@ export const ModModeSwitcher: React.FC<ModModeSwitcherProps> = memo(({ className
 											<Terminal className="size-2.5 text-emerald-400" /> Coding Mode
 										</span>
 										<span className="text-[8px] px-1 py-0.1 rounded bg-emerald-500/20 text-emerald-300 font-mono">
-											FAST
+											TECHNICAL
 										</span>
 									</div>
 									<p className="text-description/80">
-										Standard developer loop for direct code edits & execution.
+										Standard developer loop for direct code edits & terminal execution.
 									</p>
 								</div>
 
@@ -165,25 +165,26 @@ export const ModModeSwitcher: React.FC<ModModeSwitcherProps> = memo(({ className
 											<Palette className="size-2.5 text-purple-300" /> Design Mode (MoD)
 										</span>
 										<span className="text-[8px] px-1 py-0.1 rounded bg-purple-500/30 text-purple-200 font-mono">
-											COUNCIL
+											STEERED
 										</span>
 									</div>
 									<p className="text-description/80">
-										<strong className="text-purple-200">Mixture of Designers v1.3:</strong> Invokes AI design
-										personas to appraise architecture before building.
+										<strong className="text-purple-200">Design Instincts Steering:</strong> Direct coding
+										using the exact same tools and loop, guided by senior product designer standards (tokens,
+										accessibility, UI state matrix, visual polish).
 									</p>
 									<div className="flex items-center gap-1.5 pt-1 border-t border-purple-500/20 text-[8.5px] text-purple-300/80">
 										<span className="flex items-center gap-0.5">
-											<Compass className="size-2 text-amber-400" /> Strategy
+											<Compass className="size-2 text-amber-400" /> System Tokens
 										</span>
 										<span className="flex items-center gap-0.5">
-											<Layout className="size-2 text-sky-400" /> UX
+											<Layout className="size-2 text-sky-400" /> 7 UI States
 										</span>
 										<span className="flex items-center gap-0.5">
-											<Eye className="size-2 text-emerald-400" /> A11y
+											<Eye className="size-2 text-emerald-400" /> WCAG AA
 										</span>
 										<span className="flex items-center gap-0.5">
-											<Palette className="size-2 text-purple-400" /> Visual
+											<Palette className="size-2 text-purple-400" /> Polish
 										</span>
 									</div>
 								</div>

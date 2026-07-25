@@ -3,7 +3,7 @@ import { Logger } from "@/shared/services/Logger"
 import type { DietCodeDefaultTool } from "@/shared/tools"
 import { DietCodeToolSet } from "../registry/DietCodeToolSet"
 import { type DietCodeToolSpec, resolveInstruction } from "../spec"
-import { STANDARD_PLACEHOLDERS } from "../templates/placeholders"
+import { STANDARD_PLACEHOLDERS, SystemPromptSection } from "../templates/placeholders"
 import { TemplateEngine } from "../templates/TemplateEngine"
 import type { ComponentRegistry, DietCodeToolSpecParameter, PromptVariant, SystemPromptContext } from "../types"
 
@@ -24,7 +24,15 @@ export class PromptBuilder {
 	async build(): Promise<string> {
 		const componentSections = await this.buildComponents()
 		const placeholderValues = this.preparePlaceholders(componentSections)
-		const prompt = this.templateEngine.resolve(this.variant.baseTemplate, this.context, placeholderValues)
+		let prompt = this.templateEngine.resolve(this.variant.baseTemplate, this.context, placeholderValues)
+
+		if (
+			this.context.modEnabled &&
+			componentSections[STANDARD_PLACEHOLDERS.MOD_DESIGNER_STEERING] &&
+			!prompt.includes("DESIGNER INSTINCTS")
+		) {
+			prompt += `\n\n${componentSections[STANDARD_PLACEHOLDERS.MOD_DESIGNER_STEERING]}`
+		}
 
 		let executionStateHeader = ""
 		if (this.context.mode === "act") {
@@ -80,9 +88,19 @@ export class PromptBuilder {
 	private async buildComponents(): Promise<Record<string, string>> {
 		const sections: Record<string, string> = {}
 		const { componentOrder } = this.variant
+		const effectiveComponentOrder = [...componentOrder]
+
+		if (this.context.modEnabled && !effectiveComponentOrder.includes(SystemPromptSection.MOD_DESIGNER_STEERING)) {
+			const agentRoleIndex = effectiveComponentOrder.indexOf(SystemPromptSection.AGENT_ROLE)
+			if (agentRoleIndex !== -1) {
+				effectiveComponentOrder.splice(agentRoleIndex + 1, 0, SystemPromptSection.MOD_DESIGNER_STEERING)
+			} else {
+				effectiveComponentOrder.push(SystemPromptSection.MOD_DESIGNER_STEERING)
+			}
+		}
 
 		// Process components sequentially to maintain order
-		for (const componentId of componentOrder) {
+		for (const componentId of effectiveComponentOrder) {
 			const componentFn = this.components[componentId]
 			if (!componentFn) {
 				Logger.warn(`Warning: Component '${componentId}' not found`)
