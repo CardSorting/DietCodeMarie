@@ -27,7 +27,7 @@ export const NATIVE_VSIX_TARGETS = ["win32-x64", "win32-arm64", "linux-x64", "li
 
 export function detectBinaryAbi(binaryPath) {
 	try {
-		execFileSync(process.execPath, ["-e", `require('${binaryPath}')`], { stdio: "pipe" })
+		execFileSync(process.execPath, ["-e", `require(${JSON.stringify(binaryPath)})`], { stdio: "pipe" })
 		return Number.parseInt(process.versions.modules, 10)
 	} catch (error) {
 		const stderr = error.stderr?.toString() || error.message || ""
