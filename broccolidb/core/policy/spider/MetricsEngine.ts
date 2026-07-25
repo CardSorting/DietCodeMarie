@@ -229,8 +229,10 @@ export class MetricsEngine {
 	}
 
 	public computeCouplingMetrics(nodes: Map<string, SpiderNode>) {
-		const couplingMap = new Map<string, number>()
-		for (const id of nodes.keys()) couplingMap.set(id, 0)
+		const dependentsMap = new Map<string, Set<string>>()
+		for (const id of nodes.keys()) {
+			dependentsMap.set(id, new Set())
+		}
 
 		for (const node of nodes.values()) {
 			node.dependents = []
@@ -243,24 +245,21 @@ export class MetricsEngine {
 				// V215: Fast-path for already resolved re-exports (which are IDs)
 				const resolved: string | null = nodes.has(imp) ? imp : this.resolver.resolveImportToNodeId(node.path, imp, nodes)
 
-				if (resolved && couplingMap.has(resolved)) {
-					couplingMap.set(resolved, (couplingMap.get(resolved) || 0) + 1)
-					const targetNode = nodes.get(resolved)
-					if (targetNode) {
-						if (!(targetNode as any).dependents) (targetNode as any).dependents = []
-						if (!(targetNode as any).dependents.includes(node.id)) {
-							(targetNode as any).dependents.push(node.id)
-						}
+				if (resolved) {
+					const depSet = dependentsMap.get(resolved)
+					if (depSet) {
+						depSet.add(node.id)
 					}
 				}
 			}
 		}
 
-		for (const [id, count] of couplingMap.entries()) {
+		for (const [id, depSet] of dependentsMap.entries()) {
 			const node = nodes.get(id)
 			if (node) {
-				node.afferentCoupling = count
-				if (count > 5 && (node.imports || []).length > 5) {
+				node.dependents = Array.from(depSet)
+				node.afferentCoupling = depSet.size
+				if (depSet.size > 5 && (node.imports || []).length > 5) {
 					Logger.info(`[MetricsEngine] Efferent Cluster detected in legacy module: ${path.basename(id)}`)
 				}
 			}

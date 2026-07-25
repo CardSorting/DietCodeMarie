@@ -1509,4 +1509,14 @@ export class SpiderService {
 
       return { path: normalizedPath, studyItems: pack };
   }
+
+  public dispose(): void {
+    this.engine.dispose();
+    this.forensicSpider = null;
+    this.lastReport = null;
+    this.previousReport = null;
+    this.baselineReport = null;
+    this.bootstrapped = false;
+  }
 }
+

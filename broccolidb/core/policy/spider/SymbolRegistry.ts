@@ -1,5 +1,6 @@
 // [LAYER: CORE]
-import type { SpiderNode } from './types.js';
+import * as v8 from "v8"
+import * as zlib from "zlib"
 
 export interface SymbolProvider {
     symbolName: string;
@@ -15,22 +16,26 @@ export interface SymbolProvider {
 export class SymbolRegistry {
   private providers: Map<string, Set<string>> = new Map(); // symbolName -> [filePaths]
   private exportsByFile: Map<string, SymbolProvider[]> = new Map(); // filePath -> [SymbolProviders]
+  private footprintToProvider: Map<string, SymbolProvider> = new Map(); // footprint -> SymbolProvider (O(1) lookup)
   private transitions: Map<string, { from: string, to: string, timestamp: number }> = new Map(); // symbolName -> moveData
 
   public register(provider: SymbolProvider) {
-    const existing = this.providers.get(provider.symbolName) || new Set();
+    let existing = this.providers.get(provider.symbolName);
+    if (!existing) {
+      existing = new Set();
+      this.providers.set(provider.symbolName, existing);
+    }
     existing.add(provider.filePath);
-    this.providers.set(provider.symbolName, existing);
 
-    const fileExports = this.exportsByFile.get(provider.filePath) || [];
+    let fileExports = this.exportsByFile.get(provider.filePath);
+    if (!fileExports) {
+      fileExports = [];
+      this.exportsByFile.set(provider.filePath, fileExports);
+    }
     if (!fileExports.some(p => p.symbolName === provider.symbolName)) {
-        fileExports.push(provider);
-        this.exportsByFile.set(provider.filePath, fileExports);
+      fileExports.push(provider);
     }
-
-    if (existing.size > 1) {
-        // console.warn(`[SymbolRegistry] ⚠️  Ambiguous symbol detected: '${provider.symbolName}' is provided by ${existing.size} files.`);
-    }
+    this.footprintToProvider.set(provider.footprint, provider);
   }
 
   public unregisterFile(filePath: string) {
@@ -42,6 +47,7 @@ export class SymbolRegistry {
                 providers.delete(filePath);
                 if (providers.size === 0) this.providers.delete(exp.symbolName);
             }
+            this.footprintToProvider.delete(exp.footprint);
         }
     }
     this.exportsByFile.delete(filePath);
@@ -52,27 +58,31 @@ export class SymbolRegistry {
   }
 
   public findProviderByFootprint(footprint: string): SymbolProvider | null {
-      for (const providers of this.exportsByFile.values()) {
-          const match = providers.find(p => p.footprint === footprint);
-          if (match) return match;
-      }
-      return null;
+      return this.footprintToProvider.get(footprint) || null;
   }
 
-  private transitionTimers: Set<NodeJS.Timeout> = new Set();
+  private sweepExpiredTransitions(now = Date.now()) {
+      for (const [symbol, trans] of this.transitions.entries()) {
+          if (now - trans.timestamp > 5000) {
+              this.transitions.delete(symbol);
+          }
+      }
+  }
 
   public recordTransition(symbolName: string, from: string, to: string) {
-      this.transitions.set(symbolName, { from, to, timestamp: Date.now() });
-      // TTL: Expire transitions after 5 seconds to keep the context localized to the current task
-      const timer = setTimeout(() => {
-          this.transitions.delete(symbolName);
-          this.transitionTimers.delete(timer);
-      }, 5000);
-      this.transitionTimers.add(timer);
+      const now = Date.now();
+      this.sweepExpiredTransitions(now);
+      this.transitions.set(symbolName, { from, to, timestamp: now });
   }
 
   public getTransition(symbolName: string) {
-      return this.transitions.get(symbolName);
+      const trans = this.transitions.get(symbolName);
+      if (!trans) return undefined;
+      if (Date.now() - trans.timestamp > 5000) {
+          this.transitions.delete(symbolName);
+          return undefined;
+      }
+      return trans;
   }
 
   public getConflicts(): Map<string, string[]> {
@@ -90,10 +100,7 @@ export class SymbolRegistry {
   }
 
   public clear() {
-      for (const timer of this.transitionTimers) {
-          clearTimeout(timer);
-      }
-      this.transitionTimers.clear();
+      this.footprintToProvider.clear();
       this.providers.clear();
       this.exportsByFile.clear();
       this.transitions.clear();
@@ -105,23 +112,33 @@ export class SymbolRegistry {
 
   public serialize(): string {
     const exports = Array.from(this.exportsByFile.entries());
-    return JSON.stringify(exports);
+    const binary = zlib.deflateSync(v8.serialize(exports));
+    return binary.toString("base64");
   }
 
   public deserialize(data: string) {
     try {
-      const exports = JSON.parse(data);
       this.clear();
+      let exports: [string, SymbolProvider[]][] = [];
+      try {
+        const binary = zlib.inflateSync(Buffer.from(data, "base64"));
+        exports = v8.deserialize(binary);
+      } catch {
+        // Fallback for uncompressed legacy JSON payload
+        exports = JSON.parse(data);
+      }
       for (const [filePath, providers] of exports) {
           this.exportsByFile.set(filePath, providers);
           for (const p of providers) {
               const existing = this.providers.get(p.symbolName) || new Set();
               existing.add(filePath);
               this.providers.set(p.symbolName, existing);
+              this.footprintToProvider.set(p.footprint, p);
           }
       }
-    } catch (e) {
-      // console.error('[SymbolRegistry] Deserialization failed:', e);
+    } catch {
+      // Ignore corrupted payload gracefully
     }
   }
 }
+

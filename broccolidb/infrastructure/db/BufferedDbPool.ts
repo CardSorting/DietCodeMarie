@@ -27,7 +27,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 const mutexLocalStorage = new AsyncLocalStorage<string>();
 
 class Mutex {
-  private queue: { resolve: (release: () => void) => void; holderId: string; stack: string; timestamp: number }[] = [];
+  private queue: { resolve: (release: () => void) => void; holderId: string; timestamp: number }[] = [];
   private locked = false;
   private currentHolderId: string | null = null;
 
@@ -35,7 +35,6 @@ class Mutex {
 
   async acquire(): Promise<() => void> {
     const callerId = mutexLocalStorage.getStore() || crypto.randomUUID();
-    const stack = new Error().stack || '';
     const timestamp = Date.now();
 
     // Re-entrancy: If the current async context already holds the lock, return a no-op release.
@@ -54,6 +53,7 @@ class Mutex {
         const idx = this.queue.findIndex(i => i.resolve === resolve);
         if (idx !== undefined && idx >= 0) {
             this.queue.splice(idx, 1);
+            const stack = new Error().stack || '';
             console.error(`[Mutex:${this.name}] 🚨 Deadlock timeout after ${this.timeoutMs}ms! Mutex held by ${this.currentHolderId}. Waiter stack:\n${stack}`);
             reject(new Error(`Mutex ${this.name} acquisition timeout`));
         }
@@ -65,7 +65,6 @@ class Mutex {
               resolve(releaseFn);
           }, 
           holderId: callerId,
-          stack, 
           timestamp 
       });
     });

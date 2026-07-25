@@ -261,21 +261,31 @@ export class PathResolver {
 	 */
 	private checkCacheSaturation() {
 		const MAX_ENTRIES = 5000
-		if (this.resolutionCache.size > MAX_ENTRIES) {
-			const keysToDelete = Array.from(this.resolutionCache.keys()).slice(0, 2500)
-			for (const k of keysToDelete) this.resolutionCache.delete(k)
-			Logger.info("[PathResolver] Resolution cache pruned (2500 oldest entries evicted).")
+		if (
+			this.resolutionCache.size <= MAX_ENTRIES &&
+			this.negativeCache.size <= MAX_ENTRIES &&
+			this.canonicalCache.size <= MAX_ENTRIES &&
+			this.stringInterner.size <= MAX_ENTRIES
+		) {
+			return
 		}
-		if (this.canonicalCache.size > MAX_ENTRIES) {
-			const keysToDelete = Array.from(this.canonicalCache.keys()).slice(0, 2500)
-			for (const k of keysToDelete) this.canonicalCache.delete(k)
-			Logger.info("[PathResolver] Canonical cache pruned (2500 oldest entries evicted).")
+
+		const pruneMap = (map: Map<string, any>, label: string) => {
+			if (map.size > MAX_ENTRIES) {
+				let count = 0
+				for (const key of map.keys()) {
+					map.delete(key)
+					count++
+					if (count >= 2500) break
+				}
+				Logger.info(`[PathResolver] ${label} pruned (2500 oldest entries evicted).`)
+			}
 		}
-		if (this.stringInterner.size > MAX_ENTRIES) {
-			const keysToDelete = Array.from(this.stringInterner.keys()).slice(0, 2500)
-			for (const k of keysToDelete) this.stringInterner.delete(k)
-			Logger.info("[PathResolver] String interner pruned (2500 oldest entries evicted).")
-		}
+
+		pruneMap(this.resolutionCache, "Resolution cache")
+		pruneMap(this.negativeCache, "Negative cache")
+		pruneMap(this.canonicalCache, "Canonical cache")
+		pruneMap(this.stringInterner, "String interner")
 	}
 
 	/**
@@ -371,3 +381,5 @@ export class PathResolver {
 		return normTarget // Fallback to normalized relative path if no alias matches
 	}
 }
+
+

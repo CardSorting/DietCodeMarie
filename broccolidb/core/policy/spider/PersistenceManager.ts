@@ -1,6 +1,7 @@
 // [LAYER: CORE]
 import * as crypto from "crypto"
 import * as v8 from "v8"
+import * as zlib from "zlib"
 import { MetricsEngine } from "./MetricsEngine.js"
 import { SpiderNode, SpiderRegistryPayload, SpiderSnapshot } from "./types.js"
 
@@ -11,7 +12,7 @@ const isSpiderSnapshot = (value: unknown): value is SpiderSnapshot => {
 }
 
 export class PersistenceManager {
-	private snapshots: Buffer[] = [] // V190: Binary Snapshot Buffer (Industrial Fidelity)
+	private snapshots: Buffer[] = [] // V190: Hyper-Compressed Binary Snapshot Buffer (zlib + V8)
 	private cachedHistory: SpiderSnapshot[] | null = null
 
 	constructor(private metrics: MetricsEngine) {}
@@ -38,7 +39,13 @@ export class PersistenceManager {
 
 		for (const snapshot of this.snapshots) {
 			try {
-				const decoded = v8.deserialize(snapshot)
+				let binary = snapshot
+				try {
+					binary = zlib.inflateSync(snapshot)
+				} catch {
+					// Uncompressed legacy buffer fallback
+				}
+				const decoded = v8.deserialize(binary)
 				if (!isSpiderSnapshot(decoded)) continue
 				history.push(decoded)
 				healthySnapshots.push(snapshot)
@@ -61,11 +68,18 @@ export class PersistenceManager {
 			nodes: Array.from(nodes.entries()),
 			...metadata,
 		}
-		return v8.serialize(payload)
+		const binary = v8.serialize(payload)
+		return zlib.deflateSync(binary)
 	}
 
 	public deserialize(data: Buffer): SpiderRegistryPayload {
-		const result = v8.deserialize(data)
+		let binary = data
+		try {
+			binary = zlib.inflateSync(data)
+		} catch {
+			// Uncompressed legacy buffer fallback
+		}
+		const result = v8.deserialize(binary)
 		if (!result || !result.nodes) {
 			throw new Error("Invalid or corrupted structural payload.")
 		}
@@ -74,10 +88,9 @@ export class PersistenceManager {
 
 	/**
 	 * V190: High-Fidelity Snapshotting.
-	 * Preserves the entire structural state in a compressed V8 binary format.
+	 * Preserves the entire structural state in a hyper-compressed zlib + V8 binary format.
 	 */
 	public async takeSnapshot(nodes: Map<string, SpiderNode>): Promise<SpiderSnapshot> {
-		this.cachedHistory = null
 		const report = this.metrics.computeEntropy(nodes)
 		const snapshot: SpiderSnapshot = {
 			timestamp: new Date().toISOString(),
@@ -86,14 +99,23 @@ export class PersistenceManager {
 			components: report.components,
 		}
 
-		// Preserve binary state for high-fidelity restoration if needed
-		const binary = v8.serialize(snapshot)
+		// Preserve hyper-compressed binary state for high-fidelity restoration if needed
+		const binary = zlib.deflateSync(v8.serialize(snapshot))
 		this.snapshots.push(binary)
 
 		// V215: Buffer Saturation Guard (Max 5 snapshots)
 		// Prevents indefinite memory growth in long-running metabolic sessions.
 		if (this.snapshots.length > 5) {
 			this.snapshots.shift()
+		}
+
+		if (this.cachedHistory === null) {
+			this.cachedHistory = [snapshot]
+		} else {
+			this.cachedHistory.push(snapshot)
+			if (this.cachedHistory.length > 5) {
+				this.cachedHistory.shift()
+			}
 		}
 
 		return snapshot

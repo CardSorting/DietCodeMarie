@@ -6,15 +6,17 @@ import type { SpiderNode } from './types.js';
 import type { DiskParityResult, DriftStatus } from './report-types.js';
 
 export class DiskParityEngine {
+  private sha256Cache: Map<string, string> = new Map();
+
   constructor(private readonly cwd: string) {}
 
-  hashFileContent(content: string): string {
+  hashFileContent(content: string | Buffer): string {
     return crypto.createHash('sha256').update(content).digest('hex');
   }
 
   hashDiskFile(absolutePath: string): string | null {
     if (!fs.existsSync(absolutePath)) return null;
-    const content = fs.readFileSync(absolutePath, 'utf-8');
+    const content = fs.readFileSync(absolutePath);
     return this.hashFileContent(content);
   }
 
@@ -36,7 +38,7 @@ export class DiskParityEngine {
       } else {
         const stats = fs.statSync(absolutePath);
         lastModifiedAt = stats.mtimeMs;
-        const content = fs.readFileSync(absolutePath, 'utf-8');
+        const content = fs.readFileSync(absolutePath);
         diskHash = this.hashFileContent(content);
         const md5Anchor = crypto.createHash('md5').update(content).digest('hex');
         const graphMatchesDisk = md5Anchor === node.hash;
@@ -58,6 +60,20 @@ export class DiskParityEngine {
   }
 
   private sha256Hex(value: string): string {
-    return crypto.createHash('sha256').update(value).digest('hex');
+    let cached = this.sha256Cache.get(value);
+    if (!cached) {
+      if (this.sha256Cache.size >= 500) {
+        const oldestKey = this.sha256Cache.keys().next().value;
+        if (oldestKey !== undefined) this.sha256Cache.delete(oldestKey);
+      }
+      cached = crypto.createHash('sha256').update(value).digest('hex');
+      this.sha256Cache.set(value, cached);
+    }
+    return cached;
+  }
+
+  dispose(): void {
+    this.sha256Cache.clear();
   }
 }
+

@@ -35,6 +35,7 @@ const signatureFromNode = (node: ts.Node, sourceFile: ts.SourceFile): string => 
 };
 
 export class FootprintEngine {
+  private static readonly MAX_CACHE_SIZE = 50;
   private sourceFileCache: Map<string, { content: string; sourceFile: ts.SourceFile }> = new Map();
 
   computeFootprints(
@@ -50,6 +51,12 @@ export class FootprintEngine {
 
       let cached = this.sourceFileCache.get(node.path);
       if (!cached || cached.content !== content) {
+        if (this.sourceFileCache.size >= FootprintEngine.MAX_CACHE_SIZE) {
+          const oldestKey = this.sourceFileCache.keys().next().value;
+          if (oldestKey !== undefined) {
+            this.sourceFileCache.delete(oldestKey);
+          }
+        }
         cached = {
           content,
           sourceFile: ts.createSourceFile(node.path, content, ts.ScriptTarget.Latest, true),
@@ -57,9 +64,10 @@ export class FootprintEngine {
         this.sourceFileCache.set(node.path, cached);
       }
       const sourceFile = cached.sourceFile;
+      const declMap = this.buildExportedDeclarationMap(sourceFile);
       for (const symbolName of node.exports) {
         if (symbolName === 'default') continue;
-        const declaration = this.findExportedDeclaration(sourceFile, symbolName);
+        const declaration = declMap.get(symbolName);
         if (!declaration) continue;
 
         const raw = declaration.getText(sourceFile);
@@ -93,15 +101,14 @@ export class FootprintEngine {
     return footprints;
   }
 
-  private findExportedDeclaration(sourceFile: ts.SourceFile, symbolName: string): ts.Node | null {
-    let found: ts.Node | null = null;
-    const visit = (node: ts.Node) => {
-      if (found) return;
-      const isExported = (n: ts.Node) =>
-        'modifiers' in n &&
-        Array.isArray((n as ts.HasModifiers).modifiers) &&
-        (n as ts.HasModifiers).modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+  private buildExportedDeclarationMap(sourceFile: ts.SourceFile): Map<string, ts.Node> {
+    const declMap = new Map<string, ts.Node>();
+    const isExported = (n: ts.Node) =>
+      'modifiers' in n &&
+      Array.isArray((n as ts.HasModifiers).modifiers) &&
+      (n as ts.HasModifiers).modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
 
+    const visit = (node: ts.Node) => {
       if (
         (ts.isFunctionDeclaration(node) ||
           ts.isClassDeclaration(node) ||
@@ -109,23 +116,20 @@ export class FootprintEngine {
           ts.isTypeAliasDeclaration(node) ||
           ts.isEnumDeclaration(node)) &&
         isExported(node) &&
-        node.name?.text === symbolName
+        node.name?.text
       ) {
-        found = node;
-        return;
-      }
-      if (ts.isVariableStatement(node) && isExported(node)) {
+        declMap.set(node.name.text, node);
+      } else if (ts.isVariableStatement(node) && isExported(node)) {
         for (const decl of node.declarationList.declarations) {
-          if (ts.isIdentifier(decl.name) && decl.name.text === symbolName) {
-            found = decl;
-            return;
+          if (ts.isIdentifier(decl.name)) {
+            declMap.set(decl.name.text, decl);
           }
         }
       }
       ts.forEachChild(node, visit);
     };
     visit(sourceFile);
-    return found;
+    return declMap;
   }
 
   private collectImportConsumers(
@@ -134,7 +138,11 @@ export class FootprintEngine {
     symbolName: string
   ): string[] {
     const consumers: string[] = [];
-    for (const node of nodes.values()) {
+    const providerNode = nodes.get(providerPath);
+    const candidateIds = providerNode?.dependents && providerNode.dependents.length > 0 ? providerNode.dependents : Array.from(nodes.keys());
+    for (const depId of candidateIds) {
+      const node = nodes.get(depId);
+      if (!node) continue;
       const symbols = node.consumptions[providerPath] ?? [];
       if (symbols.includes(symbolName) || symbols.includes('*')) {
         consumers.push(node.path);

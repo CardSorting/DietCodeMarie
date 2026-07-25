@@ -18,7 +18,12 @@ export class ForensicEngine {
 	 */
 	public calculateRippleProbability(nodes: Map<string, SpiderNode>): Map<string, number> {
 		const rippleMap = new Map<string, number>()
+		const totalScale = Math.max(1, nodes.size * 0.2)
 		for (const node of nodes.values()) {
+			if (!node.dependents || node.dependents.length === 0) {
+				rippleMap.set(node.id, 0)
+				continue
+			}
 			const reachable = new Set<string>()
 			const queue = [node.id]
 			let head = 0
@@ -36,7 +41,7 @@ export class ForensicEngine {
 				}
 			}
 			// Ripple Probability is a function of reachability vs total nodes
-			rippleMap.set(node.id, Math.min(1.0, reachable.size / Math.max(1, nodes.size * 0.2)))
+			rippleMap.set(node.id, Math.min(1.0, reachable.size / totalScale))
 		}
 		return rippleMap
 	}

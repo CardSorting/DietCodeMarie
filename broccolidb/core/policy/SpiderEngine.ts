@@ -164,7 +164,8 @@ export class SpiderEngine {
 		this.stabilityHeartbeat = setTimeout(() => {
 			Logger.error(`[SpiderEngine] Stability Lease EXPIRED for ${owner} (${lockId}). Forcefully releasing lock.`)
 			this.releaseStabilityLock(owner, lockId)
-		}, 60000) 
+		}, 60000)
+		this.stabilityHeartbeat.unref?.() 
 
 		return lockId
 	}
@@ -212,11 +213,15 @@ export class SpiderEngine {
 		this.persistence.dispose() 
 		this.nodes.clear()
 		this.ghosts.clear()
+		this.suppressions.clear()
 		this.sessionBuffer.clear()
-		this.registry.clear()
+		this.cachedCycles = []
+		this.registry.dispose()
 		this.substrateCheckpoint = null
+		this.checkpointTimestamp = null
 		Logger.info("[SpiderEngine] Industrial Disposal Complete. Memory Substrate Released.")
 	}
+
 
 	public [Symbol.dispose](): void {
 		this.dispose()
@@ -317,7 +322,7 @@ export class SpiderEngine {
 		this.resolver.clearCaches()
 
 		let sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
-		const analysis = this.analyzeStructuralData(sourceFile)
+		const analysis = this.analyzeStructuralData(sourceFile, normalizedPath)
 		const metrics = isMassive ? this.getDefaultMetrics() : analysis.metrics
 		const imports = analysis.imports.map((i) => i.specifier)
 		const { symbols: exportedSymbols, reExports: reExportSpecifiers } = analysis.exports
@@ -362,7 +367,7 @@ export class SpiderEngine {
 			afferentCoupling: oldNode?.afferentCoupling || 0,
 			...metrics,
 			hash,
-			isInterface: this.detectInterface(normalizedPath, sourceFile),
+			isInterface: analysis.isInterface,
 			exports: exportedSymbols,
 			reExports,
 			consumptions,
@@ -411,7 +416,7 @@ export class SpiderEngine {
 		}
 	}
 
-	private analyzeStructuralData(sourceFile: ts.SourceFile): { 
+	private analyzeStructuralData(sourceFile: ts.SourceFile, filePath?: string): { 
 		metrics: {
 			anyDensity: number,
 			logicDensity: number,
@@ -423,7 +428,8 @@ export class SpiderEngine {
 		imports: { specifier: string; symbols: string[] }[],
 		exports: { symbols: string[]; reExports: string[] },
 		namingScore: number,
-		cognitiveComplexity: number
+		cognitiveComplexity: number,
+		isInterface: boolean
 	} {
 		const ctx = {
 			anyCasts: 0,
@@ -432,11 +438,20 @@ export class SpiderEngine {
 			internalReferenceCount: 0,
 			imports: [] as { specifier: string; symbols: string[] }[],
 			exports: { symbols: [] as string[], reExports: [] as string[] },
-			names: [] as string[]
+			names: [] as string[],
+			hasConcrete: false
 		}
 
 		const visit = (node: ts.Node, depth: number) => {
 			const kind = node.kind
+
+			if (ts.isClassDeclaration(node) || ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) {
+				const hasBody =
+					(ts.isFunctionDeclaration(node) && node.body) ||
+					(ts.isClassDeclaration(node) && node.members.length > 0) ||
+					ts.isVariableDeclaration(node)
+				if (hasBody) ctx.hasConcrete = true
+			}
 
 			// Metrics logic
 			if (ts.isAsExpression(node)) {
@@ -502,6 +517,9 @@ export class SpiderEngine {
 		visit(sourceFile, 0)
 
 		const contentLen = sourceFile.text.length || 1
+		const normPath = filePath || sourceFile.fileName
+		const isInterface = !ctx.hasConcrete || normPath.includes("/interfaces/") || normPath.includes("/types/") || normPath.endsWith(".d.ts")
+
 		return {
 			metrics: {
 				anyDensity: ctx.anyCasts / (contentLen / 500),
@@ -517,7 +535,8 @@ export class SpiderEngine {
 				reExports: Array.from(new Set(ctx.exports.reExports)),
 			},
 			namingScore: ctx.names.filter(n => n.length > 3).length / Math.max(1, ctx.names.length),
-			cognitiveComplexity: this.metrics.calculateCognitiveComplexity(sourceFile)
+			cognitiveComplexity: this.metrics.calculateCognitiveComplexity(sourceFile),
+			isInterface
 		}
 	}
 
@@ -744,6 +763,7 @@ export class SpiderEngine {
 			this.metrics.computeReachability(this.nodes)
 			this.reachabilityTimeout = null
 		}, 100)
+		this.reachabilityTimeout.unref?.()
 	}
 
 	public async verifySubstrateIntegrity(): Promise<{ synchronized: boolean; drift: number }> {
@@ -776,6 +796,7 @@ export class SpiderEngine {
 			this.sessionBuffer.clear()
 			if (!this.isIndexing) this.substrateCheckpoint = null
 			this.ghosts.clear()
+			this.cachedCycles = []
 			if (global.gc) global.gc()
 			return
 		}
@@ -786,6 +807,8 @@ export class SpiderEngine {
 			)
 			this.resolver.clearCaches()
 			this.sessionBuffer.clear()
+			this.ghosts.clear()
+			this.cachedCycles = []
 			if (global.gc) global.gc()
 		}
 	}
@@ -827,7 +850,12 @@ export class SpiderEngine {
 			})
 		}
 
+		const snapshotHistory = this.getSnapshotHistory()
+		const rippleMap = this.forensic.calculateRippleProbability(this.nodes)
+		const pressureMap = monitor && typeof monitor.getPressureMap === 'function' ? monitor.getPressureMap() : null
+
 		for (const node of this.nodes.values()) {
+			// Structural risk & monolith checks
 			if ((node.blastRadius || 0) > 0.6) {
 				violations.push({
 					id: "SPI-202",
@@ -857,9 +885,8 @@ export class SpiderEngine {
 					remediation: "Either integrate this module or prune it.",
 				})
 			}
-		}
 
-		for (const node of this.nodes.values()) {
+			// Layer leakage checks
 			const imports = node.imports || []
 			for (const imp of imports) {
 				const targetId = this.resolver.resolveImportToNodeId(node.path, imp, this.nodes)
@@ -886,6 +913,42 @@ export class SpiderEngine {
 						path: node.path,
 						message: `AXIOMATIC VIOLATION: Layer Leakage detected. '${node.layer}' is not permitted to import '${targetNode.layer}' logic (${targetNode.path}).`,
 						remediation: "Invert the dependency using an interface or events.",
+					})
+				}
+			}
+
+			// Ripple prophecy & domain drift checks
+			const ripple = rippleMap.get(node.id) || 0
+			if (ripple > 0.8) {
+				violations.push({
+					id: "SPI-300",
+					severity: "WARN",
+					path: node.path,
+					message: `SUBSTRATE PROPHECY: High Ripple Probability (${Math.round(ripple * 100)}%).`,
+					remediation: "Decouple hub or extract interfaces.",
+				})
+			}
+
+			const drift = this.forensic.detectDomainDrift(node, snapshotHistory)
+			if (drift) {
+				violations.push({
+					id: "SPI-301",
+					severity: "INFO",
+					path: node.path,
+					message: drift,
+					remediation: "Audit new vocabulary.",
+				})
+			}
+
+			if (pressureMap) {
+				const pressure = pressureMap.get(node.id) || 0
+				if (this.metrics.detectRefactoringFatigue(node, pressure, snapshotHistory)) {
+					violations.push({
+						id: "SPI-302",
+						severity: "WARN",
+						path: node.path,
+						message: `REFACTORING FATIGUE: High churn in ${path.basename(node.path)} with zero improvement.`,
+						remediation: "Fundamental rethink required.",
 					})
 				}
 			}
@@ -916,7 +979,6 @@ export class SpiderEngine {
 			}
 		}
 
-		const snapshotHistory = this.getSnapshotHistory()
 		const entanglements = this.metrics.detectEntangledDependencies(snapshotHistory)
 		for (const e of entanglements) {
 			violations.push({
@@ -937,44 +999,6 @@ export class SpiderEngine {
 				message: c,
 				remediation: "Implement missing architectural contract half.",
 			})
-		}
-
-		const rippleMap = this.forensic.calculateRippleProbability(this.nodes)
-		for (const node of this.nodes.values()) {
-			const ripple = rippleMap.get(node.id) || 0
-			if (ripple > 0.8) {
-				violations.push({
-					id: "SPI-300",
-					severity: "WARN",
-					path: node.path,
-					message: `SUBSTRATE PROPHECY: High Ripple Probability (${Math.round(ripple * 100)}%).`,
-					remediation: "Decouple hub or extract interfaces.",
-				})
-			}
-
-			const drift = this.forensic.detectDomainDrift(node, snapshotHistory)
-			if (drift) {
-				violations.push({
-					id: "SPI-301",
-					severity: "INFO",
-					path: node.path,
-					message: drift,
-					remediation: "Audit new vocabulary.",
-				})
-			}
-
-			if (monitor && typeof monitor.getPressureMap === 'function') {
-				const pressure = monitor.getPressureMap().get(node.id) || 0
-				if (this.metrics.detectRefactoringFatigue(node, pressure, snapshotHistory)) {
-					violations.push({
-						id: "SPI-302",
-						severity: "WARN",
-						path: node.path,
-						message: `REFACTORING FATIGUE: High churn in ${path.basename(node.path)} with zero improvement.`,
-						remediation: "Fundamental rethink required.",
-					})
-				}
-			}
 		}
 
 		if (monitor && typeof monitor.getStabilityStrategy === 'function') {
@@ -1087,7 +1111,11 @@ export class SpiderEngine {
 
 	public getViolationHotspots(): string[] {
 		const violations = this.getViolations()
-		return Array.from(new Set(violations.map((v) => v.path)))
+		const pathSet = new Set<string>()
+		for (const v of violations) {
+			pathSet.add(v.path)
+		}
+		return Array.from(pathSet)
 	}
 
 	public getFilesByPath(dir: string): string[] {
@@ -1243,7 +1271,7 @@ export class SpiderEngine {
 						const oldNode = previousRegistry.get(f)
 
 						let sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
-						const analysis = this.analyzeStructuralData(sourceFile)
+						const analysis = this.analyzeStructuralData(sourceFile, f)
 						const metrics = analysis.metrics
 						const namingScore = analysis.namingScore
 						const importsData = analysis.imports
@@ -1260,7 +1288,7 @@ export class SpiderEngine {
 							afferentCoupling: 0,
 							...metrics,
 							hash,
-							isInterface: this.detectInterface(f, sourceFile),
+							isInterface: analysis.isInterface,
 							exports: exportsData.symbols,
 							reExports: exportsData.reExports, 
 							consumptions: {}, 
@@ -1550,3 +1578,5 @@ export class SpiderEngine {
 		return total === 0 ? 1.0 : valid / total
 	}
 }
+
+

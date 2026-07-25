@@ -56,9 +56,20 @@ export interface SpiderAgentDigest {
 
 const SEVERITY_RANK: Record<SpiderSeverity, number> = { ERROR: 0, WARN: 1, INFO: 2 };
 
+const findingIdCache = new Map<string, string>();
+
 export function stableFindingId(finding: Pick<SpiderFinding, 'diagnosticId' | 'filePath' | 'message' | 'symbolName'>): string {
-  const key = [finding.diagnosticId, finding.filePath, finding.symbolName ?? '', finding.message].join('|');
-  return crypto.createHash('sha256').update(key).digest('hex').slice(0, 16);
+  const key = `${finding.diagnosticId}|${finding.filePath}|${finding.symbolName ?? ''}|${finding.message}`;
+  let id = findingIdCache.get(key);
+  if (!id) {
+    if (findingIdCache.size >= 1000) {
+      const oldestKey = findingIdCache.keys().next().value;
+      if (oldestKey !== undefined) findingIdCache.delete(oldestKey);
+    }
+    id = crypto.createHash('sha256').update(key).digest('hex').slice(0, 16);
+    findingIdCache.set(key, id);
+  }
+  return id;
 }
 
 export function assignFindingIds(findings: SpiderFinding[]): SpiderFinding[] {
