@@ -25,7 +25,7 @@ export class PersistenceManager {
 	}
 
 	public getSnapshots(): Buffer[] {
-		return [...this.snapshots]
+		return this.snapshots.slice()
 	}
 
 	public getSnapshotHistory(): SpiderSnapshot[] {
