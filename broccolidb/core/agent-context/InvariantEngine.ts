@@ -28,32 +28,33 @@ export class InvariantEngine {
       }
     }
 
-    const scanForBannedDbFiles = (dir: string) => {
+    const scanForBannedDbFiles = async (dir: string) => {
       if (!fs.existsSync(dir)) return;
-      for (const item of fs.readdirSync(dir)) {
+      const items = await fs.promises.readdir(dir);
+      for (const item of items) {
         if (item === 'node_modules' || item === 'dist' || item === '.git') continue;
         const full = path.join(dir, item);
-        const stat = fs.statSync(full);
+        const stat = await fs.promises.stat(full);
         if (stat.isDirectory()) {
-          scanForBannedDbFiles(full);
+          await scanForBannedDbFiles(full);
         } else if (item.startsWith('telemetry_queue.db')) {
           violations.push(`Banned telemetry queue database exists on disk: ${path.relative(this.workspacePath, full)}`);
         }
       }
     };
-    scanForBannedDbFiles(this.workspacePath);
+    await scanForBannedDbFiles(this.workspacePath);
 
     // 2. Scan source files for banned symbols and direct SQLite instantiations
     const filesToScan: string[] = [];
-    const scanDir = (dir: string) => {
+    const scanDir = async (dir: string) => {
       if (!fs.existsSync(dir)) return;
-      const list = fs.readdirSync(dir);
+      const list = await fs.promises.readdir(dir);
       for (const item of list) {
         const full = path.join(dir, item);
-        const stat = fs.statSync(full);
+        const stat = await fs.promises.stat(full);
         if (stat.isDirectory()) {
           if (item !== 'node_modules' && item !== 'tests' && item !== 'dist' && item !== 'out' && item !== 'webview-ui') {
-            scanDir(full);
+            await scanDir(full);
           }
         } else if (item.endsWith('.ts') || item.endsWith('.js')) {
           filesToScan.push(full);
@@ -61,9 +62,9 @@ export class InvariantEngine {
       }
     };
 
-    scanDir(path.resolve(broccolidbRoot, 'core'));
-    scanDir(path.resolve(broccolidbRoot, 'infrastructure'));
-    scanDir(path.resolve(broccolidbRoot, 'cli'));
+    await scanDir(path.resolve(broccolidbRoot, 'core'));
+    await scanDir(path.resolve(broccolidbRoot, 'infrastructure'));
+    await scanDir(path.resolve(broccolidbRoot, 'cli'));
 
     const capabilityDir = path.resolve(broccolidbRoot, 'core/agent-context/capabilities');
     if (fs.existsSync(capabilityDir)) {

@@ -1,4 +1,4 @@
-// [LAYER: CORE]
+import * as crypto from 'node:crypto';
 import type { ServiceContext } from './types.js';
 
 export interface SideQueryResult {
@@ -40,7 +40,7 @@ export class SideQueryService {
 
     const duration = Date.now() - start;
     return {
-      id: Math.random().toString(36).substring(7),
+      id: crypto.randomUUID(),
       response: response.text,
       usage: response.usage,
       durationMs: duration,
