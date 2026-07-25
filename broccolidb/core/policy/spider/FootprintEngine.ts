@@ -35,6 +35,8 @@ const signatureFromNode = (node: ts.Node, sourceFile: ts.SourceFile): string => 
 };
 
 export class FootprintEngine {
+  private sourceFileCache: Map<string, { content: string; sourceFile: ts.SourceFile }> = new Map();
+
   computeFootprints(
     nodes: Map<string, SpiderNode>,
     contentByPath: Map<string, string>,
@@ -46,7 +48,15 @@ export class FootprintEngine {
       const content = contentByPath.get(node.path);
       if (!content) continue;
 
-      const sourceFile = ts.createSourceFile(node.path, content, ts.ScriptTarget.Latest, true);
+      let cached = this.sourceFileCache.get(node.path);
+      if (!cached || cached.content !== content) {
+        cached = {
+          content,
+          sourceFile: ts.createSourceFile(node.path, content, ts.ScriptTarget.Latest, true),
+        };
+        this.sourceFileCache.set(node.path, cached);
+      }
+      const sourceFile = cached.sourceFile;
       for (const symbolName of node.exports) {
         if (symbolName === 'default') continue;
         const declaration = this.findExportedDeclaration(sourceFile, symbolName);
@@ -152,5 +162,13 @@ export class FootprintEngine {
       moveConfidence: 'high',
       matchReason: `Identity preserved by AST hash (${astHash.slice(0, 8)}) and signature hash (${signatureHash.slice(0, 8)}) despite path change ${previousLocation} -> ${currentLocation}.`,
     };
+  }
+
+  clear(): void {
+    this.sourceFileCache.clear();
+  }
+
+  dispose(): void {
+    this.clear();
   }
 }

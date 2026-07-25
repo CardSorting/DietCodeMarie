@@ -67,6 +67,11 @@ export class ForensicSpider {
     };
   }
 
+  dispose(): void {
+    this.footprintEngine.dispose();
+    this.previousFootprintLocations.clear();
+  }
+
   scanPhysicalFiles(scope?: Set<string>): PhysicalFile[] {
     const files: PhysicalFile[] = [];
     const seen = new Set<string>();

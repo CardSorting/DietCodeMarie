@@ -26,6 +26,7 @@ export class CoordinatorService {
     this.lifecycleState = 'started';
     await this.initRecovery();
     this.heartbeatInterval = setInterval(() => this.monitorHeartbeats(), 10000);
+    this.heartbeatInterval.unref();
   }
 
   async stop(): Promise<void> {
