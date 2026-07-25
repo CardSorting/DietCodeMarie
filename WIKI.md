@@ -32,7 +32,7 @@ Do not merge these narratives. LUMI owns IDE session behavior and approvals. Bro
 | Providers | `src/core/api/`, `src/shared/providers/providers.json` | Five active provider keys in current code/UI |
 | Prompts | `src/core/prompts/system-prompt/` | Variant-specific system prompts and tool descriptions |
 | Context/rules/skills | `src/core/context/`, `.dietcoderules/`, `.agents/skills/` | User/project instructions and optional skills |
-| Mixture of Designers (MoD) | `src/core/orchestration/mod/` | Embedded senior Designer-in-Residence, 5-Whys recursive reasoning, Industry Pattern Library (`PatternLibrary.ts`), CSS Design Token Codemod Engine (`TokenSyncEngine.ts`), Dynamic UX Health Index (0-100), Design Decision Records (`DesignDecisionRecord.ts`), 8-State UI Contract Ledger (`ComponentContractLedger.ts`), Predictive UX Risk Calculator (`UXRegressionRiskCalculator.ts`), Speculative Task Wave Planner (`SpeculativeTaskPlanner.ts`), Adaptive Circuit Breaker (`DesignCircuitBreaker.ts`), In-Memory State Cache (`DesignStateCache.ts`) |
+| Master of Design (MoD) | `src/core/prompts/system-prompt/components/mod_designer_steering.ts` | Unified System Prompt Steering Toggle. Runs through the standard coding task loop with 100% tool parity (`read_file`, `replace_in_file`, `execute_command`, `browser_action`, subagents, MCP tools), automatically steered by senior design engineering instincts (tokens, 7-state UI matrix, WCAG 2.1 AA, responsive grid ergonomics, 5-Whys). |
 | Webview UI | `webview-ui/` | React/Vite sidebar, settings, message rendering |
 | Protocol | `proto/`, `src/generated/` | Protobuf/gRPC contracts; generated outputs should not be hand-edited |
 | Roadmap/governance | `src/services/roadmap/`, `ROADMAP.md` | Steering, gates, roadmap lifecycle |
@@ -221,23 +221,22 @@ webview-ui/
   -> VS Code webview messaging runtime
 ```
 
-## Mixture of Designers (MoD) Orchestration
+## Master of Design (MoD) Architecture
 
-Mixture of Designers (MoD) v1.2 is a toggleable LUMI execution mode for structured product-design refinement and implementation.
+Master of Design (MoD) is a toggleable LUMI execution mode for senior design-steered coding and implementation.
 
-### Standard vs MoD Behavior
-- **Standard Mode**: Processes requests in a single LLM request loop, executing tools directly through the `ToolExecutorCoordinator`. Standard mode does not record designer intent or run specialist agents.
-- **MoD Mode**: Routes requests through a multi-stage design-to-implementation pipeline. It selects a set of design specialists, validates their recommendations, resolves conflicts, locks decisions, and delegates work to implementation subagents under parent governance.
+### Standard Coding vs Design (MoD) Behavior
+- **Coding Mode**: Standard developer loop for direct code edits and terminal execution.
+- **Design Mode (MoD)**: Runs on the exact same task loop with 100% tool parity (`read_file`, `replace_in_file`, `execute_command`, `browser_action`, subagents, MCP tools), automatically steered by senior design engineering instincts:
+  1. *Design Token Sensing*: Inspecting CSS/Tailwind variables before modifying UI.
+  2. *7-State UI Matrix*: Handling Idle, Hover, Active, Disabled, Loading, Empty, and Error boundaries.
+  3. *WCAG 2.1 AA Standards*: Ensuring contrast >= 4.5:1, touch targets >= 44px, visible focus rings, and reduced motion fallbacks.
+  4. *Visual Aesthetics*: Typographic scale, dark/light mode balance, glassmorphism, fluid micro-transitions.
+  5. *Responsive Layout Ergonomics*: Mobile/desktop grid reflow without scrollbar leaks.
+  6. *5-Whys Cognitive Ergonomics*: Usability friction reduction and clear CTA paths.
 
-### Plan-Only vs Plan-and-Implement
-- **Plan-Only**: Executes up to Stage 7 (Implementation Planning) and runs validation/critique without performing any code mutations or spawning developer subagents.
-- **Plan-and-Implement**: Spawns subagents via the canonical `SubagentRunner` to apply modifications to the codebase within authorized boundaries, followed by integrated validation and gates audit.
-
-### Specialist-Selection Logic
-Selection is derived directly from classified product problems (mapping problem dimensions to specialized roles). Redundant roles are excluded, and only the smallest useful mixture of specialists is called (max 6). Each role selection contains a recorded justification.
-
-### Convergence and Conflict Resolution
-`ConvergenceEngine` clusters related recommendations, deduplicates overlapping recommendations, and resolves conflicts using the following priority order:
+### Subagent Swarm Propagation
+Subagent task swarms created while in MoD Mode automatically inherit `modEnabled: true` in their `SystemPromptContext` (`src/core/task/tools/subagent/SubagentRunner.ts`), ensuring subagent workers operate with senior design instincts.
 1. Product intent & constraints
 2. User safety and accessibility
 3. Primary workflow impact

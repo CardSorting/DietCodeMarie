@@ -1,12 +1,12 @@
 ---
-title: "Mixture of Designers (MoD) Orchestration Architecture"
-sidebarTitle: "Mixture of Designers (MoD)"
-description: "Architecture, Mixture of Experts (MoE) routing, circuit breakers, zero-stall heuristic sensing, and consensus for Mixture of Designers in LUMI."
+title: "Master of Design (MoD) Prompt Steering Architecture"
+sidebarTitle: "Master of Design (MoD)"
+description: "Architecture, system prompt steering toggle, 6 design engineering pillars, subagent swarm inheritance, and UX ergonomics for Master of Design in LUMI."
 ---
 
-# Mixture of Designers (MoD) Architecture
+# Master of Design (MoD) Architecture
 
-The **Mixture of Designers (MoD)** framework in LUMI is an autonomous, multi-specialist product design and implementation orchestrator. Inspired by modern **Mixture-of-Experts (MoE)** model routing, **Byzantine Fault Tolerant (BFT)** consensus, and zero-stall execution authority, MoD evaluates complex product requests across 10 specialized design dimensions, converges on optimal design decisions, and implements validated code changes with zero blocking.
+The **Master of Design (MoD)** framework in LUMI is a unified, prompt-steered execution mode that injects senior product design engineering instincts directly into the standard coding task loop. Rather than bypassing the core agent pipeline with isolated orchestrators, MoD Mode mirrors the unified coding agent path with 100% tool parity (`read_file`, `replace_in_file`, `execute_command`, `browser_action`, subagents, MCP tools), automatically steering every code edit, architecture decision, and subagent task with senior design engineering principles.
 
 ---
 
@@ -14,156 +14,58 @@ The **Mixture of Designers (MoD)** framework in LUMI is an autonomous, multi-spe
 
 | Component | Path | Responsibility |
 |-----------|------|----------------|
-| Orchestrator | `src/core/orchestration/mod/MixtureOfDesignersOrchestrator.ts` | End-to-end stage pipeline lifecycle, circuit breaker execution, and stage transitions |
-| Types & Interfaces | `src/core/orchestration/mod/types.ts` | Data models, schemas for intent, classified problems, refinements, decisions, and telemetry |
-| Intent Analyzer | `src/core/orchestration/mod/IntentAnalyzer.ts` | LLM product intent extraction with self-healing heuristic fallback recovery |
-| Problem Classifier | `src/core/orchestration/mod/ProblemClassifier.ts` | Problem dimension categorization with zero-stall keyword heuristic sensing |
-| Specialist Selector | `src/core/orchestration/mod/SpecialistSelector.ts` | Softmax Top-K MoE routing, capacity factor load balancing, and fallback mapping |
-| Context Builder | `src/core/orchestration/mod/ContextBuilder.ts` | Role-aware context package prefetching with in-memory TTL content caching |
-| Convergence Engine | `src/core/orchestration/mod/ConvergenceEngine.ts` | BFT 3-stage filtering, deduplication, conflict resolution lattice, and utility scoring |
-| Gate Evaluator | `src/core/orchestration/mod/GateEvaluator.ts` | Multi-dimension validation gate checks and targeted revision pass routing |
-| Product Critic | `src/core/orchestration/mod/ProductCriticRunner.ts` | Post-implementation adversarial critique and gate failure trigger |
-| Receipt Store | `src/core/orchestration/mod/ReceiptStore.ts` | Persistent DAG state serialization, validation, checkpoint hashing, and resume recovery |
+| System Prompt Steering Component | `src/core/prompts/system-prompt/components/mod_designer_steering.ts` | Injects senior designer instincts prompt section when `modEnabled` is true |
+| Prompt Builder Registry | `src/core/prompts/system-prompt/registry/PromptBuilder.ts` | Dynamically evaluates and places `MOD_DESIGNER_STEERING` right after `AGENT_ROLE_SECTION` |
+| Task Loop Integration | `src/core/task/index.ts` | Passes `modEnabled` setting to `SystemPromptContext` in the unified execution loop |
+| Subagent Swarm Inheritance | `src/core/task/tools/subagent/SubagentRunner.ts` | Propagates `modEnabled` prompt steering down to subagent task contexts |
+| Slash Command Alignment | `src/core/prompts/commands/deep-planning/index.ts` | Passes `modEnabled` steering to `/deep-planning` slash command templates |
+| UX Mode Switcher | `webview-ui/src/components/chat/ModModeSwitcher.tsx` | Segmented control bar with zero-jargon copy, keyboard navigation, and popover guides |
+| Unit Test Suite | `src/core/task/tools/subagent/__tests__/mod.test.ts` | 100% test coverage verifying prompt steering injection and subagent inheritance |
 
 ---
 
-## 10 Specialized Designer Roles
+## 6 Core Design Engineering Pillars
 
-MoD routes classified problems to specialized design personas:
+When `modEnabled` is toggled ON, the agent automatically applies these 6 design engineering pillars:
 
-| Designer Role | Target Dimensions | Focus & Responsibilities |
-|---------------|-------------------|--------------------------|
-| `product-strategist` | `product-strategy`, `generative-workflow` | User goals, jobs-to-be-done (JTBD), value alignment |
-| `ux-architect` | `information-architecture`, `workflow` | Structural navigation, screen layout, user mental model coherence |
-| `interaction-designer` | `interaction`, `system-status`, `agentic-control` | Affordances, states (hover, active, focus, disabled), system feedback |
-| `visual-systems-designer` | `visual-hierarchy`, `cross-surface-consistency` | Visual balance, contrast, typography scale, surface harmony |
-| `content-designer` | `content` | Copy clarity, microcopy, instructional clarity, tone |
-| `design-system-engineer` | `design-system` | Component token usage, primitive reuse, design token compliance |
-| `accessibility-reviewer` | `accessibility` | Keyboard navigation, screen reader accessibility (ARIA), WCAG standards |
-| `responsive-design-reviewer` | `responsive-design` | Responsive breakpoints, layout reflow, mobile/desktop viewport safety |
-| `frontend-implementation-designer` | `implementation-quality` | Code aesthetics, component structure, clean implementation patterns |
-| `product-critic` | `final-product-critique` | Post-execution adversarial critique and holistic quality evaluation |
+1. **Design Token Sensing & System Hierarchy**:
+   - Prefers existing project design tokens (e.g., `var(--primary)`, `bg-background`, `text-muted-foreground`, `rounded-lg`) over hardcoded pixel/hex values.
+   - Inspects existing component hierarchies before creating new UI surfaces.
 
----
+2. **Complete 7-State UI Matrix**:
+   - Every interactive UI element or surface explicitly handles 7 states:
+     1. *Default / Idle*: Clean visual presentation with proper contrast.
+     2. *Hover / Interactive*: Subtle tactile feedback.
+     3. *Active / Pressed*: Physical pressed response (`scale-[0.98]`).
+     4. *Disabled / Inactive*: Reduced opacity (`opacity-50`) with `cursor-not-allowed` and ARIA disabled states.
+     5. *Loading / Skeleton*: Pulsing loaders or shimmer UI during async data fetching.
+     6. *Empty / Zero State*: Helpful guidance text or illustrations for empty datasets.
+     7. *Error / Warning Boundary*: Inline error feedback with clear recovery CTAs.
 
-## 10-Stage Pipeline Lifecycle
+3. **WCAG 2.1 AA Accessibility & Motion Standards**:
+   - Text contrast >= 4.5:1 (3:1 for large headings) and touch targets >= 44x44px.
+   - Visible keyboard focus rings (`focus-visible:ring-2`), semantic HTML5 tags (`<main>`, `<nav>`, `<article>`, `<button>`), and `prefers-reduced-motion` fallbacks.
 
-```text
-User Request
-  │
-  ├─► Stage 1 & 2: Concurrent Product Intent & Problem Classification
-  │     (Fallback: Heuristic sensing ensures zero-stall if LLM stream fails)
-  │
-  ├─► Stage 3: Specialist Selection & MoE Capacity Balancing
-  │     (Softmax Top-K routing with capacity load offloading)
-  │
-  ├─► Stage 4: Specialist Analysis & Recommendation Validation
-  │     (Circuit-Breaker wrapped Promise.allSettled execution)
-  │
-  ├─► Stage 5: Convergence & BFT Consensus
-  │     (Syntactic isolation, priority lattice conflict resolution, utility scoring)
-  │
-  ├─► Stage 6: Decision Lock
-  │     (Lock accepted decisions before code mutations)
-  │
-  ├─► Stage 7: Implementation Planning
-  │     (Generate disjoint boundary mutation tasks)
-  │
-  ├─► [Branch: Outcome Mode]
-  │     ├─► "plan-only": Skip mutation execution ──► Integrated Validation & Critique ──► Finish
-  │     └─► "plan-and-implement": Proceed to Stage 8
-  │
-  ├─► Stage 8: Parent-Authorized Implementation
-  │     (Disjoint mutation batches run in parallel with direct I/O execution authority)
-  │
-  ├─► Stage 9: Integrated Validation & Product Critique
-  │     (Evaluate product, UX, visual, interaction, accessibility, & implementation gates)
-  │
-  └─► Stage 10: Gate Evaluation & Revision Loop
-        (Incremental revision pass re-runs ONLY responsible roles for failed gates)
-```
+4. **Visual Aesthetics & Spatial Harmony**:
+   - Typographic hierarchy, vibrant dark/light mode balance, subtle glassmorphism (`backdrop-blur`), and fluid micro-transitions (150ms-200ms ease-out).
+
+5. **Responsive Layouts & Grid Ergonomics**:
+   - Mobile-first, fluid grid and flex layouts across mobile, tablet, and desktop viewports without horizontal scrollbar leaks or overflow cropping.
+
+6. **5-Whys Cognitive Ergonomics**:
+   - Root-cause usability analysis tracing surface UX requests down to cognitive friction.
+   - Eliminates unnecessary workflow steps and guides users along prominent call-to-action (CTA) paths.
 
 ---
 
-## Resilience & High Throughput Architecture
+## Subagent Swarm Propagation
 
-### 1. MoE Capacity Factor Load Balancing
-When a single specialist role is assigned more than 5 problems, `SpecialistSelector` offloads excess load to pre-mapped fallback experts (`FALLBACK_ROLE_MAP`). This prevents single-role bottlenecking and balances execution load across specialists.
-
-### 2. Specialist Circuit Breakers
-Specialist executions in Stage 4 use `Promise.allSettled`. If an individual LLM call fails, times out, or throws an exception, the circuit breaker trips, logs the failure, and re-routes to fallback context without crashing the orchestrator pipeline.
-
-### 3. Zero-Stall Heuristic Fallback Sensing
-If the `ProblemClassifier` or `IntentAnalyzer` LLM streams fail:
-- `ProblemClassifier.getFallbackClassification(requestText)` performs keyword-driven problem sensing for accessibility, visual hierarchy, interaction, and workflow issues directly from the user request text.
-- `IntentAnalyzer.getFallbackIntent(requestText)` extracts explicit/implicit requirements, performance, and calm experience constraints.
-
-### 4. In-Memory Context Content Caching
-`ContextBuilder` maintains a 1-minute TTL workspace content cache (`setCachedFileContent` / `getCachedFileContent`). This eliminates duplicate file reads during batch prefetching across specialists.
+When a primary task running in MoD Mode launches subagents via `use_subagents`, `SubagentRunner.ts` automatically propagates `modEnabled: true` to the subagent's `SystemPromptContext`. The entire subagent swarm operates with senior design instincts while maintaining execution boundaries.
 
 ---
 
-## Convergence & BFT Consensus
+## World-Class UX Ergonomics
 
-`ConvergenceEngine` processes specialist recommendations using a 3-stage filter:
-1. **BFT Syntactic Isolation**: Drops malformed refinements missing required targets or recommendations.
-2. **Semantic Boundary Verification**: Drops refinements touching out-of-scope files.
-3. **Priority Lattice Conflict Resolution & Complementary Fusion**: Resolves conflicting recommendations on identical targets based on role hierarchy while fusing non-conflicting visual tokens and acceptance criteria:
-   ```text
-   product-strategist (5) > accessibility-reviewer (4) > ux-architect (3) > design-system-engineer (2) > others (1)
-   ```
-4. **Decision Utility Calculation**:
-   $$\text{Utility} = \text{Severity Weight} \times \text{Confidence Weight}$$
-
----
-
-## Hardening & Architectural Enhancements (v1.3)
-
-Recent production audits resolved critical pipeline failure modes and added high-reliability execution guarantees:
-
-1. **Subagent UI Status Envelope Serialization**:
-   - `SubagentStatusRow.tsx` natively parses MoD stage progress notifications (`runId`, `stage`, `progress`).
-   - `transitionTo()` broadcasts `status` and `items` fields so the chat UI displays live progress badges (`MoD convergence (54%)`) without error fallbacks.
-
-2. **Complementary Property Fusion**:
-   - `ConvergenceEngine` fuses non-conflicting visual evidence, adaptation notes, tradeoffs, and acceptance criteria into winning design decisions during priority conflict resolution, preserving valuable insights from lower-priority specialists.
-
-3. **Resilient LLM Response Parsing**:
-   - `parseRefinements()` strips markdown codeblocks (`replace(/```json/gi, "")`) and invokes `getFallbackRefinement()` fallback synthesis if an LLM returns unformatted text, preventing silent drop of refinements.
-
-4. **Universal Implementation Task Mapping**:
-   - `generateImplementationTasks()` maps **all accepted design decisions** directly into implementation tasks, removing narrow hardcoded category string filters.
-
-5. **Fallback Core Specialist Council Assignment**:
-   - `SpecialistSelector` automatically assigns core default specialists (`product-strategist`, `ux-architect`, `visual-systems-designer`) if problem classification returns empty or unmapped problem sets.
-
-6. **Executive Summary Design Reporting**:
-   - `reportFinalResult()` outputs a structured executive summary detailing locked decisions, rationales, implementation task completion rates, and quality gate audit results.
-
-7. **Invariant Target Resolution Guard (`TargetResolutionException`)**:
-   - `resolveTargetFilesForDecision()` enforces a zero-hallucination boundary between design appraisal and mutation execution.
-   - Prohibits fuzzy keyword guessing fallbacks. If a design decision targets `General` or `General Area`, target resolution attempts *only* deterministic extraction (from explicit paths in evidence, AST references, or refinements).
-   - If no concrete workspace file paths can be deterministically extracted, it throws `TargetResolutionException`.
-   - `generateImplementationTasks()` catches the exception and records `[TARGET_RESOLUTION_FAILURE]` in execution limitations, cleanly blocking implementation without creating ghost mutation tasks.
-
-8. **Automatic & Discerning Execution Strategy (`"auto"`)**:
-   - `determineEffectiveOutcome(requestText)` automatically discerns whether to run `plan-only` vs `plan-and-implement` without requiring manual webview toggle buttons.
-   - Explicit review/audit prompts defer code modifications, while grounded, actionable tasks seamlessly proceed to execution.
-
-9. **Glassbox MoD Live Council Inspector**:
-   - Replaced generic spinners and raw stage strings with real-time **Glassbox Council Inspector Cards**:
-     - **Active Specialist Lenses**: Displays live assigned persona pills (`Product Strategist`, `UX Architect`, `Accessibility Specialist`).
-     - **Locked Design Decisions**: Displays locked decisions (`🔒`), rationales, and targeted workspace file badges (`[AnomalyRegistry.ts]`).
-     - **Governed Code Mutations**: Displays concrete mutation task objectives with target file tags and status indicators (`⏳ pending`, `⚡ executing`, `✅ completed`).
-     - **Quality Gate Audit Matrix**: Displays live pass/audit status across all 8 quality gates.
-     - **5-Stage Visual Stepper**: Displays pipeline progress (`Intent & Routing` ➔ `Council Audit` ➔ `Decision Lock` ➔ `Code Execution` ➔ `Quality Audit`) with glowing Lumi purple step indicators.
-
----
-
-## Verification & Testing
-
-Run the unit test suite covering MoD orchestration, circuit breakers, fallback routing, and BFT consensus:
-
-```bash
-npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha src/core/task/tools/subagent/__tests__/mod.test.ts
-```
+- **Segmented Control Pill**: Clean, zero-jargon toggle between **Coding Mode** and **Design Mode (MoD)** positioned directly above the chat composer input.
+- **Keyboard Ergonomics**: Keyboard arrow key navigation (`ArrowLeft` / `ArrowRight`) across execution tabs with proper `role="tablist"` ARIA attributes.
+- **Execution Mode Guide**: Integrated popover offering non-technical explanations and visual indicator badges.

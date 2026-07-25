@@ -18,14 +18,11 @@ The production-grade lease reconciliation and execution-hardening pass is implem
 
 | Surface | Current behavior | Primary files |
 |---------|------------------|---------------|
-| Designer-in-Residence | Single senior product designer agent architecture with 5-Whys root-cause reasoning | `src/core/orchestration/mod/DesignerInResidence.ts` |
-| Industry Pattern Registry | Benchmark UI patterns (Command Palette, Split Workspace, Contextual Action Toolbar, Optimistic Undo Toast, Guided Empty State, Focus-Trapped Modals) | `src/core/orchestration/mod/PatternLibrary.ts` |
-| Token Sensing & Codemod Sync | Extracts CSS custom properties and automatically patches hardcoded CSS/HEX values | `src/core/orchestration/mod/ContextBuilder.ts`, `TokenSyncEngine.ts` |
-| Dynamic UX Health Index | Scores UX health (0-100), letter grade (A+-F), and category breakdowns across 7 debt dimensions | `src/core/orchestration/mod/DesignIntelligenceGraph.ts` |
-| Design Decision Records & Drift Guard | Formats immutable DDR-001 decision records and scans code for design system drift | `src/core/orchestration/mod/DesignDecisionRecord.ts`, `DesignDriftDetector.ts` |
-| 8-State Interactive UI Contracts & Risk | Audits component state completeness across 8 core UI states and evaluates UX regression risk | `src/core/orchestration/mod/ComponentContractLedger.ts`, `UXRegressionRiskCalculator.ts` |
-| High-Throughput Speculative Execution | Partitions tasks into parallel disjoint waves, enforces 30s LLM timeouts, and caches state in memory | `src/core/orchestration/mod/SpeculativeTaskPlanner.ts`, `DesignCircuitBreaker.ts`, `DesignStateCache.ts` |
-| Orchestration Engine | Fast-path atomic decision locking and non-blocking background receipt saves | `src/core/orchestration/mod/MixtureOfDesignersOrchestrator.ts` |
+| Master of Design (MoD) Steering | Injects 6 senior design engineering pillars when `modEnabled` is true | `src/core/prompts/system-prompt/components/mod_designer_steering.ts` |
+| Prompt Builder Integration | Positions MoD steering right after `AGENT_ROLE_SECTION` across all prompt variants | `src/core/prompts/system-prompt/registry/PromptBuilder.ts` |
+| Task Loop Parity | Runs MoD Mode through standard task loop with 100% tool parity (`read_file`, `replace_in_file`, `execute_command`, `browser_action`, subagents, MCP) | `src/core/task/index.ts` |
+| Subagent Swarm Propagation | Subagent tasks automatically inherit `modEnabled: true` context | `src/core/task/tools/subagent/SubagentRunner.ts` |
+| UX Ergonomics Bar | Segmented control bar with zero-jargon copy, keyboard navigation, popover guides | `webview-ui/src/components/chat/ModModeSwitcher.tsx` |
 
 The working tree also contains earlier user changes across policy, audit, roadmap, subagent, and completion files. Preserve them; do not reset or rewrite unrelated modifications.
 

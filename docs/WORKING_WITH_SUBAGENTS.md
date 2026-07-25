@@ -27,8 +27,7 @@ LUMI can spawn **subagents** — isolated agent runs with their own prompts, too
 | Durable lock authority | `src/core/governance/LockAuthority.ts` · `src/core/swarm/SwarmMutexService.ts` |
 | Task lifecycle authority | `src/core/task/lifecycle/TaskLifecycleFunnel.ts` · [Task lifecycle](task-lifecycle-authority.md) |
 | Lane completion gates | `src/core/task/tools/subagentCompletionGates.ts` |
-| Merge gate | `src/core/task/tools/subagent/MergeGate.ts` |
-| Mixture of Designers (MoD) | `src/core/orchestration/mod/` · [MoD Architecture](mixture-of-designers.md) |
+| Master of Design (MoD) | `src/core/prompts/system-prompt/components/mod_designer_steering.ts` · [MoD Architecture](mixture-of-designers.md) |
 
 `ToolExecutorCoordinator` registers static tools from `DietCodeDefaultTool` and **dynamic subagent handlers** loaded at runtime.
 
@@ -77,8 +76,8 @@ Multi-lane swarms run through `GovernedSwarmCoordinator` with durable receipts a
 | `read_only`, `audit_only`, `planning_only`, `documentation_only`, `diagnostic_only` | Skipped |
 | `mutation` (default when omitted) | Required |
 
-### Mixture of Designers (MoD) Glassbox Telemetry
-When running in MoD mode (`src/core/orchestration/mod/`), the orchestrator automatically discerns execution strategy (`plan-only` vs `plan-and-implement`) and streams a full Glassbox Council payload containing active persona lenses, locked architectural decisions (`🔒`), governed code mutation tasks (`⚡`), 8-gate audit results (`🛡️`), and a 5-step visual pipeline indicator directly into the chat timeline. For detailed architecture, see [MoD Architecture](mixture-of-designers.md).
+### Master of Design (MoD) Swarm Propagation
+When running in MoD mode (`modEnabled: true`), parent tasks automatically propagate `modEnabled: true` down to subagents via `SubagentRunner.ts`. The subagent swarm inherits senior designer instincts (design token sensing, 7-state UI matrix, WCAG 2.1 AA accessibility, visual aesthetics, responsive layout ergonomics, 5-Whys analysis) while maintaining strict execution boundaries. For detailed architecture, see [MoD Architecture](mixture-of-designers.md).
 
 ### Lifecycle (production handler)
 

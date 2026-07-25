@@ -6,6 +6,24 @@
 
 Last audited: 2026-07-24
 
+## ADR-016: Unified MoD Prompt Steering Toggle Architecture
+
+**Status:** Accepted
+
+**Context:** The MoD framework previously used a dedicated backend orchestrator (`MixtureOfDesignersOrchestrator`) that bypassed the main coding agent task loop. This introduced redundant execution paths, maintenance complexity, and tool parity drift. All MoD requirements are fundamentally a mirror of the coding agent steered by senior designer instincts.
+
+**Decision:** Refactor MoD in its entirety into a System Prompt Steering Toggle:
+1. **Unified Task Execution Path**: MoD Mode runs through the standard coding task loop (`initiateTaskLoop` in `src/core/task/index.ts`) with 100% tool parity (`read_file`, `replace_in_file`, `execute_command`, `browser_action`, subagents, MCP tools).
+2. **Dynamic Prompt Steering**: When `modEnabled` is `true`, `PromptBuilder.ts` automatically injects `MOD_DESIGNER_STEERING` (`src/core/prompts/system-prompt/components/mod_designer_steering.ts`) directly after `AGENT_ROLE_SECTION` for maximum attention weighting.
+3. **6 Design Engineering Pillars**: Injects Design Token Sensing, Complete 7-State UI Matrix, WCAG 2.1 AA Accessibility, Visual Aesthetics, Responsive Layout Ergonomics, and 5-Whys Cognitive Analysis.
+4. **Subagent Swarm Propagation**: `SubagentRunner.ts` propagates `modEnabled: true` down to subagent task contexts so subagent swarms inherit senior designer instincts seamlessly.
+5. **Non-Technical UX Ergonomics**: Segmented control switcher (`ModModeSwitcher.tsx`) with zero-jargon copy, keyboard navigation, popover guides, and visual indicator badges.
+
+**Consequences:**
+- Centralizes core execution into a single, unified, highly optimized task loop.
+- Guarantees 100% tool parity between Coding Mode and Design (MoD) Mode.
+- Eliminates thousands of lines of redundant backend orchestration bypass code.
+
 ## ADR-015: LUMI Designer-in-Residence Enterprise Architecture & Governance
 
 **Status:** Accepted
