@@ -250,6 +250,7 @@ Tutorial: [your-first-project](docs/getting-started/your-first-project.mdx) · P
 | [Governed subagent execution](docs/governed-subagent-execution.md) | Swarm architecture and lifecycle |
 | [Governed execution authority](docs/governed-execution-authority.md) | SQLite lease authority, projection reconciliation, and deadlock safety |
 | [SQLite storage & memory architecture](docs/architecture/sqlite-storage-and-memory-lifecycle.md) | Multi-table retention, auto-vacuum PRAGMA sequence, statement handle disposal, and WAL checkpoint guardrails |
+| [Storage & cache management](docs/features/storage-and-cache-management.md) | Multi-tiered storage engine, shadow Git vacuuming (`git gc --prune=now`), dynamic exclusions, and clearCache command |
 | [Governed execution runbook](docs/governed-execution-runbook.md) | Operator playbook |
 | [Task lifecycle authority](docs/task-lifecycle-authority.md) | Transactional generation, cancellation, resume, and terminal state |
 | [Completion funnel](docs/completion-lifecycle-decision-engine.md) | Semantic completion and durable lifecycle handoff |
