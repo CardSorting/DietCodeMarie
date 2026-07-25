@@ -142,6 +142,7 @@ export class IntentTracer {
     this.completedIntents++;
     this.totalLatencyMs += trace.latencyMs ?? 0;
     this.activeStarts.delete(intentId);
+    this.intents.delete(intentId);
     this.pushTrace(trace);
     return trace;
   }
@@ -169,6 +170,7 @@ export class IntentTracer {
     this.failedIntents++;
     this.lastFailedIntent = trace;
     this.activeStarts.delete(intentId);
+    this.intents.delete(intentId);
     this.pushTrace(trace);
     return trace;
   }
