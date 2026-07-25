@@ -57,7 +57,11 @@ function main() {
 		fs.writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, "\t")}\n`)
 		execFileSync("git", ["add", "package.json"], { cwd: repoRoot, stdio: "ignore" })
 
-		execFileSync(process.platform === "win32" ? "ovsx.cmd" : "ovsx", args, { stdio: "inherit", cwd: repoRoot })
+		execFileSync(process.platform === "win32" ? "ovsx.cmd" : "ovsx", args, {
+			stdio: "inherit",
+			cwd: repoRoot,
+			shell: process.platform === "win32",
+		})
 		console.log(`[openvsx] published CardSorting.lumi for ${target}`)
 		console.warn(
 			"[openvsx] If the extension still shows an unverified publisher warning, wait for Eclipse to grant CardSorting namespace ownership, then republish.",

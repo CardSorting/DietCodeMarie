@@ -30,6 +30,7 @@ function runElectronRebuild() {
 	execFileSync(process.platform === "win32" ? "npm.cmd" : "npm", ["exec", "electron-rebuild", "--", ...args], {
 		stdio: "inherit",
 		cwd: repoRoot,
+		shell: process.platform === "win32",
 	})
 
 	const platform = process.platform

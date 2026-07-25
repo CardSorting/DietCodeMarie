@@ -40,6 +40,7 @@ function main() {
 			{
 				stdio: "inherit",
 				cwd: repoRoot,
+				shell: process.platform === "win32",
 			},
 		)
 		assertVsixHasNativeModule(outPath)

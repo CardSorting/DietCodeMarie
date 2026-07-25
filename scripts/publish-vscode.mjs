@@ -19,6 +19,7 @@ function main() {
 		execFileSync(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "package:vsix"], {
 			stdio: "inherit",
 			cwd: repoRoot,
+			shell: process.platform === "win32",
 		})
 	}
 
@@ -30,6 +31,7 @@ function main() {
 	execFileSync(process.platform === "win32" ? "vsce.cmd" : "vsce", args, {
 		stdio: "inherit",
 		cwd: repoRoot,
+		shell: process.platform === "win32",
 	})
 	console.log(`[vscode] published CardSorting.lumi-vscode for ${target}`)
 }

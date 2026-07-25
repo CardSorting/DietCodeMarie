@@ -101,6 +101,7 @@ export function rebuildBetterSqlite3(repoRoot) {
 	execFileSync(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "rebuild:electron:better-sqlite3"], {
 		stdio: "inherit",
 		cwd: repoRoot,
+		shell: process.platform === "win32",
 	})
 }
 
