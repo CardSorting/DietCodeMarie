@@ -1,4 +1,4 @@
-// [LAYER: CORE]
+import * as crypto from 'node:crypto';
 import type { ServiceContext } from './types.js';
 
 export interface MailboxMessage {
@@ -17,6 +17,7 @@ export interface MailboxMessage {
  */
 export class MailboxService {
   private _messages: MailboxMessage[] = [];
+  private readonly MAX_MESSAGES = 1000;
 
   constructor(private ctx: ServiceContext) {}
 
@@ -25,7 +26,7 @@ export class MailboxService {
    */
   async postMessage(to: string, from: string, type: MailboxMessage['type'], payload: any): Promise<void> {
     const msg: MailboxMessage = {
-      id: Math.random().toString(36).substring(7),
+      id: crypto.randomUUID(),
       from,
       to,
       type,
@@ -34,6 +35,9 @@ export class MailboxService {
       read: false,
     };
     this._messages.push(msg);
+    if (this._messages.length > this.MAX_MESSAGES) {
+      this._messages.splice(0, this._messages.length - this.MAX_MESSAGES);
+    }
     console.log(`[Mailbox] Message from ${from} to ${to}: ${type}`);
   }
 

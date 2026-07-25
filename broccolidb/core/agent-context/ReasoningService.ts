@@ -52,6 +52,7 @@ export class ReasoningService {
     if (!node) throw new Error(`Node ${nodeId} not found`);
 
     const evidence: string[] = [];
+    const visited = new Set<string>([nodeId]);
     const lineage: Pedigree['lineage'] = [
       {
         nodeId,
@@ -67,7 +68,8 @@ export class ReasoningService {
       const n = await this.graph.getKnowledge(id);
 
       for (const edge of n.edges || []) {
-        if (edge.type === 'supports') {
+        if (edge.type === 'supports' && !visited.has(edge.targetId)) {
+          visited.add(edge.targetId);
           evidence.push(edge.targetId);
           const targetNode = await this.graph.getKnowledge(edge.targetId);
           if (targetNode) {
