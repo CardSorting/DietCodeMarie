@@ -2432,4 +2432,17 @@ ${messages.join('\n')}`;
   }
 
   // ─── HYPER-COGNITION ───
+
+  public clearCaches(): void {
+    this.nodeCache.clear();
+    this.refCache.clear();
+    this.fileCache.clear();
+    this.rawTreeCache.clear();
+    this.treeCache.clear();
+  }
+
+  public dispose(): void {
+    this.clearCaches();
+    this.hooks = {};
+  }
 }

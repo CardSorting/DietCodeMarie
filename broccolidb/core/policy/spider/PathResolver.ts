@@ -262,16 +262,19 @@ export class PathResolver {
 	private checkCacheSaturation() {
 		const MAX_ENTRIES = 5000
 		if (this.resolutionCache.size > MAX_ENTRIES) {
-			this.resolutionCache.clear()
-			Logger.info("[PathResolver] Resolution cache saturated. Metaphorical sweep performed.")
+			const keysToDelete = Array.from(this.resolutionCache.keys()).slice(0, 2500)
+			for (const k of keysToDelete) this.resolutionCache.delete(k)
+			Logger.info("[PathResolver] Resolution cache pruned (2500 oldest entries evicted).")
 		}
 		if (this.canonicalCache.size > MAX_ENTRIES) {
-			this.canonicalCache.clear()
-			Logger.info("[PathResolver] Canonical cache saturated. Metaphorical sweep performed.")
+			const keysToDelete = Array.from(this.canonicalCache.keys()).slice(0, 2500)
+			for (const k of keysToDelete) this.canonicalCache.delete(k)
+			Logger.info("[PathResolver] Canonical cache pruned (2500 oldest entries evicted).")
 		}
 		if (this.stringInterner.size > MAX_ENTRIES) {
-			this.stringInterner.clear()
-			Logger.info("[PathResolver] String interner saturated. Metaphorical sweep performed.")
+			const keysToDelete = Array.from(this.stringInterner.keys()).slice(0, 2500)
+			for (const k of keysToDelete) this.stringInterner.delete(k)
+			Logger.info("[PathResolver] String interner pruned (2500 oldest entries evicted).")
 		}
 	}
 

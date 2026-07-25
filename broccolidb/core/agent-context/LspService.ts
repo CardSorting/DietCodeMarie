@@ -48,6 +48,8 @@ export class LspService {
         server.kill();
     }
     this.servers.clear();
+    this._diagnostics.clear();
+    this._retryCount.clear();
     this._rejectAll(new LifecycleStateError('LspService stopped.'));
     this.lifecycleState = 'stopped';
   }
