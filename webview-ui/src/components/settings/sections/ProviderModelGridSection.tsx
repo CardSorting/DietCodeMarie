@@ -9,7 +9,7 @@ import {
 	nousResearchModels as staticNousResearchModels,
 	xaiModels,
 } from "@shared/api"
-import { Check, Search, Sparkles, Zap } from "lucide-react"
+import { Search, Sparkles } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import styled from "styled-components"
 import { useExtensionState } from "@/context/ExtensionStateContext"
@@ -130,7 +130,7 @@ interface ProviderModelGridSectionProps {
 }
 
 /**
- * Provider-Specific Credential Setup & Paginated Model Grid Array Section
+ * Provider-Specific Credential Setup & Paginated Ultra-Compressed Model List Section
  */
 export const ProviderModelGridSection = ({ providerTabId, renderSectionHeader }: ProviderModelGridSectionProps) => {
 	const { apiConfiguration, openRouterModels, nousResearchModels } = useExtensionState()
@@ -334,10 +334,10 @@ export const ProviderModelGridSection = ({ providerTabId, renderSectionHeader }:
 
 				<ModelFilterTabs activeTab={activeFilter} models={providerModelsRecord} onTabChange={setActiveFilter} />
 
-				{/* Paginated Grid Array of Models */}
+				{/* Ultra-Compressed Paginated Model List */}
 				{filteredGridModels.length === 0 ? (
 					<EmptyState>
-						<Sparkles size={18} />
+						<Sparkles size={16} />
 						<p>No models found for {providerMeta.name}.</p>
 						<button
 							onClick={() => {
@@ -350,63 +350,35 @@ export const ProviderModelGridSection = ({ providerTabId, renderSectionHeader }:
 					</EmptyState>
 				) : (
 					<>
-						<ModelGridArray>
+						<CompactModelList>
 							{paginatedGridModels.map(([id, info]) => {
 								const isActive = currentConfig.selectedModelId === id
 								const isJustActivated = lastActivatedModelId === id
 								const badges = getModelBadges(id, info)
 
 								return (
-									<GridCard isActive={isActive} key={id}>
-										<CardTop>
+									<CompactRowItem isActive={isActive} key={id}>
+										<RowLeftInfo>
+											{badges.length > 0 && <BadgeChip className="new">NEW</BadgeChip>}
 											<ModelTitle title={id}>{info.name || id}</ModelTitle>
-											<CardBadges>
-												{badges.map((b) => (
-													<BadgeChip className={b.toLowerCase()} key={b}>
-														{b}
-													</BadgeChip>
-												))}
-											</CardBadges>
-										</CardTop>
+										</RowLeftInfo>
 
-										<CardMetrics>
-											<MetricItem>
-												<span className="metric-lbl">Context</span>
-												<span className="metric-val">
-													{info.contextWindow ? `${Math.round(info.contextWindow / 1000)}K` : "128K"}
-												</span>
-											</MetricItem>
-											<MetricItem>
-												<span className="metric-lbl">Price</span>
-												<span className="metric-val">
-													{info.inputPrice ? `$${info.inputPrice}` : "$0"}
-												</span>
-											</MetricItem>
-										</CardMetrics>
-
-										<SelectButton
-											isActive={isActive}
-											isSuccess={isJustActivated}
-											onClick={() => handleSelectModel(id)}
-											type="button">
-											{isJustActivated ? (
-												<>
-													<Check size={10} /> Active!
-												</>
-											) : isActive ? (
-												<>
-													<Check size={10} /> Selected
-												</>
-											) : (
-												<>
-													<Zap size={10} /> Select
-												</>
-											)}
-										</SelectButton>
-									</GridCard>
+										<RowRightMeta>
+											<MetaText>
+												{info.contextWindow ? `${Math.round(info.contextWindow / 1000)}K` : "128K"}
+											</MetaText>
+											<SelectButton
+												isActive={isActive}
+												isSuccess={isJustActivated}
+												onClick={() => handleSelectModel(id)}
+												type="button">
+												{isJustActivated ? "Active!" : isActive ? "Selected" : "Select"}
+											</SelectButton>
+										</RowRightMeta>
+									</CompactRowItem>
 								)
 							})}
-						</ModelGridArray>
+						</CompactModelList>
 
 						{totalPages > 1 && (
 							<PaginationBar>
@@ -418,7 +390,7 @@ export const ProviderModelGridSection = ({ providerTabId, renderSectionHeader }:
 									‹ Prev
 								</button>
 								<span className="page-info">
-									Page {currentPage} of {totalPages} ({filteredGridModels.length} models)
+									{currentPage} / {totalPages} ({filteredGridModels.length})
 								</span>
 								<button
 									className="page-btn"
@@ -444,28 +416,28 @@ const ProviderHeaderCard = styled.div`
 	justify-content: space-between;
 	background: var(--vscode-sideBar-background, rgba(0, 0, 0, 0.04));
 	border: 1px solid var(--vscode-panel-border);
-	border-radius: 6px;
-	padding: 6px 10px;
-	margin-bottom: 6px;
+	border-radius: 5px;
+	padding: 5px 8px;
+	margin-bottom: 5px;
 
 	.header-info {
 		h3 {
 			margin: 0;
-			font-size: 12px;
+			font-size: 11.5px;
 			font-weight: 600;
 			color: var(--vscode-foreground);
 		}
 		p {
 			margin: 1px 0 0 0;
-			font-size: 9.5px;
+			font-size: 9px;
 			color: var(--vscode-descriptionForeground);
 		}
 	}
 
 	.model-count-badge {
-		font-size: 9px;
+		font-size: 8.5px;
 		font-weight: 700;
-		padding: 2px 6px;
+		padding: 1.5px 5px;
 		border-radius: 9999px;
 		background: var(--vscode-badge-background, rgba(128, 128, 128, 0.2));
 		color: var(--vscode-badge-foreground, var(--vscode-foreground));
@@ -476,27 +448,27 @@ const ProviderHeaderCard = styled.div`
 const CredentialsBox = styled.div`
 	background: var(--vscode-editor-background);
 	border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
-	border-radius: 6px;
-	padding: 8px 10px;
-	margin-bottom: 8px;
+	border-radius: 5px;
+	padding: 6px 8px;
+	margin-bottom: 6px;
 `
 
 const CredentialsLabel = styled.div`
-	font-size: 8.5px;
+	font-size: 8px;
 	font-weight: 700;
-	letter-spacing: 0.6px;
+	letter-spacing: 0.5px;
 	color: var(--vscode-descriptionForeground);
-	margin-bottom: 6px;
+	margin-bottom: 4px;
 `
 
 const SearchInputWrapper = styled.div`
 	position: relative;
 	width: 100%;
-	margin-bottom: 4px;
+	margin-bottom: 3px;
 
 	.search-icon {
 		position: absolute;
-		left: 8px;
+		left: 7px;
 		top: 50%;
 		transform: translateY(-50%);
 		color: var(--vscode-descriptionForeground);
@@ -504,13 +476,13 @@ const SearchInputWrapper = styled.div`
 
 	input {
 		width: 100%;
-		height: 24px;
-		padding: 2px 20px 2px 24px;
+		height: 22px;
+		padding: 2px 18px 2px 22px;
 		background: var(--vscode-input-background);
 		color: var(--vscode-input-foreground);
 		border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-		border-radius: 4px;
-		font-size: 10.5px;
+		border-radius: 3px;
+		font-size: 10px;
 		outline: none;
 
 		&:focus {
@@ -520,73 +492,72 @@ const SearchInputWrapper = styled.div`
 
 	.clear-btn {
 		position: absolute;
-		right: 6px;
+		right: 5px;
 		top: 50%;
 		transform: translateY(-50%);
 		background: none;
 		border: none;
 		color: var(--vscode-descriptionForeground);
-		font-size: 12px;
+		font-size: 11px;
 		cursor: pointer;
 	}
 `
 
-const ModelGridArray = styled.div`
-	display: grid;
-	grid-template-columns: repeat(2, 1fr);
-	gap: 4px;
+const CompactModelList = styled.div`
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
 	margin-top: 3px;
 `
 
-const GridCard = styled.div<{ isActive?: boolean }>`
+const CompactRowItem = styled.div<{ isActive?: boolean }>`
 	background: var(--vscode-editor-background);
 	border: 1px solid ${(props) => (props.isActive ? "var(--vscode-focusBorder)" : "var(--vscode-widget-border, var(--vscode-panel-border))")};
-	border-radius: 4px;
-	padding: 4px 5px;
+	border-radius: 3px;
+	padding: 3px 6px;
 	display: flex;
-	flex-direction: column;
+	align-items: center;
 	justify-content: space-between;
-	gap: 3px;
+	gap: 6px;
+	height: 24px;
 	transition: all 0.12s ease;
 
 	&:hover {
 		border-color: var(--vscode-focusBorder);
-		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+		background: var(--vscode-list-hoverBackground);
 	}
 `
 
-const CardTop = styled.div`
+const RowLeftInfo = styled.div`
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: 2px;
+	gap: 4px;
+	min-width: 0;
+	flex: 1;
+`
+
+const RowRightMeta = styled.div`
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	flex-shrink: 0;
 `
 
 const ModelTitle = styled.span`
 	font-size: 9.5px;
 	font-weight: 600;
 	color: var(--vscode-foreground);
-	line-height: 1.1;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	flex: 1;
-`
-
-const CardBadges = styled.div`
-	display: flex;
-	flex-wrap: wrap;
-	gap: 2px;
-	flex-shrink: 0;
 `
 
 const BadgeChip = styled.span`
 	font-size: 7px;
 	font-weight: 700;
-	padding: 0 2.5px;
+	padding: 0 3px;
 	border-radius: 2px;
-	background: rgba(128, 128, 128, 0.12);
-	color: var(--vscode-foreground);
+	flex-shrink: 0;
 
 	&.new {
 		background: rgba(234, 88, 12, 0.15);
@@ -594,43 +565,23 @@ const BadgeChip = styled.span`
 	}
 `
 
-const CardMetrics = styled.div`
-	display: flex;
-	justify-content: space-between;
-	background: var(--vscode-sideBar-background, rgba(0, 0, 0, 0.03));
-	border-radius: 2px;
-	padding: 1px 3px;
-`
-
-const MetricItem = styled.div`
-	display: flex;
-	align-items: center;
-	gap: 3px;
-
-	.metric-lbl {
-		font-size: 7.5px;
-		color: var(--vscode-descriptionForeground);
-	}
-	.metric-val {
-		font-size: 8.5px;
-		font-weight: 600;
-		color: var(--vscode-foreground);
-	}
+const MetaText = styled.span`
+	font-size: 8px;
+	font-weight: 500;
+	color: var(--vscode-descriptionForeground);
 `
 
 const SelectButton = styled.button<{ isActive?: boolean; isSuccess?: boolean }>`
-	width: 100%;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	gap: 2px;
-	padding: 1px 3px;
+	padding: 1px 6px;
 	font-size: 8.5px;
 	font-weight: 600;
 	border-radius: 2.5px;
 	cursor: pointer;
 	border: none;
-	height: 18px;
+	height: 16px;
 
 	background: ${(props) =>
 		props.isSuccess
@@ -650,7 +601,7 @@ const PaginationBar = styled.div`
 	align-items: center;
 	justify-content: space-between;
 	margin-top: 4px;
-	padding: 2px 5px;
+	padding: 2px 4px;
 	background: var(--vscode-sideBar-background, rgba(0, 0, 0, 0.03));
 	border: 1px solid var(--vscode-panel-border);
 	border-radius: 3px;
@@ -661,7 +612,7 @@ const PaginationBar = styled.div`
 		border: none;
 		border-radius: 2.5px;
 		padding: 1px 6px;
-		font-size: 9px;
+		font-size: 8.5px;
 		font-weight: 600;
 		cursor: pointer;
 
@@ -672,7 +623,7 @@ const PaginationBar = styled.div`
 	}
 
 	.page-info {
-		font-size: 8.5px;
+		font-size: 8px;
 		font-weight: 500;
 		color: var(--vscode-descriptionForeground);
 	}
@@ -683,18 +634,18 @@ const EmptyState = styled.div`
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	padding: 16px 8px;
+	padding: 12px 8px;
 	color: var(--vscode-descriptionForeground);
-	gap: 4px;
-	font-size: 10px;
+	gap: 3px;
+	font-size: 9.5px;
 
 	button {
 		background: var(--vscode-button-background);
 		color: var(--vscode-button-foreground);
 		border: none;
-		border-radius: 3px;
-		padding: 2px 8px;
-		font-size: 9.5px;
+		border-radius: 2.5px;
+		padding: 1.5px 6px;
+		font-size: 9px;
 		cursor: pointer;
 	}
 `
