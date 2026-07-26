@@ -16,10 +16,18 @@
 
 ## By the numbers
 
-| Metric | Value | Where |
-|--------|-------|-------|
-| Extension version | **10.7.0** | `package.json` |
-| Publisher / ID | **CardSorting.lumi-vscode** (VS Marketplace) · **CardSorting.lumi** (Open VSX) | `package.json` |
+| Field | Value | Source |
+| :--- | :--- | :--- |
+| Primary repository | `CardSorting/LUMI` | `package.json` |
+| Primary extension ID | `CardSorting.lumi-vscode` | `package.json` |
+| Open VSX extension ID | `CardSorting.lumi` | `package.json` |
+| Primary binary output | `dist/extension.js` | `esbuild.mjs` |
+| Webview output | `webview-ui/build` | `webview-ui/vite.config.ts` |
+| SQLite native module | `better-sqlite3` (Electron ABI 140) | `scripts/vsix-native-deps.mjs` |
+| Minimum VS Code engine | `^1.84.0` | `package.json` |
+| Minimum Node engine | `^20.19.43` | `package.json` |
+| Core developer license | Apache-2.0 | `LICENSE` |
+| Extension version | **10.8.0** | `package.json` |
 | Registered VS Code commands | **~25** `lumi.*` | `package.json` `contributes.commands` |
 | Static tool enum values | **64** | `DietCodeDefaultTool` in `src/shared/tools.ts` |
 | Tool handler files | **55** | `src/core/task/tools/handlers/` |
