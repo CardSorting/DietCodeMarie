@@ -40,6 +40,14 @@ const aliasResolverPlugin = {
 			"@packages": path.resolve(__dirname, "src/packages"),
 		}
 
+		const statMemo = new Map()
+		const cachedStat = (target) => {
+			if (statMemo.has(target)) return statMemo.get(target)
+			const res = fs.statSync(target)
+			statMemo.set(target, res)
+			return res
+		}
+
 		// Handle relative .js/.jsx -> .ts/.tsx mapping
 		build.onResolve({ filter: /^\.\.?\// }, (args) => {
 			if (args.path.endsWith(".js") || args.path.endsWith(".jsx")) {
@@ -66,7 +74,7 @@ const aliasResolverPlugin = {
 
 				// First, check if the path exists as is
 				if (cachedExists(importPath)) {
-					const stats = fs.statSync(importPath)
+					const stats = cachedStat(importPath)
 					if (stats.isDirectory()) {
 						// If it's a directory, try to find index files
 						const extensions = [".ts", ".tsx", ".js", ".jsx"]
