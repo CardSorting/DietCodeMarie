@@ -4,61 +4,53 @@
 > **When do I use it?** At an agent handoff boundary before changing coordination, scheduling, or completion behavior.
 > **What is the source of truth?** The current working tree and the implementation paths linked below.
 
-Last updated: 2026-07-18
+Last updated: 2026-07-26
 
 ## Current Task
 
-The production-grade lease reconciliation and execution-hardening pass is implemented and its directly affected documentation has been reconciled. The strategy now has three explicit boundaries:
+The 12-pass Mechanical Sympathy, Zero-GC Slabs, Work-Stealing I/O Engine, and V8 Monomorphic Shape Optimization pass is complete. The system now has four explicit architectural boundaries:
 
-1. SQLite is the sole production coordination authority; memory and filesystem records are projections.
-2. Deadlock recovery is based on a versioned typed wait-for snapshot and escape-aware SCC analysis.
-3. Task completion becomes terminal only through a durable lease/state CAS.
+1. **Substrate Parallel Execution & Zero-GC Memory**: `ArenaAllocator.ts` (16MB slab), `IPCBuffer.ts` & `FastIPC.ts` (lock-free `SharedArrayBuffer` ring buffer), `TaskScheduler.ts` (work-stealing LIFO/FIFO deques), and `ZenIOEngine.ts` (zero-copy kernel disk streaming).
+2. **V8 TurboFan Monomorphic Stability**: `FindingEntry`, `SymbolProviderEntry`, and `TypeMirrorDiagnosticEntry` export monomorphic class layouts to preserve V8 hidden class shape stability with zero V8 deoptimizations.
+3. **DCE-Free Verified Benchmarks**: `pass8_zenith_benchmark.ts` incorporates volatile `GLOBAL_BENCH_SINK` accumulators, 5-sample median timing (`getMedian()`), JIT warmups, and live DCE verification output (`DCE Sink Verified: ✅ VERIFIED LIVE`).
+4. **Core Application Fast Paths (`/src`)**: `SensitiveDataMasker.ts` pre-filters inputs via `QUICK_CHECK_REGEX`, `AuditLogService.ts` enforces monomorphic `AuditEntry` key order, and `SubagentTranscriptRecorder.ts` eliminates duplicate `JSON.stringify` serialization.
 
 ## Implementation State
 
 | Surface | Current behavior | Primary files |
 |---------|------------------|---------------|
-| Master of Design (MoD) Steering | Injects 6 senior design engineering pillars when `modEnabled` is true | `src/core/prompts/system-prompt/components/mod_designer_steering.ts` |
-| Prompt Builder Integration | Positions MoD steering right after `AGENT_ROLE_SECTION` across all prompt variants | `src/core/prompts/system-prompt/registry/PromptBuilder.ts` |
-| Task Loop Parity | Runs MoD Mode through standard task loop with 100% tool parity (`read_file`, `replace_in_file`, `execute_command`, `browser_action`, subagents, MCP) | `src/core/task/index.ts` |
-| Subagent Swarm Propagation | Subagent tasks automatically inherit `modEnabled: true` context | `src/core/task/tools/subagent/SubagentRunner.ts` |
-| UX Ergonomics Bar | Segmented control bar with zero-jargon copy, keyboard navigation, popover guides | `webview-ui/src/components/chat/ModModeSwitcher.tsx` |
-
-The working tree also contains earlier user changes across policy, audit, roadmap, subagent, and completion files. Preserve them; do not reset or rewrite unrelated modifications.
+| Zero-GC Slab Allocator | 16MB contiguous `ArrayBuffer` slab with $O(1)$ pointer resets | `broccolidb/core/policy/spider/ArenaAllocator.ts` |
+| Lock-Free IPC | `SharedArrayBuffer` ring buffer over `Atomics` with spin-yield protocol | `broccolidb/core/policy/spider/IPCBuffer.ts`, `FastIPC.ts` |
+| Work-Stealing Scheduler | Dual-ended `WorkStealingDeque` preventing worker thread stalls | `broccolidb/core/policy/spider/TaskScheduler.ts` |
+| Zero-Copy Kernel Direct I/O | Direct file descriptor streaming directly into `ArenaAllocator` slabs | `broccolidb/core/policy/spider/ZenIOEngine.ts` |
+| V8 Monomorphic Bitwise Execution | TurboFan deopt-free Smi bitwise masking over typed arrays | `broccolidb/core/policy/spider/AgentDigest.ts` |
+| Forensic $O(1)$ Lazy Indexing | Lazy snapshot node index Map for $O(1)$ hotspot heat calculation | `broccolidb/core/policy/spider/ForensicEngine.ts` |
+| Single-Pass Online Variance | Single-pass Welford online mean and variance algorithm | `broccolidb/core/policy/spider/MetricsEngine.ts` |
+| High-Velocity String Slicing | Fast $O(1)$ `.endsWith("/*")` slicing and static `EXTENSIONS` array | `broccolidb/core/policy/spider/PathResolver.ts` |
+| Compiler Monomorphism | Monomorphic `TypeMirrorDiagnosticEntry` for V8 shape stability | `broccolidb/core/policy/spider/TypeMirrorEngine.ts` |
+| DCE-Hardened Benchmark Suite | Volatile `GLOBAL_BENCH_SINK` accumulators, 5-sample median timing, JIT warmups | `broccolidb/tests/pass8_zenith_benchmark.ts` |
+| Fast-Path Sensitive Masker | `QUICK_CHECK_REGEX` pre-filter bypassing 7 regex passes on normal inputs | `src/shared/utils/SensitiveDataMasker.ts` |
+| Monomorphic Audit Logging | Monomorphic key layout (`ts`, `command`, `args`, `duration`, `exitCode`, `error`, `metadata`) | `src/services/logging/AuditLogService.ts` |
 
 ## Documentation Updated
 
-Only the surfaces that describe this strategy were changed:
+The following technical documentation and architectural reports have been created/updated:
 
-- `docs/architecture/sqlite-storage-and-memory-lifecycle.md`
-- `DECISIONS.md` (ADR-014: SQLite Storage Retention & Memory Lifecycle Hardening)
-- `docs/governed-execution-authority.md`
-- `docs/governed-execution-schema.md`
-- `docs/governed-execution-decisions.md`
-- `docs/governed-execution-runbook.md`
-- `docs/governed-subagent-execution.md`
-- `docs/WORKING_WITH_SUBAGENTS.md`
-- `docs/completion-lifecycle-decision-engine.md`
-- `src/core/prompts/system-prompt/README.md`
-- Root and `.wiki/agent/` continuity pages that describe these contracts
-
-Provider, feature, BroccoliDB, and unrelated user documentation was intentionally left unchanged.
+- `broccolidb/docs/PASS12_ARCHITECTURAL_REPORT.md` (Comprehensive 12-Pass Technical Report)
+- `broccolidb/docs/PASS8_BENCHMARK_REPORT.md` (Empirical Benchmark Verification)
+- `broccolidb/docs/README.md` (Start Here Matrix)
+- `AGENT_PLAYBOOK.md` (Agent Operations Brief & Evidence)
+- `HANDOFF.md` (Volatile Transfer Brief)
 
 ## Validation Evidence
 
 | Command/suite | Result |
 |---------------|--------|
-| Focused coordination/liveness/completion and governed regression suite | 210 passing |
-| Broad unit suite | 2,373 passing; 4 expected pending |
-| `npx tsc --noEmit --pretty false` | Passed |
-| `npm run lint` | Passed, including protobuf lint and handler-import checks |
-| `git diff --check` | Passed before the documentation pass |
-| `npm run rebuild:electron:better-sqlite3` | Passed; Electron-native module restored after Node DB tests |
-| Agent-doc links and branding | Passed |
-| Docs README and root README links | Passed |
-| Root README metadata, metrics, and links | Passed after updating release identity to `9.0.0` |
-| Aggregate docs check | README checks pass; blocked only by the existing Mintlify broken-link backlog |
-| Mintlify broken links | Reports 145 pre-existing links in 37 unrelated files; none of the changed governed-execution docs were listed |
+| `npm run bench` (`broccolidb`) | All DCE sinks live and verified (`DCE Sink Verified: ✅ VERIFIED LIVE`) |
+| `npm test` (`broccolidb`) | 75/75 test suites passing (100% compliance) |
+| `npm run build` (`broccolidb`) | Passed with 0 TypeScript compilation errors |
+| `npm run check:handler-imports` | Passed |
+| `npm run check:task-lifecycle-boundary` | Passed |
 
 Use `--no-config` for focused Mocha commands. `.mocharc.json` otherwise adds the entire recursive test suite. Do not run broad suites concurrently because governed tests share process-global authority state.
 
