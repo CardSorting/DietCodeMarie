@@ -48,7 +48,7 @@ const execFileAsync = promisify(execFile)
 async function runTsc() {
 	const isWin = process.platform === "win32"
 	const bin = isWin ? "npx.cmd" : "npx"
-	await execFileAsync(bin, ["tsc", "-p", "./tsconfig.test.json", "--outDir", "out"], { encoding: "utf-8" })
+	await execFileAsync(bin, ["tsc", "-p", "./tsconfig.test.json", "--incremental", "--outDir", "out"], { encoding: "utf-8" })
 }
 
 async function main() {

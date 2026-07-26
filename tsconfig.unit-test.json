@@ -1,6 +1,8 @@
 {
 	"extends": "./tsconfig.json",
 	"compilerOptions": {
+		"incremental": true,
+		"tsBuildInfoFile": "./node_modules/.tmp/tsconfig.unit-test.tsbuildinfo",
 		"module": "commonjs",
 		"moduleResolution": "node",
 		"typeRoots": [

@@ -73,6 +73,8 @@ jobs:
               with:
                   path: node_modules
                   key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+                  restore-keys: |
+                      ${{ runner.os }}-npm-
 
             # Cache webview-ui dependencies - only reuse if package-lock.json exactly matches
             - name: Cache webview-ui dependencies
@@ -81,6 +83,8 @@ jobs:
               with:
                   path: webview-ui/node_modules
                   key: ${{ runner.os }}-npm-webview-${{ hashFiles('webview-ui/package-lock.json') }}
+                  restore-keys: |
+                      ${{ runner.os }}-npm-webview-
 
             # Cache VS Code installation
             - name: Cache VS Code
