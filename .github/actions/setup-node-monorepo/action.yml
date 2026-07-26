@@ -19,12 +19,34 @@ runs:
           package-lock.json
           webview-ui/package-lock.json
 
+    - name: Cache node_modules
+      uses: actions/cache@v4
+      id: node-modules-cache
+      with:
+        path: |
+          node_modules
+          webview-ui/node_modules
+        key: node-modules-${{ runner.os }}-${{ inputs.node-version }}-${{ hashFiles('package-lock.json', 'webview-ui/package-lock.json') }}
+
+    - name: Cache build artifacts
+      uses: actions/cache@v4
+      with:
+        path: |
+          webview-ui/node_modules/.vite
+          node_modules/.cache
+          node_modules/.tmp
+        key: build-cache-${{ runner.os }}-${{ inputs.node-version }}-${{ github.sha }}
+        restore-keys: |
+          build-cache-${{ runner.os }}-${{ inputs.node-version }}-
+
     - name: Install root dependencies
+      if: steps.node-modules-cache.outputs.cache-hit != 'true'
       shell: bash
-      run: npm ci
+      run: npm ci --prefer-offline
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
 
     - name: Install webview-ui dependencies
+      if: steps.node-modules-cache.outputs.cache-hit != 'true'
       shell: bash
-      run: cd webview-ui && npm ci
+      run: cd webview-ui && npm ci --prefer-offline

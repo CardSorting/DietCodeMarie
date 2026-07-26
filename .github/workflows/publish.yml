@@ -44,20 +44,17 @@ jobs:
                   fetch-depth: 0
                   fetch-tags: true
 
-            - name: Setup Node.js
-              uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+            - name: Setup Node monorepo
+              uses: ./.github/actions/setup-node-monorepo
               with:
-                  node-version: 22
-
-            - name: Install root dependencies
-              run: npm install --include=optional
-
-            - name: Install webview-ui dependencies
-              run: cd webview-ui && npm install --include=optional
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Install native protoc on Apple Silicon
               if: runner.os == 'macOS' && runner.arch == 'ARM64'
-              run: brew install protobuf
+              env:
+                  HOMEBREW_NO_AUTO_UPDATE: "1"
+                  HOMEBREW_NO_INSTALL_CLEANUP: "1"
+              run: command -v protoc || brew install protobuf
 
             - name: Package targeted VSIX files
               env:

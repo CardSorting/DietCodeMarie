@@ -29,22 +29,17 @@ jobs:
               with:
                   fetch-depth: 0
 
-            - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+            - name: Setup Node monorepo
+              uses: ./.github/actions/setup-node-monorepo
               with:
-                  node-version: 22
-                  cache: npm
-                  cache-dependency-path: |
-                      package-lock.json
-                      webview-ui/package-lock.json
-
-            - name: Install dependencies
-              run: |
-                  npm ci
-                  cd webview-ui && npm ci
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Install native protoc on Apple Silicon
               if: runner.os == 'macOS' && runner.arch == 'ARM64'
-              run: brew install protobuf
+              env:
+                  HOMEBREW_NO_AUTO_UPDATE: "1"
+                  HOMEBREW_NO_INSTALL_CLEANUP: "1"
+              run: command -v protoc || brew install protobuf
 
             - name: Package VSIX
               run: npm run package:vsix:all
