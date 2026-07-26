@@ -71,40 +71,58 @@ const forbiddenWrites = [
 	},
 ]
 
-function walk(directory) {
-	const files = []
-	for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-		if (entry.name === "node_modules" || entry.name === "generated" || entry.name === "dist") continue
-		const absolute = path.join(directory, entry.name)
-		if (entry.isDirectory()) {
-			files.push(...walk(absolute))
-		} else if (entry.isFile() && /\.(?:ts|tsx|js|mjs)$/.test(entry.name)) {
-			files.push(absolute)
-		}
-	}
-	return files
-}
-
-const violations = []
-for (const absolute of walk(sourceRoot)) {
-	const relative = path.normalize(path.relative(root, absolute))
-	if (relative.includes(`${path.sep}__tests__${path.sep}`) || /\.(?:test|spec)\.[^.]+$/.test(relative)) continue
-	const contents = fs.readFileSync(absolute, "utf8")
-	const lines = contents.split(/\r?\n/)
-	for (const rule of forbiddenWrites) {
-		if (rule.allow?.has(relative)) continue
-		for (let index = 0; index < lines.length; index++) {
-			if (rule.pattern.test(lines[index])) {
-				violations.push(`${relative}:${index + 1}: ${rule.label}`)
+async function walkAsync(directory) {
+	const entries = await fs.promises.readdir(directory, { withFileTypes: true })
+	const files = await Promise.all(
+		entries.map(async (entry) => {
+			if (entry.name === "node_modules" || entry.name === "generated" || entry.name === "dist") return []
+			const absolute = path.join(directory, entry.name)
+			if (entry.isDirectory()) {
+				return walkAsync(absolute)
 			}
-		}
+			if (entry.isFile() && /\.(?:ts|tsx|js|mjs)$/.test(entry.name)) {
+				return [absolute]
+			}
+			return []
+		}),
+	)
+	return files.flat()
+}
+
+async function run() {
+	const allFiles = await walkAsync(sourceRoot)
+	const violations = []
+
+	await Promise.all(
+		allFiles.map(async (absolute) => {
+			const relative = path.normalize(path.relative(root, absolute))
+			if (relative.includes(`${path.sep}__tests__${path.sep}`) || /\.(?:test|spec)\.[^.]+$/.test(relative)) return
+			const contents = await fs.promises.readFile(absolute, "utf8")
+
+			for (const rule of forbiddenWrites) {
+				if (rule.allow?.has(relative)) continue
+				if (!rule.pattern.test(contents)) continue
+
+				const lines = contents.split(/\r?\n/)
+				for (let index = 0; index < lines.length; index++) {
+					if (rule.pattern.test(lines[index])) {
+						violations.push(`${relative}:${index + 1}: ${rule.label}`)
+					}
+				}
+			}
+		}),
+	)
+
+	if (violations.length > 0) {
+		console.error("Task lifecycle authority boundary violations:")
+		for (const violation of violations) console.error(`- ${violation}`)
+		process.exit(1)
 	}
+
+	console.log("Task lifecycle boundary check passed.")
 }
 
-if (violations.length > 0) {
-	console.error("Task lifecycle authority boundary violations:")
-	for (const violation of violations) console.error(`- ${violation}`)
+run().catch((err) => {
+	console.error(err)
 	process.exit(1)
-}
-
-console.log("Task lifecycle boundary check passed.")
+})
