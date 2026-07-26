@@ -56,6 +56,14 @@ function walkDocs(dir, out = []) {
 	return out
 }
 
+const fsMemo = new Map()
+function existsCached(target) {
+	if (fsMemo.has(target)) return fsMemo.get(target)
+	const res = fs.existsSync(target)
+	fsMemo.set(target, res)
+	return res
+}
+
 function resolveLink(fromFile, target) {
 	if (!target) return null
 	if (target.startsWith("file://")) {
@@ -77,15 +85,15 @@ function resolveLink(fromFile, target) {
 	if (target.startsWith("/")) {
 		const base = target.replace(/^\//, "").replace(/#.*$/, "")
 		for (const c of [path.join(docsRoot, base), `${path.join(docsRoot, base)}.md`, `${path.join(docsRoot, base)}.mdx`]) {
-			if (fs.existsSync(c)) return c
+			if (existsCached(c)) return c
 		}
 		return null
 	}
 	if (!noAnchor) return fromFile
 	const resolved = path.resolve(path.dirname(fromFile), noAnchor)
-	if (fs.existsSync(resolved)) return resolved
-	if (fs.existsSync(`${resolved}.md`)) return `${resolved}.md`
-	if (fs.existsSync(`${resolved}.mdx`)) return `${resolved}.mdx`
+	if (existsCached(resolved)) return resolved
+	if (existsCached(`${resolved}.md`)) return `${resolved}.md`
+	if (existsCached(`${resolved}.mdx`)) return `${resolved}.mdx`
 	return resolved
 }
 
@@ -104,7 +112,7 @@ const scanRoots = [
 const scanned = new Set()
 for (const sub of scanRoots) {
 	const dir = path.join(docsRoot, sub)
-	if (fs.existsSync(dir)) for (const f of walkDocs(dir)) scanned.add(f)
+	if (existsCached(dir)) for (const f of walkDocs(dir)) scanned.add(f)
 }
 for (const name of [
 	"AGENT_STACK.md",
@@ -118,30 +126,39 @@ for (const name of [
 	"MAINTAINER.md",
 ]) {
 	const full = path.join(docsRoot, name)
-	if (fs.existsSync(full)) scanned.add(full)
+	if (existsCached(full)) scanned.add(full)
 }
 
-for (const full of scanned) {
-	const rel = path.relative(docsRoot, full)
-	const content = fs.readFileSync(full, "utf8")
-	const re = new RegExp(linkPattern.source, "g")
-	let m
-	while ((m = re.exec(content))) {
-		const target = m[1]
-		if (target.startsWith("http") || target.startsWith("#") || target.startsWith("mailto:")) continue
-		if (target.includes("../broccolidb") || target.includes("broccolidb/docs")) {
-			const resolved = resolveLink(full, target)
-			if (resolved && !fs.existsSync(resolved)) broken.push(`${rel} → ${target}`)
-			continue
-		}
-		const resolved = resolveLink(full, target)
-		if (!resolved || !fs.existsSync(resolved)) broken.push(`${rel} → ${target}`)
-	}
+async function main() {
+	await Promise.all(
+		Array.from(scanned).map(async (full) => {
+			const rel = path.relative(docsRoot, full)
+			const content = await fs.promises.readFile(full, "utf8")
+			const re = new RegExp(linkPattern.source, "g")
+			let m
+			while ((m = re.exec(content))) {
+				const target = m[1]
+				if (target.startsWith("http") || target.startsWith("#") || target.startsWith("mailto:")) continue
+				if (target.includes("../broccolidb") || target.includes("broccolidb/docs")) {
+					const resolved = resolveLink(full, target)
+					if (resolved && !existsCached(resolved)) broken.push(`${rel} → ${target}`)
+					continue
+				}
+				const resolved = resolveLink(full, target)
+				if (!resolved || !existsCached(resolved)) broken.push(`${rel} → ${target}`)
+			}
+		}),
+	)
+
+	const rootIndex = await fs.promises.readFile(path.join(docsRoot, "README.md"), "utf8")
+	assert.ok(rootIndex.includes("AGENT_STACK.md"), "docs/README.md must link AGENT_STACK")
+	assert.ok(rootIndex.includes("papers/philosophy.md"), "docs/README.md must link agent papers")
+
+	assert.strictEqual(broken.length, 0, `Broken agent doc links:\n${broken.join("\n")}`)
+	console.log(`docs:check-agent-links OK — ${requiredDocs.length} required, ${scanned.size} scanned`)
 }
 
-const rootIndex = fs.readFileSync(path.join(docsRoot, "README.md"), "utf8")
-assert.ok(rootIndex.includes("AGENT_STACK.md"), "docs/README.md must link AGENT_STACK")
-assert.ok(rootIndex.includes("papers/philosophy.md"), "docs/README.md must link agent papers")
-
-assert.strictEqual(broken.length, 0, `Broken agent doc links:\n${broken.join("\n")}`)
-console.log(`docs:check-agent-links OK — ${requiredDocs.length} required, ${scanned.size} scanned`)
+main().catch((err) => {
+	console.error(err)
+	process.exit(1)
+})
