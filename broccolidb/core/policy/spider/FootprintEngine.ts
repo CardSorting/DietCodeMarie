@@ -21,32 +21,19 @@ const hashText = (value: string): string =>
 const signatureFromNode = (node: ts.Node, sourceFile: ts.SourceFile): string => {
   if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) {
     const name = node.name?.getText(sourceFile) ?? 'anonymous';
-    let params = '';
-    for (let i = 0; i < node.parameters.length; i++) {
-      if (i > 0) params += ',';
-      params += node.parameters[i].getText(sourceFile);
-    }
+    const params = node.parameters.map((p) => p.getText(sourceFile)).join(',');
     return `fn:${name}(${params})`;
   }
   if (ts.isClassDeclaration(node)) {
     const name = node.name?.getText(sourceFile) ?? 'anonymous';
-    let members = '';
-    for (let i = 0; i < node.members.length; i++) {
-      if (i > 0) members += ',';
-      members += node.members[i].kind;
-    }
+    const members = node.members.map((m) => m.kind).join(',');
     return `class:${name}{${members}}`;
   }
   if (ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) || ts.isEnumDeclaration(node)) {
     return `${node.kind}:${node.name?.getText(sourceFile) ?? 'anonymous'}`;
   }
   if (ts.isVariableStatement(node)) {
-    let decls = '';
-    const declList = node.declarationList.declarations;
-    for (let i = 0; i < declList.length; i++) {
-      if (i > 0) decls += ';';
-      decls += declList[i].getText(sourceFile);
-    }
+    const decls = node.declarationList.declarations.map((d) => d.getText(sourceFile)).join(';');
     return decls;
   }
   return node.getText(sourceFile).slice(0, 120);

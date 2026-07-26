@@ -10,6 +10,9 @@ const asNonEmptyString = (value: unknown): string | null => {
 	return trimmed.length > 0 ? trimmed : null
 }
 
+const REGEX_TSCONFIG_COMMENTS = /\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g;
+const REGEX_TRAILING_COMMAS = /,(\s*[}\]])/g;
+
 export function isTypeScriptFile(filePath: string): boolean {
 	const len = filePath.length
 	if (len < 3) return false
@@ -46,8 +49,8 @@ export class PathResolver {
 				const raw = fs.readFileSync(tsconfigPath, "utf-8")
 				// V160: Industrial JSON sanitization (String-aware)
 				// Strips comments while respecting quoted strings
-				const cleanJson = raw.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g, (m, g1) => g1 ? "" : m)
-					.replace(/,(\s*[}\]])/g, "$1")
+				const cleanJson = raw.replace(REGEX_TSCONFIG_COMMENTS, (m, g1) => g1 ? "" : m)
+					.replace(REGEX_TRAILING_COMMAS, "$1")
 				const config = JSON.parse(cleanJson)
 				const paths = config.compilerOptions?.paths
 				if (paths) {
@@ -93,7 +96,7 @@ export class PathResolver {
 		if (safeSpecifier.startsWith(".")) {
 			const abs = path.resolve(this.cwd, path.dirname(safeSourcePath), safeSpecifier)
 			const rel = this.canonicalize(abs)
-			if (nodeIds instanceof Set ? nodeIds.has(rel) : nodeIds.has(rel)) result = rel
+			if (nodeIds.has(rel)) result = rel
 			else if (nodeIds.has(`${rel}.ts`)) result = `${rel}.ts`
 			else if (nodeIds.has(`${rel}.tsx`)) result = `${rel}.tsx`
 			else {
