@@ -23,6 +23,8 @@ export function isTypeScriptFile(filePath: string): boolean {
 	)
 }
 
+const EXTENSIONS = ["", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx", "/index.js"] as const;
+
 export class PathResolver {
 	private dynamicAliases: Map<string, string> = new Map()
 	private resolutionCache: Map<string, Map<string, string | null>> = new Map()
@@ -56,8 +58,8 @@ export class PathResolver {
 				if (paths) {
 					for (const [alias, targets] of Object.entries(paths)) {
 						if (!Array.isArray(targets) || targets.length === 0) continue
-						const cleanAlias = alias.replace("/*", "")
-						const target = targets[0].replace("/*", "")
+						const cleanAlias = alias.endsWith("/*") ? alias.slice(0, -2) : alias
+						const target = targets[0].endsWith("/*") ? targets[0].slice(0, -2) : targets[0]
 						this.dynamicAliases.set(cleanAlias, target)
 					}
 					Logger.info(`[PathResolver] Dynamically loaded ${this.dynamicAliases.size} aliases from tsconfig.json.`)
@@ -111,7 +113,7 @@ export class PathResolver {
 			for (const [alias, target] of this.dynamicAliases) {
 				if (safeSpecifier.startsWith(alias)) {
 					const rel = safeSpecifier.replace(alias, target).replace(/\\/g, "/")
-					if (nodeIds instanceof Set ? nodeIds.has(rel) : nodeIds.has(rel)) result = rel
+					if (nodeIds.has(rel)) result = rel
 					else if (nodeIds.has(`${rel}.ts`)) result = `${rel}.ts`
 					else if (nodeIds.has(`${rel}.tsx`)) result = `${rel}.tsx`
 					else {
@@ -156,8 +158,7 @@ export class PathResolver {
 		}
 
 		// V18: Standardized extension retry logic across all engines
-		const extensions = ["", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx", "/index.js"]
-		for (const ext of extensions) {
+		for (const ext of EXTENSIONS) {
 			const full = (absPath.endsWith("/") && ext.startsWith("/") ? absPath.slice(0, -1) : absPath) + ext
 			if (fs.existsSync(full) && fs.statSync(full).isFile()) return full
 		}
