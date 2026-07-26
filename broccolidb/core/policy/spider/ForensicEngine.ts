@@ -54,7 +54,16 @@ export class ForensicEngine {
 		if (snapshots.length < 3) return 0
 		const history: SpiderNode[] = []
 		for (let i = 0; i < snapshots.length; i++) {
-			const n = snapshots[i].nodes.find((sn: SpiderNode) => sn.id === node.id)
+			const snap = snapshots[i] as SpiderSnapshot & { _nodeIndexMap?: Map<string, SpiderNode> }
+			let nodeMap = snap._nodeIndexMap
+			if (!nodeMap) {
+				nodeMap = new Map<string, SpiderNode>()
+				for (let j = 0; j < snap.nodes.length; j++) {
+					nodeMap.set(snap.nodes[j].id, snap.nodes[j])
+				}
+				snap._nodeIndexMap = nodeMap
+			}
+			const n = nodeMap.get(node.id)
 			if (n) history.push(n)
 		}
 		if (history.length < 3) return 0

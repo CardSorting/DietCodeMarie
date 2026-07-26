@@ -9,6 +9,26 @@ export interface SymbolProvider {
     footprint: string;
 }
 
+// Strictly Monomorphic Class Layout (Guarantees V8 Hidden Class Shape Stability)
+export class SymbolProviderEntry implements SymbolProvider {
+    public readonly symbolName: string;
+    public readonly filePath: string;
+    public readonly type: 'CLASS' | 'FUNCTION' | 'INTERFACE' | 'TYPE' | 'CONST';
+    public readonly footprint: string;
+
+    constructor(
+        symbolName: string,
+        filePath: string,
+        type: 'CLASS' | 'FUNCTION' | 'INTERFACE' | 'TYPE' | 'CONST',
+        footprint: string
+    ) {
+        this.symbolName = symbolName;
+        this.filePath = filePath;
+        this.type = type;
+        this.footprint = footprint;
+    }
+}
+
 /**
  * SymbolRegistry: A deterministic index of all exported symbols in the project.
  * Replaces 'Ghost Mapping' with strict, traceable accounting.

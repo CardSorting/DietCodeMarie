@@ -46,8 +46,7 @@ export class DiskParityEngine {
         } else {
           const content = fs.readFileSync(absolutePath);
           diskHash = this.hashFileContent(content);
-          const md5Anchor = crypto.createHash('md5').update(content).digest('hex');
-          const graphMatchesDisk = md5Anchor === node.hash;
+          const graphMatchesDisk = diskHash === node.hash || (node.hash.length === 32 && crypto.createHash('md5').update(content).digest('hex') === node.hash);
           graphHash = graphMatchesDisk ? diskHash : this.sha256Hex(node.hash);
           driftStatus = graphMatchesDisk ? 'clean' : 'drifted';
         }

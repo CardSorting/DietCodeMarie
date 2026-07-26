@@ -31,44 +31,38 @@ export class MetricsEngine {
 			}
 		}
 
-		let sumComp = 0
-		let sumCoup = 0
-		let sumSize = 0
+		let count = 0
+		let meanComp = 0, M2Comp = 0
+		let meanCoup = 0, M2Coup = 0
+		let meanSize = 0, M2Size = 0
+
 		const couplings: number[] = new Array(totalFiles)
-		let idx = 0
 
 		for (const node of nodes.values()) {
+			count++
 			const comp = node.astComplexity || 0
 			const coup = node.afferentCoupling || 0
 			const sz = comp / 10 + (node.exports ? node.exports.length * 5 : 0)
 
-			sumComp += comp
-			sumCoup += coup
-			sumSize += sz
-			couplings[idx++] = coup
-		}
+			couplings[count - 1] = coup
 
-		const meanComp = sumComp / totalFiles
-		const meanCoup = sumCoup / totalFiles
-		const meanSize = sumSize / totalFiles
+			const deltaComp = comp - meanComp
+			meanComp += deltaComp / count
+			M2Comp += deltaComp * (comp - meanComp)
 
-		let varComp = 0
-		let varCoup = 0
-		let varSize = 0
-		for (const node of nodes.values()) {
-			const comp = node.astComplexity || 0
-			const coup = node.afferentCoupling || 0
-			const sz = comp / 10 + (node.exports ? node.exports.length * 5 : 0)
+			const deltaCoup = coup - meanCoup
+			meanCoup += deltaCoup / count
+			M2Coup += deltaCoup * (coup - meanCoup)
 
-			varComp += (comp - meanComp) ** 2
-			varCoup += (coup - meanCoup) ** 2
-			varSize += (sz - meanSize) ** 2
+			const deltaSize = sz - meanSize
+			meanSize += deltaSize / count
+			M2Size += deltaSize * (sz - meanSize)
 		}
 
 		return {
-			complexity: { mean: meanComp, stdDev: Math.sqrt(varComp / totalFiles) },
-			coupling: { mean: meanCoup, stdDev: Math.sqrt(varCoup / totalFiles) },
-			size: { mean: meanSize, stdDev: Math.sqrt(varSize / totalFiles) },
+			complexity: { mean: meanComp, stdDev: Math.sqrt(Math.max(0, M2Comp / totalFiles)) },
+			coupling: { mean: meanCoup, stdDev: Math.sqrt(Math.max(0, M2Coup / totalFiles)) },
+			size: { mean: meanSize, stdDev: Math.sqrt(Math.max(0, M2Size / totalFiles)) },
 			giniCoefficient: this.calculateGiniCoefficient(couplings),
 		}
 	}
