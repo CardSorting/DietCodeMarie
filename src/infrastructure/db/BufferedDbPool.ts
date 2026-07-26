@@ -66,6 +66,33 @@ export type WriteOp = {
 	dedupKey?: string
 }
 
+/**
+ * Factory creating monomorphic WriteOp instances with constant V8 property layout.
+ */
+export function createMonomorphicWriteOp(
+	type: WriteOp["type"],
+	table: keyof Schema,
+	values?: Record<string, unknown | Increment>,
+	where?: WhereCondition | WhereCondition[],
+	conflictTarget?: string | string[],
+	agentId?: string,
+	layer?: DbLayer,
+	hasIncrements?: boolean,
+	dedupKey?: string,
+): WriteOp {
+	return {
+		type,
+		table,
+		values,
+		where,
+		conflictTarget,
+		agentId,
+		layer,
+		hasIncrements,
+		dedupKey,
+	}
+}
+
 const LAYER_PRIORITY: Record<DbLayer, number> = {
 	domain: 0,
 	infrastructure: 1,

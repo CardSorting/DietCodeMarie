@@ -80,10 +80,12 @@ export class SubagentTranscriptRecorder {
 			payload,
 			checksum: "",
 		}
-		const serialized = JSON.stringify(event)
-		event.checksum = computeTranscriptLineChecksum(serialized)
+		const baseSerialized = JSON.stringify(event)
+		event.checksum = computeTranscriptLineChecksum(baseSerialized)
 
-		const nextByteSize = this.byteSize + Buffer.byteLength(JSON.stringify(event), "utf8")
+		const finalSerialized = JSON.stringify(event)
+		const lineBytes = Buffer.byteLength(finalSerialized, "utf8")
+		const nextByteSize = this.byteSize + lineBytes
 		if (nextByteSize > TRANSCRIPT_MAX_BYTES) {
 			throw new Error(`Transcript byte limit exceeded (${TRANSCRIPT_MAX_BYTES})`)
 		}
