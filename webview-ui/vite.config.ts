@@ -70,9 +70,14 @@ export default defineConfig({
 			],
 		},
 	},
+	esbuild: {
+		legalComments: "none",
+		target: "es2022",
+	},
 	build: {
 		target: "es2022",
 		outDir: "build",
+		modulePreload: false,
 		reportCompressedSize: false,
 		cssMinify: "esbuild",
 		// Only minify in production build

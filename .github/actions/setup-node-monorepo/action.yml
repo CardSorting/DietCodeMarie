@@ -46,7 +46,7 @@ runs:
 
     - name: Set Node memory and cache limits
       shell: bash
-      run: echo "NODE_OPTIONS=--max-old-space-size=8192 --max-semi-space-size=128" >> $GITHUB_ENV
+      run: echo "NODE_OPTIONS=--max-old-space-size=4096 --max-semi-space-size=64" >> $GITHUB_ENV
 
     - name: Install root dependencies
       if: steps.node-modules-cache.outputs.cache-hit != 'true'

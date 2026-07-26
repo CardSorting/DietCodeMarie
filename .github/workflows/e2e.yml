@@ -61,63 +61,10 @@ jobs:
             contents: read
         steps:
             - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-            - name: Setup Node.js environment
-              uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+            - name: Setup Node monorepo
+              uses: ./.github/actions/setup-node-monorepo
               with:
-                  node-version: 22
-
-            # Cache root dependencies - only reuse if package-lock.json exactly matches
-            - name: Cache root dependencies
-              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-              id: root-cache
-              with:
-                  path: node_modules
-                  key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
-                  restore-keys: |
-                      ${{ runner.os }}-npm-
-
-            # Cache webview-ui dependencies - only reuse if package-lock.json exactly matches
-            - name: Cache webview-ui dependencies
-              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-              id: webview-cache
-              with:
-                  path: webview-ui/node_modules
-                  key: ${{ runner.os }}-npm-webview-${{ hashFiles('webview-ui/package-lock.json') }}
-                  restore-keys: |
-                      ${{ runner.os }}-npm-webview-
-
-            # Cache VS Code installation
-            - name: Cache VS Code
-              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-              id: vscode-cache
-              with:
-                  path: .vscode-test
-                  key: vscode-${{ runner.os }}-stable-${{ hashFiles('.vscode-test.mjs', 'package.json') }}
-                  restore-keys: |
-                      vscode-${{ runner.os }}-stable-
-
-            # Cache Playwright browsers
-            - name: Cache Playwright browsers
-              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-              id: playwright-cache
-              with:
-                  path: |
-                      ~/.cache/ms-playwright
-                      ~/Library/Caches/ms-playwright
-                      ~/AppData/Local/ms-playwright
-                  key: playwright-browsers-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-                  restore-keys: |
-                      playwright-browsers-${{ runner.os }}-
-
-            - name: Install root dependencies
-              if: steps.root-cache.outputs.cache-hit != 'true'
-              run: npm ci --prefer-offline
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Install webview-ui dependencies
-              if: steps.webview-cache.outputs.cache-hit != 'true'
-              run: cd webview-ui && npm ci --prefer-offline
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Install vsce
               run: npm install -g @vscode/vsce@3.2.1

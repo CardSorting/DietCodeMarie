@@ -29,81 +29,37 @@ const aliasResolverPlugin = {
 			return res
 		}
 
-		const aliases = {
-			"@": path.resolve(__dirname, "src"),
-			"@core": path.resolve(__dirname, "src/core"),
-			"@generated": path.resolve(__dirname, "src/generated"),
-			"@hosts": path.resolve(__dirname, "src/hosts"),
-			"@integrations": path.resolve(__dirname, "src/integrations"),
-			"@services": path.resolve(__dirname, "src/services"),
-			"@shared": path.resolve(__dirname, "src/shared"),
-			"@utils": path.resolve(__dirname, "src/utils"),
-			"@packages": path.resolve(__dirname, "src/packages"),
-		}
+		// Handle relative and aliased .js/.jsx -> .ts/.tsx mapping
+		build.onResolve({ filter: /\.jsx?$/ }, (args) => {
+			if (args.path.startsWith(".") || args.path.startsWith("@")) {
+				let resolvedPath = args.path
+				if (args.path.startsWith("@")) {
+					const aliasMap = {
+						"@/": "src/",
+						"@core/": "src/core/",
+						"@generated/": "src/generated/",
+						"@hosts/": "src/hosts/",
+						"@integrations/": "src/integrations/",
+						"@services/": "src/services/",
+						"@shared/": "src/shared/",
+						"@utils/": "src/utils/",
+						"@packages/": "src/packages/",
+					}
+					for (const [prefix, target] of Object.entries(aliasMap)) {
+						if (args.path.startsWith(prefix)) {
+							resolvedPath = path.resolve(__dirname, args.path.replace(prefix, target))
+							break
+						}
+					}
+				} else {
+					resolvedPath = path.resolve(args.resolveDir, args.path)
+				}
 
-		const statMemo = new Map()
-		const cachedStat = (target) => {
-			const key = path.normalize(target)
-			if (statMemo.has(key)) return statMemo.get(key)
-			const res = fs.statSync(key)
-			statMemo.set(key, res)
-			return res
-		}
-
-		// Handle relative .js/.jsx -> .ts/.tsx mapping
-		build.onResolve({ filter: /^\.\.?\// }, (args) => {
-			if (args.path.endsWith(".js") || args.path.endsWith(".jsx")) {
-				const tsPath = path.resolve(args.resolveDir, args.path.replace(/\.js$/, ".ts").replace(/\.jsx$/, ".tsx"))
+				const tsPath = resolvedPath.replace(/\.js$/, ".ts").replace(/\.jsx$/, ".tsx")
 				if (cachedExists(tsPath)) {
 					return { path: tsPath }
 				}
 			}
-		})
-
-		// For each alias entry, create a resolver
-		Object.entries(aliases).forEach(([alias, aliasPath]) => {
-			const aliasRegex = new RegExp(`^${alias}($|/.*)`)
-			build.onResolve({ filter: aliasRegex }, (args) => {
-				const importPath = args.path.replace(alias, aliasPath)
-
-				// If it's a file ending in .js/.jsx, try to find the .ts/.tsx equivalent first
-				if (importPath.endsWith(".js") || importPath.endsWith(".jsx")) {
-					const tsPath = importPath.replace(/\.js$/, ".ts").replace(/\.jsx$/, ".tsx")
-					if (cachedExists(tsPath)) {
-						return { path: tsPath }
-					}
-				}
-
-				// First, check if the path exists as is
-				if (cachedExists(importPath)) {
-					const stats = cachedStat(importPath)
-					if (stats.isDirectory()) {
-						// If it's a directory, try to find index files
-						const extensions = [".ts", ".tsx", ".js", ".jsx"]
-						for (const ext of extensions) {
-							const indexFile = path.join(importPath, `index${ext}`)
-							if (cachedExists(indexFile)) {
-								return { path: indexFile }
-							}
-						}
-					} else {
-						// It's a file that exists, so return it
-						return { path: importPath }
-					}
-				}
-
-				// If the path doesn't exist, try appending extensions
-				const extensions = [".ts", ".tsx", ".js", ".jsx"]
-				for (const ext of extensions) {
-					const pathWithExtension = `${importPath}${ext}`
-					if (cachedExists(pathWithExtension)) {
-						return { path: pathWithExtension }
-					}
-				}
-
-				// If nothing worked, return the original path and let esbuild handle the error
-				return { path: importPath }
-			})
 		})
 	},
 }

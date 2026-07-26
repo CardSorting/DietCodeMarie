@@ -45,10 +45,13 @@ const { execFile } = require("child_process")
 const { promisify } = require("util")
 const execFileAsync = promisify(execFile)
 
+const path = require("path")
+
 async function runTsc() {
-	const isWin = process.platform === "win32"
-	const bin = isWin ? "npx.cmd" : "npx"
-	await execFileAsync(bin, ["tsc", "-p", "./tsconfig.test.json", "--incremental", "--outDir", "out"], { encoding: "utf-8" })
+	const tscBin = path.join(__dirname, "..", "node_modules", "typescript", "bin", "tsc")
+	await execFileAsync(process.execPath, [tscBin, "-p", "./tsconfig.test.json", "--incremental", "--outDir", "out"], {
+		encoding: "utf-8",
+	})
 }
 
 async function main() {

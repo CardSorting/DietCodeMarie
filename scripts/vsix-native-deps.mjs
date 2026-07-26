@@ -25,17 +25,27 @@ export const EXPECTED_ELECTRON_ABI = 140
 
 export const NATIVE_VSIX_TARGETS = ["win32-x64", "win32-arm64", "linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64"]
 
+const abiMemo = new Map()
+
 export function detectBinaryAbi(binaryPath) {
 	try {
+		const stat = fs.statSync(binaryPath)
+		const memoKey = `${binaryPath}:${stat.mtimeMs}:${stat.size}`
+		if (abiMemo.has(memoKey)) return abiMemo.get(memoKey)
+
 		execFileSync(process.execPath, ["-e", `require(${JSON.stringify(binaryPath)})`], { stdio: "pipe" })
-		return Number.parseInt(process.versions.modules, 10)
+		const abi = Number.parseInt(process.versions.modules, 10)
+		abiMemo.set(memoKey, abi)
+		return abi
 	} catch (error) {
 		const stderr = error.stderr?.toString() || error.message || ""
 		const match = stderr.match(/NODE_MODULE_VERSION\s+(\d+)/)
-		if (match) {
-			return Number.parseInt(match[1], 10)
-		}
-		return null
+		const abi = match ? Number.parseInt(match[1], 10) : null
+		try {
+			const stat = fs.statSync(binaryPath)
+			abiMemo.set(`${binaryPath}:${stat.mtimeMs}:${stat.size}`, abi)
+		} catch {}
+		return abi
 	}
 }
 
@@ -96,7 +106,11 @@ export const OPENVSX_VSCODEIGNORE_MARKERS = [
  * @typedef {{ id: string, status: CheckStatus, title: string, detail?: string, fix?: string[] }} HealthCheck
  */
 
+let rebuiltThisProcess = false
 export function rebuildBetterSqlite3(repoRoot) {
+	if (rebuiltThisProcess) {
+		return
+	}
 	const binaryPath = path.join(repoRoot, INSTALLED_NATIVE_MODULE_RELATIVE)
 	if (fs.existsSync(binaryPath)) {
 		try {
@@ -104,6 +118,7 @@ export function rebuildBetterSqlite3(repoRoot) {
 			if (stat.size >= MIN_NATIVE_BINARY_BYTES) {
 				const abi = detectBinaryAbi(binaryPath)
 				if (abi === EXPECTED_ELECTRON_ABI) {
+					rebuiltThisProcess = true
 					console.log(`[vsix] better-sqlite3 already compiled for Electron ABI ${EXPECTED_ELECTRON_ABI} (cached).`)
 					return
 				}
@@ -116,6 +131,7 @@ export function rebuildBetterSqlite3(repoRoot) {
 		cwd: repoRoot,
 		shell: process.platform === "win32",
 	})
+	rebuiltThisProcess = true
 }
 
 function listVsixEntries(vsixPath) {
