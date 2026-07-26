@@ -40,31 +40,54 @@ const allowPatterns = [
 
 const violations = []
 
-function walk(dir, out = []) {
-	for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
-		const full = path.join(dir, ent.name)
-		if (ent.isDirectory()) walk(full, out)
-		else if (/\.(md|mdx)$/.test(ent.name)) out.push(full)
-	}
-	return out
-}
-
-for (const sub of scanDirs) {
-	const dir = path.join(docsRoot, sub)
-	if (!fs.existsSync(dir)) continue
-	for (const full of walk(dir)) {
-		const rel = path.relative(docsRoot, full)
-		if (rel === "provider-config/README.mdx") continue
-		const content = fs.readFileSync(full, "utf8")
-		if (content.includes("Legacy reference:")) continue
-		const lines = content.split("\n")
-		lines.forEach((line, i) => {
-			if (!/\bDietCode\b/.test(line)) return
-			if (allowPatterns.some((p) => p.test(line))) return
-			violations.push(`${rel}:${i + 1}: ${line.trim().slice(0, 100)}`)
-		})
+async function walkAsync(dir) {
+	try {
+		const entries = await fs.promises.readdir(dir, { withFileTypes: true })
+		const files = await Promise.all(
+			entries.map(async (ent) => {
+				const full = path.join(dir, ent.name)
+				if (ent.isDirectory()) return walkAsync(full)
+				if (/\.(md|mdx)$/.test(ent.name)) return [full]
+				return []
+			}),
+		)
+		return files.flat()
+	} catch {
+		return []
 	}
 }
 
-assert.strictEqual(violations.length, 0, `Stale DietCode branding in user docs:\n${violations.join("\n")}`)
-console.log("docs:check-agent-branding OK")
+async function main() {
+	const allFiles = (
+		await Promise.all(
+			scanDirs.map(async (sub) => {
+				const dir = path.join(docsRoot, sub)
+				return walkAsync(dir)
+			}),
+		)
+	).flat()
+
+	await Promise.all(
+		allFiles.map(async (full) => {
+			const rel = path.relative(docsRoot, full)
+			if (rel === "provider-config/README.mdx") return
+			const content = await fs.promises.readFile(full, "utf8")
+			if (!content.includes("DietCode") || content.includes("Legacy reference:")) return
+
+			const lines = content.split("\n")
+			lines.forEach((line, i) => {
+				if (!/\bDietCode\b/.test(line)) return
+				if (allowPatterns.some((p) => p.test(line))) return
+				violations.push(`${rel}:${i + 1}: ${line.trim().slice(0, 100)}`)
+			})
+		}),
+	)
+
+	assert.strictEqual(violations.length, 0, `Stale DietCode branding in user docs:\n${violations.join("\n")}`)
+	console.log("docs:check-agent-branding OK")
+}
+
+main().catch((err) => {
+	console.error(err)
+	process.exit(1)
+})
