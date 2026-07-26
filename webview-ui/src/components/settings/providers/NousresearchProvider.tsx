@@ -1,5 +1,6 @@
-import { nousResearchModels } from "@shared/api"
+import { type ModelInfo, nousResearchModels } from "@shared/api"
 import { Mode } from "@shared/storage/types"
+import { useMount } from "react-use"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { ModelInfoView } from "../common/ModelInfoView"
@@ -20,17 +21,41 @@ interface NousResearchProviderProps {
  * The NousResearch provider configuration component
  */
 export const NousResearchProvider = ({ showModelOptions, isPopup, currentMode }: NousResearchProviderProps) => {
-	const { apiConfiguration } = useExtensionState()
-	const { handleFieldChange, handleModeFieldChange } = useApiConfigurationHandlers()
+	const { apiConfiguration, nousResearchModels: nousResearchModelsState, refreshNousResearchModels } = useExtensionState()
+	const { handleFieldChange, handleModeFieldsChange } = useApiConfigurationHandlers()
+
+	useMount(() => {
+		refreshNousResearchModels()
+	})
+
+	const models: Record<string, ModelInfo> =
+		nousResearchModelsState && Object.keys(nousResearchModelsState).length > 0 ? nousResearchModelsState : nousResearchModels
 
 	// Get the normalized configuration
 	const { selectedModelId, selectedModelInfo } = normalizeApiConfiguration(apiConfiguration, currentMode)
+
+	const handleModelChange = (newModelId: string) => {
+		handleModeFieldsChange(
+			{
+				nousResearchModelId: { plan: "planModeNousResearchModelId", act: "actModeNousResearchModelId" },
+				nousResearchModelInfo: { plan: "planModeNousResearchModelInfo", act: "actModeNousResearchModelInfo" },
+			},
+			{
+				nousResearchModelId: newModelId,
+				nousResearchModelInfo: models[newModelId],
+			},
+			currentMode,
+		)
+	}
 
 	return (
 		<div>
 			<ApiKeyField
 				initialValue={apiConfiguration?.nousResearchApiKey || ""}
-				onChange={(value) => handleFieldChange("nousResearchApiKey", value)}
+				onChange={(value) => {
+					handleFieldChange("nousResearchApiKey", value)
+					refreshNousResearchModels()
+				}}
 				providerName="NousResearch"
 			/>
 
@@ -38,14 +63,8 @@ export const NousResearchProvider = ({ showModelOptions, isPopup, currentMode }:
 				<>
 					<ModelSelector
 						label="Model"
-						models={nousResearchModels}
-						onChange={(e: any) =>
-							handleModeFieldChange(
-								{ plan: "planModeNousResearchModelId", act: "actModeNousResearchModelId" },
-								e.target.value,
-								currentMode,
-							)
-						}
+						models={models}
+						onChange={(e: any) => handleModelChange(e.target.value)}
 						selectedModelId={selectedModelId}
 					/>
 

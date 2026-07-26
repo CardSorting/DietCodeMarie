@@ -1,6 +1,8 @@
 import { ModelInfo } from "@shared/api"
 import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
+import { useMemo, useState } from "react"
 import styled from "styled-components"
+import { getModelBadges, isRecentModel, ModelFilterTabs, type ModelFilterType } from "./ModelTypeTab"
 
 /**
  * Container for dropdowns that ensures proper z-index handling
@@ -30,35 +32,63 @@ interface ModelSelectorProps {
 	onChange: (e: any) => void
 	zIndex?: number
 	label?: string
+	initialFilterTab?: ModelFilterType
 }
 
-/*
-OG Saoud Note:
-
-	VSCodeDropdown has an open bug where dynamically rendered options don't auto select the provided value prop. You can see this for yourself by comparing  it with normal select/option elements, which work as expected.
-	https://github.com/microsoft/vscode-webview-ui-toolkit/issues/433
-
-	In our case, when the user switches between providers, we recalculate the selectedModelId depending on the provider, the default model for that provider, and a modelId that the user may have selected. Unfortunately, the VSCodeDropdown component wouldn't select this calculated value, and would default to the first "Select a model..." option instead, which makes it seem like the model was cleared out when it wasn't.
-
-	As a workaround, we create separate instances of the dropdown for each provider, and then conditionally render the one that matches the current provider.
-	*/
-
 /**
- * A reusable component for selecting models from a dropdown
+ * A reusable component for selecting models from a dropdown with capability breakdown & pricing filtering tabs
  */
-export const ModelSelector = ({ models, selectedModelId, onChange, zIndex, label = "Model" }: ModelSelectorProps) => {
+export const ModelSelector = ({
+	models,
+	selectedModelId,
+	onChange,
+	zIndex,
+	label = "Model",
+	initialFilterTab = "all",
+}: ModelSelectorProps) => {
+	const [activeFilter, setActiveFilter] = useState<ModelFilterType>(initialFilterTab)
+
+	// Filter models based on active filter tab
+	const filteredModels = useMemo(() => {
+		if (activeFilter === "all") return models
+		const result: Record<string, ModelInfo> = {}
+		for (const [id, info] of Object.entries(models)) {
+			if (activeFilter === "recent" && isRecentModel(id, info)) {
+				result[id] = info
+			}
+		}
+		return result
+	}, [models, activeFilter])
+
+	// If selectedModelId exists in original models but not in filteredModels, include it so choice is not lost
+	const displayModels = useMemo(() => {
+		if (selectedModelId && models[selectedModelId] && !(selectedModelId in filteredModels)) {
+			return { [selectedModelId]: models[selectedModelId], ...filteredModels }
+		}
+		return filteredModels
+	}, [filteredModels, selectedModelId, models])
+
+	const modelKeys = Object.keys(models)
+
 	return (
 		<DropdownContainer className="dropdown-container" zIndex={zIndex}>
 			<label htmlFor="model-id">
 				<span className="font-medium">{label}</span>
 			</label>
+
+			{modelKeys.length > 1 && <ModelFilterTabs activeTab={activeFilter} models={models} onTabChange={setActiveFilter} />}
+
 			<VSCodeDropdown className="w-full" id="model-id" onChange={onChange} value={selectedModelId}>
 				<VSCodeOption value="">Select a model...</VSCodeOption>
-				{Object.keys(models).map((modelId) => (
-					<VSCodeOption className="break-words whitespace-normal max-w-full" key={modelId} value={modelId}>
-						{modelId}
-					</VSCodeOption>
-				))}
+				{Object.keys(displayModels).map((modelId) => {
+					const badges = getModelBadges(modelId, displayModels[modelId])
+					const badgeText = badges.length > 0 ? ` (${badges.join(", ")})` : ""
+					return (
+						<VSCodeOption className="break-words whitespace-normal max-w-full" key={modelId} value={modelId}>
+							{modelId} {badgeText}
+						</VSCodeOption>
+					)
+				})}
 			</VSCodeDropdown>
 		</DropdownContainer>
 	)

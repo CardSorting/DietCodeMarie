@@ -13,6 +13,7 @@ import { StateServiceClient } from "@/services/grpc-client"
 import { highlight } from "../history/HistoryView"
 import { ContextWindowSwitcher } from "./common/ContextWindowSwitcher"
 import { ModelInfoView } from "./common/ModelInfoView"
+import { isRecentModel, ModelFilterTabs, type ModelFilterType } from "./common/ModelTypeTab"
 import ReasoningEffortSelector from "./ReasoningEffortSelector"
 import ThinkingBudgetSlider from "./ThinkingBudgetSlider"
 import {
@@ -54,6 +55,7 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 	const { handleModeFieldsChange, handleFieldChange } = useApiConfigurationHandlers()
 	const { apiConfiguration, favoritedModelIds, openRouterModels, refreshOpenRouterModels } = useExtensionState()
 	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
+	const [activeFilter, setActiveFilter] = useState<ModelFilterType>("all")
 	const [searchTerm, setSearchTerm] = useState(modeFields.openRouterModelId || openRouterDefaultModelId)
 	const [isDropdownVisible, setIsDropdownVisible] = useState(false)
 	const [selectedIndex, setSelectedIndex] = useState(-1)
@@ -135,16 +137,21 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 		// IMPORTANT: highlightjs has a bug where if you use sort/localCompare - "// results.sort((a, b) => a.id.localeCompare(b.id)) ...sorting like this causes ids in objects to be reordered and mismatched"
 
 		// First, get all favorited models
-		const favoritedModels = searchableItems.filter((item) => favoritedModelIds.includes(item.id))
+		let favoritedModels = searchableItems.filter((item) => favoritedModelIds.includes(item.id))
 
 		// Then get search results for non-favorited models
-		const searchResults = searchTerm
+		let searchResults = searchTerm
 			? highlight(fuse.search(searchTerm), "model-item-highlight").filter((item) => !favoritedModelIds.includes(item.id))
 			: searchableItems.filter((item) => !favoritedModelIds.includes(item.id))
 
+		if (activeFilter === "recent") {
+			favoritedModels = favoritedModels.filter((item) => isRecentModel(item.id, openRouterModels[item.id]))
+			searchResults = searchResults.filter((item) => isRecentModel(item.id, openRouterModels[item.id]))
+		}
+
 		// Combine favorited models with search results
 		return [...favoritedModels, ...searchResults]
-	}, [searchableItems, searchTerm, fuse, favoritedModelIds])
+	}, [searchableItems, searchTerm, fuse, favoritedModelIds, activeFilter, openRouterModels])
 
 	const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
 		if (!isDropdownVisible) {
@@ -242,6 +249,8 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 				<label htmlFor="model-search">
 					<span style={{ fontWeight: 500 }}>Model</span>
 				</label>
+
+				<ModelFilterTabs activeTab={activeFilter} models={openRouterModels} onTabChange={setActiveFilter} />
 
 				<DropdownWrapper ref={dropdownRef}>
 					<VSCodeTextField

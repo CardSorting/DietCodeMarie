@@ -66,6 +66,9 @@ function createHandlerForProvider(
 			return new NousResearchHandler({
 				onRetryAttempt: options.onRetryAttempt,
 				nousResearchApiKey: options.nousResearchApiKey,
+				nousResearchModelId: mode === "plan" ? options.planModeNousResearchModelId : options.actModeNousResearchModelId,
+				nousResearchModelInfo:
+					mode === "plan" ? options.planModeNousResearchModelInfo : options.actModeNousResearchModelInfo,
 				apiModelId: mode === "plan" ? options.planModeNousResearchModelId : options.actModeNousResearchModelId,
 			})
 		case "cline-pass":

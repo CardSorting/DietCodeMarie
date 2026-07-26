@@ -11,6 +11,7 @@ import { refreshDietCodeModels } from "../models/refreshDietCodeModels"
 import { refreshGroqModels } from "../models/refreshGroqModels"
 import { refreshHicapModels } from "../models/refreshHicapModels"
 import { refreshLiteLlmModels } from "../models/refreshLiteLlmModels"
+import { refreshNousResearchModels } from "../models/refreshNousResearchModels"
 import { refreshOpenRouterModels } from "../models/refreshOpenRouterModels"
 import { sendOpenRouterModelsEvent } from "../models/subscribeToOpenRouterModels"
 
@@ -190,6 +191,42 @@ export async function initializeWebview(controller: Controller, _request: EmptyR
 
 					// Post state update if we updated any model info
 					if ((planModelId && models[planModelId]) || (actModelId && models[actModelId])) {
+						await controller.postStateToWebview()
+					}
+				}
+			}
+		})
+
+		refreshNousResearchModels(controller).then(async (models) => {
+			if (models && Object.keys(models).length > 0) {
+				const apiConfiguration = controller.stateManager.getApiConfiguration()
+				const planActSeparateModelsSetting = controller.stateManager.getGlobalSettingsKey("planActSeparateModelsSetting")
+				const currentMode = controller.stateManager.getGlobalSettingsKey("mode")
+
+				if (planActSeparateModelsSetting) {
+					const modelIdField = currentMode === "plan" ? "planModeNousResearchModelId" : "actModeNousResearchModelId"
+					const modelInfoField =
+						currentMode === "plan" ? "planModeNousResearchModelInfo" : "actModeNousResearchModelInfo"
+					const modelId = apiConfiguration[modelIdField]
+
+					if (modelId && models[modelId]) {
+						controller.stateManager.setGlobalState(modelInfoField, models[modelId])
+						await controller.postStateToWebview()
+					}
+				} else {
+					const planModelId = apiConfiguration.planModeNousResearchModelId
+					const actModelId = apiConfiguration.actModeNousResearchModelId
+					const updates: Partial<GlobalStateAndSettings> = {}
+
+					if (planModelId && models[planModelId]) {
+						updates.planModeNousResearchModelInfo = models[planModelId]
+					}
+					if (actModelId && models[actModelId]) {
+						updates.actModeNousResearchModelInfo = models[actModelId]
+					}
+
+					if (Object.keys(updates).length > 0) {
+						controller.stateManager.setGlobalStateBatch(updates)
 						await controller.postStateToWebview()
 					}
 				}

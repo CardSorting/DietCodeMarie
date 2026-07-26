@@ -108,6 +108,7 @@ export class StateManager {
 		aihubmixModels: { data: Record<string, ModelInfo>; timestamp: number } | null
 		liteLlmModels: { data: Record<string, ModelInfo>; timestamp: number } | null
 		vercelModels: { data: Record<string, ModelInfo>; timestamp: number } | null
+		nousResearchModels: { data: Record<string, ModelInfo>; timestamp: number } | null
 	} = {
 		dietcodeModels: null,
 		openRouterModels: null,
@@ -120,6 +121,7 @@ export class StateManager {
 		aihubmixModels: null,
 		liteLlmModels: null,
 		vercelModels: null,
+		nousResearchModels: null,
 	}
 
 	// Debounced persistence state
@@ -521,7 +523,8 @@ export class StateManager {
 			| "hicap"
 			| "aihubmix"
 			| "liteLlm"
-			| "vercel",
+			| "vercel"
+			| "nousResearch",
 		models: Record<string, ModelInfo>,
 	): void {
 		const cacheKey = `${provider}Models` as keyof typeof this.modelInfoCache
@@ -554,7 +557,8 @@ export class StateManager {
 			| "hicap"
 			| "aihubmix"
 			| "liteLlm"
-			| "vercel",
+			| "vercel"
+			| "nousResearch",
 	): Record<string, ModelInfo> | null {
 		this.purgeExpiredCaches()
 		const cacheKey = `${provider}Models` as keyof typeof this.modelInfoCache
@@ -580,7 +584,8 @@ export class StateManager {
 			| "huaweiCloudMaas"
 			| "hicap"
 			| "aihubmix"
-			| "liteLlm",
+			| "liteLlm"
+			| "nousResearch",
 		modelId: string,
 	): ModelInfo | undefined {
 		this.purgeExpiredCaches()

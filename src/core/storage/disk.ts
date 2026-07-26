@@ -172,6 +172,7 @@ export const GlobalFileNames = {
 	groqModels: "groq_models.json",
 	basetenModels: "baseten_models.json",
 	hicapModels: "hicap_models.json",
+	nousResearchModels: "nous_research_models.json",
 	mcpSettings: "dietcode_mcp_settings.json",
 	dietcodeRules: ".dietcoderules",
 	workflows: ".dietcoderules/workflows",

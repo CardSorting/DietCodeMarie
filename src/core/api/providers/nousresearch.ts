@@ -1,5 +1,6 @@
 import { ModelInfo, NousResearchModelId, nousResearchDefaultModelId, nousResearchModels } from "@shared/api"
 import OpenAI from "openai"
+import { StateManager } from "@/core/storage/StateManager"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient } from "@/shared/net"
 import { DietCodeTool } from "@/shared/tools"
@@ -11,6 +12,8 @@ import { ApiHandler, CommonApiHandlerOptions } from "../types"
 
 interface NousResearchHandlerOptions extends CommonApiHandlerOptions {
 	nousResearchApiKey?: string
+	nousResearchModelId?: string
+	nousResearchModelInfo?: ModelInfo
 	apiModelId?: string
 }
 
@@ -135,13 +138,37 @@ export class NousResearchHandler implements ApiHandler {
 		}
 	}
 
-	getModel(): { id: NousResearchModelId; info: ModelInfo } {
-		const modelId = this.options.apiModelId
+	getModel(): { id: string; info: ModelInfo } {
+		const modelId = this.options.nousResearchModelId || this.options.apiModelId
+		const modelInfo = this.options.nousResearchModelInfo
 
-		if (modelId && modelId in nousResearchModels) {
-			const id = modelId as NousResearchModelId
-			return { id, info: nousResearchModels[id] }
+		if (modelId && modelInfo) {
+			return { id: modelId, info: modelInfo }
 		}
+
+		if (modelId) {
+			const cachedModelInfo = StateManager.get().getModelInfo("nousResearch", modelId)
+			if (cachedModelInfo) {
+				return { id: modelId, info: cachedModelInfo }
+			}
+			if (modelId in nousResearchModels) {
+				const id = modelId as NousResearchModelId
+				return { id, info: nousResearchModels[id] }
+			}
+			return {
+				id: modelId,
+				info: {
+					maxTokens: 8192,
+					contextWindow: 128_000,
+					supportsImages: false,
+					supportsPromptCache: false,
+					inputPrice: 0,
+					outputPrice: 0,
+					description: modelId,
+				},
+			}
+		}
+
 		return { id: nousResearchDefaultModelId, info: nousResearchModels[nousResearchDefaultModelId] }
 	}
 }

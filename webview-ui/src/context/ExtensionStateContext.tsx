@@ -16,6 +16,7 @@ import {
 	groqDefaultModelId,
 	groqModels,
 	type ModelInfo,
+	nousResearchModels,
 	openRouterDefaultModelId,
 	openRouterDefaultModelInfo,
 	requestyDefaultModelId,
@@ -39,6 +40,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	groqModels: Record<string, ModelInfo>
 	basetenModels: Record<string, ModelInfo>
 	huggingFaceModels: Record<string, ModelInfo>
+	nousResearchModels: Record<string, ModelInfo>
 	mcpServers: McpServer[]
 	mcpMarketplaceCatalog: McpMarketplaceCatalog
 	totalTasksSize: number | null
@@ -90,6 +92,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	refreshVercelAiGatewayModels: () => void
 	refreshHicapModels: () => void
 	refreshLiteLlmModels: () => Promise<void>
+	refreshNousResearchModels: () => void
 	setUserInfo: (userInfo?: UserInfo) => void
 
 	// Navigation state setters
@@ -314,6 +317,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		[basetenDefaultModelId]: basetenModels[basetenDefaultModelId],
 	})
 	const [huggingFaceModels, setHuggingFaceModels] = useState<Record<string, ModelInfo>>({})
+	const [nousResearchModelsState, setNousResearchModels] = useState<Record<string, ModelInfo>>(nousResearchModels)
 	const [mcpServers, setMcpServers] = useState<McpServer[]>([])
 	const [mcpMarketplaceCatalog, setMcpMarketplaceCatalog] = useState<McpMarketplaceCatalog>({ items: [] })
 
@@ -395,6 +399,17 @@ export const ExtensionStateContextProvider: React.FC<{
 			.catch((error: Error) => console.error("Failed to refresh Vercel AI Gateway models:", error))
 	}, [])
 
+	const refreshNousResearchModels = useCallback(() => {
+		ModelsServiceClient.refreshNousResearchModelsRpc(EmptyRequest.create({}))
+			.then((response: OpenRouterCompatibleModelInfo) => {
+				const models = fromProtobufModels(response.models)
+				if (models && Object.keys(models).length > 0) {
+					setNousResearchModels(models)
+				}
+			})
+			.catch((error: Error) => console.error("Failed to refresh NousResearch models:", error))
+	}, [])
+
 	// Auto-refresh model lists on API key availability
 	useEffect(() => {
 		if (!openRouterModels || Object.keys(openRouterModels).length <= 1) {
@@ -459,6 +474,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		groqModels: groqModelsState,
 		basetenModels: basetenModelsState,
 		huggingFaceModels,
+		nousResearchModels: nousResearchModelsState,
 		mcpServers,
 		mcpMarketplaceCatalog,
 		totalTasksSize,
@@ -575,6 +591,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		refreshVercelAiGatewayModels,
 		refreshHicapModels,
 		refreshLiteLlmModels,
+		refreshNousResearchModels,
 		onRelinquishControl,
 		setUserInfo: (userInfo?: UserInfo) => setState((prevState) => ({ ...prevState, userInfo })),
 		expandTaskHeader,

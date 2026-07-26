@@ -156,13 +156,18 @@ export function normalizeApiConfiguration(
 				currentMode === "plan"
 					? apiConfiguration?.planModeNousResearchModelId
 					: apiConfiguration?.actModeNousResearchModelId
+			const nousResearchModelInfo =
+				currentMode === "plan"
+					? apiConfiguration?.planModeNousResearchModelInfo
+					: apiConfiguration?.actModeNousResearchModelInfo
 			return {
 				selectedProvider: provider,
 				selectedModelId: nousResearchModelId || nousResearchDefaultModelId,
 				selectedModelInfo:
-					nousResearchModelId && nousResearchModelId in nousResearchModels
+					nousResearchModelInfo ||
+					(nousResearchModelId && nousResearchModelId in nousResearchModels
 						? nousResearchModels[nousResearchModelId as keyof typeof nousResearchModels]
-						: nousResearchModels[nousResearchDefaultModelId],
+						: nousResearchModels[nousResearchDefaultModelId]),
 			}
 		default:
 			return {
@@ -220,6 +225,8 @@ export function getModeSpecificFields(apiConfiguration: ApiConfiguration | undef
 
 		// Model info objects
 		openRouterModelInfo,
+		nousResearchModelInfo:
+			mode === "plan" ? apiConfiguration.planModeNousResearchModelInfo : apiConfiguration.actModeNousResearchModelInfo,
 
 		// Other mode-specific fields
 		thinkingBudgetTokens:
@@ -270,6 +277,8 @@ export async function syncModeConfigurations(
 		case "nousResearch":
 			updates.planModeNousResearchModelId = sourceFields.nousResearchModelId
 			updates.actModeNousResearchModelId = sourceFields.nousResearchModelId
+			updates.planModeNousResearchModelInfo = sourceFields.nousResearchModelInfo
+			updates.actModeNousResearchModelInfo = sourceFields.nousResearchModelInfo
 			break
 		case "cline-pass":
 			updates.planModeClinePassModelId = sourceFields.clinePassModelId
