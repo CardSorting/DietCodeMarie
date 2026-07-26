@@ -4,7 +4,7 @@
 > **When do I use it?** When proposing or auditing architectural changes to ensure alignment with subsystem boundaries.
 > **What is the source of truth?** The physical file architecture, codebase imports, and the active `tsconfig.json` paths mapping.
 
-Last audited: 2026-07-18
+Last audited: 2026-07-26
 
 ## System Summary
 
@@ -37,7 +37,7 @@ Do not merge these narratives. LUMI owns IDE session behavior and approvals. Bro
 | Webview UI | `webview-ui/` | React/Vite sidebar, settings, message rendering |
 | Protocol | `proto/`, `src/generated/` | Protobuf/gRPC contracts; generated outputs should not be hand-edited |
 | Roadmap/governance | `src/services/roadmap/`, `ROADMAP.md` | Steering, gates, roadmap lifecycle |
-| BroccoliDB | `broccolidb/` | Separate package and docs; validate with its own scripts |
+| BroccoliDB Substrate (Passes 1-12) | `broccolidb/core/policy/spider/` | 16MB contiguous `ArenaAllocator` slab, lock-free `SharedArrayBuffer` Atomics `FastIPC`, `TaskScheduler` work-stealing deques, `ZenIOEngine` zero-copy kernel streaming, $O(1)$ lazy snapshot indexing, single-pass Welford online variance, fast string slicing, and monomorphic V8 shapes (`FindingEntry`, `SymbolProviderEntry`, `TypeMirrorDiagnosticEntry`). |
 
 ## Core Data Flow
 
