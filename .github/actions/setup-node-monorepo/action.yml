@@ -35,6 +35,9 @@ runs:
           webview-ui/node_modules/.vite
           node_modules/.cache
           node_modules/.tmp
+          src/shared/proto
+          src/generated
+          dist/proto
         key: build-cache-${{ runner.os }}-${{ inputs.node-version }}-${{ github.sha }}
         restore-keys: |
           build-cache-${{ runner.os }}-${{ inputs.node-version }}-
