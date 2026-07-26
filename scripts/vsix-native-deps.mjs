@@ -97,6 +97,19 @@ export const OPENVSX_VSCODEIGNORE_MARKERS = [
  */
 
 export function rebuildBetterSqlite3(repoRoot) {
+	const binaryPath = path.join(repoRoot, INSTALLED_NATIVE_MODULE_RELATIVE)
+	if (fs.existsSync(binaryPath)) {
+		try {
+			const stat = fs.statSync(binaryPath)
+			if (stat.size >= MIN_NATIVE_BINARY_BYTES) {
+				const abi = detectBinaryAbi(binaryPath)
+				if (abi === EXPECTED_ELECTRON_ABI) {
+					console.log(`[vsix] better-sqlite3 already compiled for Electron ABI ${EXPECTED_ELECTRON_ABI} (cached).`)
+					return
+				}
+			}
+		} catch {}
+	}
 	console.log(`[vsix] rebuilding better-sqlite3 for Electron ${ELECTRON_VERSION}...`)
 	execFileSync(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "rebuild:electron:better-sqlite3"], {
 		stdio: "inherit",
