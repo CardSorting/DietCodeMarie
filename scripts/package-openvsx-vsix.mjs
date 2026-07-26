@@ -40,6 +40,12 @@ function main() {
 		rebuildBetterSqlite3(repoRoot)
 
 		pkg.name = OPENVSX_EXTENSION_NAME
+		if (
+			fs.existsSync(path.join(repoRoot, "dist", "extension.js")) &&
+			fs.existsSync(path.join(repoRoot, "webview-ui", "build"))
+		) {
+			delete pkg.scripts["vscode:prepublish"]
+		}
 		fs.writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, "\t")}\n`)
 		execFileSync("git", ["add", "package.json"], { cwd: repoRoot })
 		console.log(`[openvsx] patched name → "${OPENVSX_EXTENSION_NAME}" (CardSorting.${OPENVSX_EXTENSION_NAME})`)
@@ -52,15 +58,13 @@ function main() {
 			console.log(`[openvsx] renamed workspace self-link: ${MARKETPLACE_EXTENSION_NAME} → ${OPENVSX_EXTENSION_NAME}`)
 		}
 
-		execFileSync(
-			process.platform === "win32" ? "vsce.cmd" : "vsce",
-			["package", "--target", target, "--allow-package-secrets", "sendgrid", "--out", outPath],
-			{
-				stdio: "inherit",
-				cwd: repoRoot,
-				shell: process.platform === "win32",
-			},
-		)
+		const vsceArgs = ["package", "--target", target, "--allow-package-secrets", "sendgrid", "--out", outPath]
+
+		execFileSync(process.platform === "win32" ? "vsce.cmd" : "vsce", vsceArgs, {
+			stdio: "inherit",
+			cwd: repoRoot,
+			shell: process.platform === "win32",
+		})
 
 		assertVsixHasNativeModule(outPath)
 		console.log(`[openvsx] packaged ${outPath}`)

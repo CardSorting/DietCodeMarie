@@ -1,5 +1,5 @@
 {
-	"name": "lumi-vscode",
+	"name": "lumi",
 	"displayName": "LUMI",
 	"description": "LUMI is your calm coding companion — comfort-first developer tooling for long sessions.",
 	"version": "10.7.0",
@@ -452,7 +452,6 @@
 		}
 	},
 	"scripts": {
-		"vscode:prepublish": "npm run protos && cd webview-ui && npx vite build && cd .. && node esbuild.mjs --production",
 		"compile": "npm run check-types && npm run lint && node esbuild.mjs",
 		"dev": "npm run protos && npm run watch",
 		"watch": "npx npm-run-all -p watch:*",
