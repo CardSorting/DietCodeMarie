@@ -20,6 +20,14 @@ const destDir = "dist"
 const aliasResolverPlugin = {
 	name: "alias-resolver",
 	setup(build) {
+		const fsMemo = new Map()
+		const cachedExists = (target) => {
+			if (fsMemo.has(target)) return fsMemo.get(target)
+			const res = fs.existsSync(target)
+			fsMemo.set(target, res)
+			return res
+		}
+
 		const aliases = {
 			"@": path.resolve(__dirname, "src"),
 			"@core": path.resolve(__dirname, "src/core"),
@@ -36,7 +44,7 @@ const aliasResolverPlugin = {
 		build.onResolve({ filter: /^\.\.?\// }, (args) => {
 			if (args.path.endsWith(".js") || args.path.endsWith(".jsx")) {
 				const tsPath = path.resolve(args.resolveDir, args.path.replace(/\.js$/, ".ts").replace(/\.jsx$/, ".tsx"))
-				if (fs.existsSync(tsPath)) {
+				if (cachedExists(tsPath)) {
 					return { path: tsPath }
 				}
 			}
@@ -51,20 +59,20 @@ const aliasResolverPlugin = {
 				// If it's a file ending in .js/.jsx, try to find the .ts/.tsx equivalent first
 				if (importPath.endsWith(".js") || importPath.endsWith(".jsx")) {
 					const tsPath = importPath.replace(/\.js$/, ".ts").replace(/\.jsx$/, ".tsx")
-					if (fs.existsSync(tsPath)) {
+					if (cachedExists(tsPath)) {
 						return { path: tsPath }
 					}
 				}
 
 				// First, check if the path exists as is
-				if (fs.existsSync(importPath)) {
+				if (cachedExists(importPath)) {
 					const stats = fs.statSync(importPath)
 					if (stats.isDirectory()) {
 						// If it's a directory, try to find index files
 						const extensions = [".ts", ".tsx", ".js", ".jsx"]
 						for (const ext of extensions) {
 							const indexFile = path.join(importPath, `index${ext}`)
-							if (fs.existsSync(indexFile)) {
+							if (cachedExists(indexFile)) {
 								return { path: indexFile }
 							}
 						}
@@ -78,7 +86,7 @@ const aliasResolverPlugin = {
 				const extensions = [".ts", ".tsx", ".js", ".jsx"]
 				for (const ext of extensions) {
 					const pathWithExtension = `${importPath}${ext}`
-					if (fs.existsSync(pathWithExtension)) {
+					if (cachedExists(pathWithExtension)) {
 						return { path: pathWithExtension }
 					}
 				}
