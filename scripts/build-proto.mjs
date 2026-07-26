@@ -2,6 +2,7 @@
 
 import chalk from "chalk"
 import { execFileSync, execSync } from "child_process"
+import { createHash } from "crypto"
 import * as fs from "fs/promises"
 import { globby } from "globby"
 import { createRequire } from "module"
@@ -34,6 +35,7 @@ const TS_OUT_DIR = path.resolve("src/shared/proto")
 const GRPC_JS_OUT_DIR = path.resolve("src/generated/grpc-js")
 const NICE_JS_OUT_DIR = path.resolve("src/generated/nice-grpc")
 const DESCRIPTOR_OUT_DIR = path.resolve("dist/proto")
+const CACHE_FILE = path.resolve("node_modules/.tmp/proto.hash")
 
 const isWindows = process.platform === "win32"
 const TS_PROTO_PLUGIN = isWindows
@@ -49,11 +51,51 @@ const TS_PROTO_OPTIONS = [
 	"useDate=false", // Timestamp fields will not be automatically converted to Date.
 ]
 
+async function computeProtoHash() {
+	try {
+		const protoFiles = await globby("**/*.proto", { cwd: PROTO_DIR })
+		protoFiles.sort()
+		const hasher = createHash("sha256")
+		for (const relFile of protoFiles) {
+			const absFile = path.join(PROTO_DIR, relFile)
+			const content = await fs.readFile(absFile)
+			hasher.update(relFile)
+			hasher.update(content)
+		}
+		return hasher.digest("hex")
+	} catch {
+		return ""
+	}
+}
+
 async function main() {
+	const force = process.argv.includes("--force")
+	const currentHash = await computeProtoHash()
+	if (!force && currentHash) {
+		try {
+			const savedHash = (await fs.readFile(CACHE_FILE, "utf-8")).trim()
+			const outExists = await fs
+				.stat(TS_OUT_DIR)
+				.then((s) => s.isDirectory())
+				.catch(() => false)
+			if (savedHash === currentHash && outExists) {
+				console.log(chalk.green("[build-proto] Proto compilation up-to-date (cached)."))
+				return
+			}
+		} catch {
+			// Cache miss or missing file
+		}
+	}
+
 	await cleanup()
 	await compileProtos()
 	await generateProtoBusSetup()
 	await generateHostBridgeClient()
+
+	if (currentHash) {
+		await fs.mkdir(path.dirname(CACHE_FILE), { recursive: true })
+		await fs.writeFile(CACHE_FILE, currentHash, "utf-8")
+	}
 }
 async function compileProtos() {
 	console.log(chalk.bold.blue("Compiling Protocol Buffers..."))
