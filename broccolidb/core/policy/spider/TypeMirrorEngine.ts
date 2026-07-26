@@ -5,7 +5,39 @@ import * as ts from 'typescript';
 import type { TypeMirrorDiagnostic, TypeMirrorResult } from './report-types.js';
 
 const GLOBAL_CONFIG_CACHE = new Map<string, { config: ts.ParsedCommandLine | null; error?: string }>();
-const GLOBAL_PROGRAM_SINGLETON = new WeakMap<ts.ParsedCommandLine, ts.Program>();
+
+// Strictly Monomorphic Class Layout (Guarantees V8 Hidden Class Shape Stability)
+export class TypeMirrorDiagnosticEntry implements TypeMirrorDiagnostic {
+  public readonly filePath: string;
+  public readonly message: string;
+  public readonly code: number;
+  public readonly category: string;
+  public readonly sourceRange?: {
+    startLine: number;
+    startColumn: number;
+    endLine: number;
+    endColumn: number;
+  };
+
+  constructor(
+    filePath: string,
+    message: string,
+    code: number,
+    category: string,
+    sourceRange?: {
+      startLine: number;
+      startColumn: number;
+      endLine: number;
+      endColumn: number;
+    }
+  ) {
+    this.filePath = filePath;
+    this.message = message;
+    this.code = code;
+    this.category = category;
+    this.sourceRange = sourceRange;
+  }
+}
 
 export class TypeMirrorEngine {
   private cachedTsconfigPath: string | null | undefined = undefined;
@@ -101,20 +133,20 @@ export class TypeMirrorEngine {
       const end = start + (diag.length ?? 1);
       const endLineChar = file ? file.getLineAndCharacterOfPosition(end) : lineChar;
 
-      return {
-        filePath: relPath,
-        message: ts.flattenDiagnosticMessageText(diag.messageText, '\n'),
-        code: diag.code,
-        category: ts.DiagnosticCategory[diag.category] ?? 'Unknown',
-        sourceRange: file
+      return new TypeMirrorDiagnosticEntry(
+        relPath,
+        ts.flattenDiagnosticMessageText(diag.messageText, '\n'),
+        diag.code,
+        ts.DiagnosticCategory[diag.category] ?? 'Unknown',
+        file
           ? {
               startLine: lineChar.line + 1,
               startColumn: lineChar.character + 1,
               endLine: endLineChar.line + 1,
               endColumn: endLineChar.character + 1,
             }
-          : undefined,
-      };
+          : undefined
+      );
     };
 
     let idx = 0;
