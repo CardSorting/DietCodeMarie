@@ -534,55 +534,56 @@ const SearchInputWrapper = styled.div`
 const ModelGridArray = styled.div`
 	display: grid;
 	grid-template-columns: repeat(2, 1fr);
-	gap: 5px;
-	margin-top: 4px;
+	gap: 4px;
+	margin-top: 3px;
 `
 
 const GridCard = styled.div<{ isActive?: boolean }>`
 	background: var(--vscode-editor-background);
 	border: 1px solid ${(props) => (props.isActive ? "var(--vscode-focusBorder)" : "var(--vscode-widget-border, var(--vscode-panel-border))")};
-	border-radius: 5px;
-	padding: 6px;
+	border-radius: 4px;
+	padding: 4px 5px;
 	display: flex;
 	flex-direction: column;
 	justify-content: space-between;
-	gap: 4px;
+	gap: 3px;
 	transition: all 0.12s ease;
 
 	&:hover {
 		border-color: var(--vscode-focusBorder);
-		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 	}
 `
 
 const CardTop = styled.div`
 	display: flex;
-	flex-direction: column;
-	gap: 3px;
+	align-items: center;
+	justify-content: space-between;
+	gap: 2px;
 `
 
 const ModelTitle = styled.span`
-	font-size: 10px;
+	font-size: 9.5px;
 	font-weight: 600;
 	color: var(--vscode-foreground);
-	line-height: 1.2;
-	word-break: break-word;
-	display: -webkit-box;
-	-webkit-line-clamp: 2;
-	-webkit-box-orient: vertical;
+	line-height: 1.1;
+	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
+	flex: 1;
 `
 
 const CardBadges = styled.div`
 	display: flex;
 	flex-wrap: wrap;
 	gap: 2px;
+	flex-shrink: 0;
 `
 
 const BadgeChip = styled.span`
-	font-size: 7.5px;
+	font-size: 7px;
 	font-weight: 700;
-	padding: 0 3px;
+	padding: 0 2.5px;
 	border-radius: 2px;
 	background: rgba(128, 128, 128, 0.12);
 	color: var(--vscode-foreground);
@@ -597,20 +598,21 @@ const CardMetrics = styled.div`
 	display: flex;
 	justify-content: space-between;
 	background: var(--vscode-sideBar-background, rgba(0, 0, 0, 0.03));
-	border-radius: 3px;
-	padding: 2px 4px;
+	border-radius: 2px;
+	padding: 1px 3px;
 `
 
 const MetricItem = styled.div`
 	display: flex;
-	flex-direction: column;
+	align-items: center;
+	gap: 3px;
 
 	.metric-lbl {
-		font-size: 8px;
+		font-size: 7.5px;
 		color: var(--vscode-descriptionForeground);
 	}
 	.metric-val {
-		font-size: 9px;
+		font-size: 8.5px;
 		font-weight: 600;
 		color: var(--vscode-foreground);
 	}
@@ -622,13 +624,13 @@ const SelectButton = styled.button<{ isActive?: boolean; isSuccess?: boolean }>`
 	align-items: center;
 	justify-content: center;
 	gap: 2px;
-	padding: 2px 4px;
-	font-size: 9px;
+	padding: 1px 3px;
+	font-size: 8.5px;
 	font-weight: 600;
-	border-radius: 3px;
+	border-radius: 2.5px;
 	cursor: pointer;
 	border: none;
-	height: 20px;
+	height: 18px;
 
 	background: ${(props) =>
 		props.isSuccess
@@ -647,19 +649,19 @@ const PaginationBar = styled.div`
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	margin-top: 6px;
-	padding: 4px 6px;
+	margin-top: 4px;
+	padding: 2px 5px;
 	background: var(--vscode-sideBar-background, rgba(0, 0, 0, 0.03));
 	border: 1px solid var(--vscode-panel-border);
-	border-radius: 4px;
+	border-radius: 3px;
 
 	.page-btn {
 		background: var(--vscode-button-background);
 		color: var(--vscode-button-foreground);
 		border: none;
-		border-radius: 3px;
-		padding: 2px 8px;
-		font-size: 10px;
+		border-radius: 2.5px;
+		padding: 1px 6px;
+		font-size: 9px;
 		font-weight: 600;
 		cursor: pointer;
 
@@ -670,7 +672,7 @@ const PaginationBar = styled.div`
 	}
 
 	.page-info {
-		font-size: 9.5px;
+		font-size: 8.5px;
 		font-weight: 500;
 		color: var(--vscode-descriptionForeground);
 	}
