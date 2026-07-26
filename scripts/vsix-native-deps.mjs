@@ -448,13 +448,20 @@ export function assertVsixHasNativeModule(vsixPath) {
 	console.log(`[vsix] verified native dependencies in ${path.basename(vsixPath)}`)
 }
 
-export function discoverVsixFiles(distDir, { version } = {}) {
+const vsixFilesMemo = new Map()
+export function discoverVsixFiles(distDir = path.resolve("dist")) {
 	if (!fs.existsSync(distDir)) {
 		return []
 	}
+	const mtimeMs = fs.statSync(distDir).mtimeMs
+	const key = `${distDir}:${mtimeMs}`
+	if (vsixFilesMemo.has(key)) return vsixFilesMemo.get(key)
 
-	if (version) {
-		return fs
+	const pkgPath = path.join(path.dirname(distDir), "package.json")
+	if (fs.existsSync(pkgPath)) {
+		const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"))
+		const version = pkg.version
+		const res = fs
 			.readdirSync(distDir)
 			.filter((entry) => {
 				const universal = entry === `lumi-vscode-${version}.vsix` || entry === `lumi-${version}.vsix`
@@ -463,9 +470,11 @@ export function discoverVsixFiles(distDir, { version } = {}) {
 			})
 			.map((entry) => path.join(distDir, entry))
 			.sort((a, b) => a.localeCompare(b))
+		vsixFilesMemo.set(key, res)
+		return res
 	}
 
-	return fs
+	const res = fs
 		.readdirSync(distDir)
 		.filter(
 			(entry) =>
@@ -474,9 +483,15 @@ export function discoverVsixFiles(distDir, { version } = {}) {
 		)
 		.map((entry) => path.join(distDir, entry))
 		.sort((a, b) => a.localeCompare(b))
+	vsixFilesMemo.set(key, res)
+	return res
 }
 
+const lumiExtensionsMemo = new Map()
 export function discoverLumiExtensions(extensionsRoots = DEFAULT_EXTENSION_ROOTS) {
+	const key = JSON.stringify(extensionsRoots.map((r) => r.dir))
+	if (lumiExtensionsMemo.has(key)) return lumiExtensionsMemo.get(key)
+
 	const results = []
 
 	for (const root of extensionsRoots) {
@@ -501,7 +516,9 @@ export function discoverLumiExtensions(extensionsRoots = DEFAULT_EXTENSION_ROOTS
 		}
 	}
 
-	return results.sort((a, b) => a.name.localeCompare(b.name))
+	const sorted = results.sort((a, b) => a.name.localeCompare(b.name))
+	lumiExtensionsMemo.set(key, sorted)
+	return sorted
 }
 
 export function pickRepairVsix(distDir, extensionFolderName, target = nativeTargetForHost()) {
