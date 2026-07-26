@@ -72,7 +72,7 @@ type HealthListener = (snapshots: ReadonlyMap<string, GrpcSubscriptionSnapshot>)
 const QUIET_ERROR_PREFIX = "[GrpcSubscriptionRuntime]"
 
 function logDebug(message: string): void {
-	if (import.meta.env.DEV) {
+	if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) {
 		console.debug(message)
 	}
 }

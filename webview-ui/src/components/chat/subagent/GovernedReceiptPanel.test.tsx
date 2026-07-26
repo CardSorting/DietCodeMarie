@@ -168,6 +168,17 @@ describe("GovernedReceiptPanel", () => {
 					laneDag: [],
 					resourceOwners: [],
 					retryHistory: [],
+					diagnostics: {
+						incident: "sealed_success",
+						incidentSummary: "Success",
+						retrySafe: true,
+						activeResourceOwners: [],
+						staleResourceOwners: [],
+						overlappingPaths: [],
+						missingTranscripts: [],
+						missingToolEvidence: [],
+						replayMismatchCauses: [],
+					},
 				}}
 			/>,
 		)
@@ -257,17 +268,17 @@ describe("GovernedReceiptPanel", () => {
 		expect(screen.getByText(/Roadmap overlaps/i)).toBeInTheDocument()
 		expect(screen.getByText(/Blocked roadmap writers/i)).toBeInTheDocument()
 		expect(screen.getByText(/rm-read:1/)).toBeInTheDocument()
-		expect(screen.getByText(/rm-write:1/)).toBeInTheDocument()
-		expect(screen.getByText(/roadmap lock/i)).toBeInTheDocument()
-		expect(screen.getByText(/advisory only/i)).toBeInTheDocument()
+		expect(screen.getByText(/read-only lane; no mutation intent/)).toBeInTheDocument()
+		expect(screen.getByText(/mutation lane with write set/)).toBeInTheDocument()
+		expect(screen.queryByText(/missing-lock/)).not.toBeInTheDocument()
 	})
 
-	it("shows accepted and rejected patch projection state in operator console", () => {
+	it("renders patch reconciliation outcomes when present", () => {
 		render(
 			<GovernedReceiptPanel
 				receipt={{
 					swarmId: "swarm-1",
-					attemptId: "attempt-proj",
+					attemptId: "attempt-patch",
 					admitted: true,
 					mergePassed: true,
 					sealed: true,
@@ -290,7 +301,7 @@ describe("GovernedReceiptPanel", () => {
 						{
 							index: 0,
 							laneId: "swarm-lane:swarm-1:0",
-							status: "sealed",
+							status: "completed",
 							executionMode: "mutation",
 							lockRequired: true,
 							evidenceCount: 2,
@@ -315,7 +326,7 @@ describe("GovernedReceiptPanel", () => {
 						{
 							index: 1,
 							laneId: "swarm-lane:swarm-1:1",
-							status: "sealed",
+							status: "completed",
 							executionMode: "mutation",
 							lockRequired: true,
 							evidenceCount: 1,
@@ -355,27 +366,15 @@ describe("GovernedReceiptPanel", () => {
 						agentProjections: [
 							{
 								agentRoadmapId: "arm-lane-0",
-								roadmapSnapshotId: "rm-snap-base",
-								swarmRoadmapId: "swarm-plan-1",
 								laneId: "swarm-lane:swarm-1:0",
 								agentId: "agent-a",
-								index: 0,
-								plane: "agent",
 								projectedItems: ["TASK-1"],
-								dependsOn: [],
-								executionMode: "mutation",
 							},
 							{
 								agentRoadmapId: "arm-lane-1",
-								roadmapSnapshotId: "rm-snap-stale",
-								swarmRoadmapId: "swarm-plan-1",
 								laneId: "swarm-lane:swarm-1:1",
 								agentId: "agent-b",
-								index: 1,
-								plane: "agent",
 								projectedItems: ["TASK-2"],
-								dependsOn: [],
-								executionMode: "mutation",
 							},
 						],
 						patchReconciliation: {

@@ -14,7 +14,7 @@ describe("useDebouncedInput", () => {
 	it("does not persist the initial value", async () => {
 		const onChange = vi.fn()
 
-		renderHook(() => useDebouncedInput("existing-key", onChange))
+		renderHook(() => useDebouncedInput<string>("existing-key", onChange))
 		await act(() => vi.advanceTimersByTimeAsync(100))
 
 		expect(onChange).not.toHaveBeenCalled()
@@ -22,7 +22,7 @@ describe("useDebouncedInput", () => {
 
 	it("persists a user edit after the debounce delay", async () => {
 		const onChange = vi.fn()
-		const { result } = renderHook(() => useDebouncedInput("existing-key", onChange))
+		const { result } = renderHook(() => useDebouncedInput<string>("existing-key", onChange))
 
 		act(() => result.current[1]("new-key"))
 		await act(() => vi.advanceTimersByTimeAsync(99))
@@ -35,7 +35,7 @@ describe("useDebouncedInput", () => {
 
 	it("does not persist an externally synchronized value", async () => {
 		const onChange = vi.fn()
-		const { result, rerender } = renderHook(({ initialValue }) => useDebouncedInput(initialValue, onChange), {
+		const { result, rerender } = renderHook(({ initialValue }) => useDebouncedInput<string>(initialValue, onChange), {
 			initialProps: { initialValue: "openrouter-key" },
 		})
 
@@ -48,7 +48,7 @@ describe("useDebouncedInput", () => {
 
 	it("persists immediately when debounce is disabled", () => {
 		const onChange = vi.fn()
-		const { result } = renderHook(() => useDebouncedInput("", onChange, 0))
+		const { result } = renderHook(() => useDebouncedInput<string>("", onChange, 0))
 
 		act(() => result.current[1]("csk-test"))
 
