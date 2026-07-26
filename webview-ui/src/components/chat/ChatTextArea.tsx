@@ -13,6 +13,7 @@ import { getModeSpecificFields, normalizeApiConfiguration } from "@/components/s
 import { Icon } from "@/components/ui/icons"
 import { useIsCompact, useIsUltraCompact } from "@/context/DensityContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { useSpeechToText } from "@/hooks/useSpeechToText"
 import { cn } from "@/lib/utils"
 import { FileServiceClient } from "@/services/grpc-client"
 import {
@@ -25,6 +26,7 @@ import {
 	type SearchResult,
 	shouldShowContextMenu,
 } from "@/utils/context-mentions"
+import { appendSpokenText } from "@/utils/formatSpokenText"
 import { isSafari } from "@/utils/platformUtils"
 import {
 	getMatchingSlashCommands,
@@ -35,6 +37,7 @@ import {
 	slashCommandDeleteRegex,
 } from "@/utils/slash-commands"
 import { ChatInputActions } from "./ChatInputActions"
+import { VoiceDictationCapsule } from "./VoiceDictationCapsule"
 
 const { MAX_IMAGES_AND_FILES_PER_MESSAGE } = CHAT_CONSTANTS
 
@@ -156,6 +159,111 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 		const [fileSearchResults, setFileSearchResults] = useState<SearchResult[]>([])
 		const [searchLoading, setSearchLoading] = useState(false)
+
+		const inputValueRef = useRef(inputValue)
+		useEffect(() => {
+			inputValueRef.current = inputValue
+		}, [inputValue])
+
+		const handleSpeechTranscript = useCallback(
+			(text: string, isFinal: boolean) => {
+				if (isFinal && text.trim()) {
+					const updated = appendSpokenText(inputValueRef.current, text)
+					setInputValue(updated)
+				}
+			},
+			[setInputValue],
+		)
+
+		const {
+			isListening,
+			isSupported: isSpeechSupported,
+			interimTranscript,
+			language: detectedLanguage,
+			error: speechError,
+			toggleListening: toggleVoiceInput,
+			resetError: clearSpeechError,
+		} = useSpeechToText({
+			onTranscript: handleSpeechTranscript,
+		})
+
+		const [autoSendVoice, setAutoSendVoice] = useState<boolean>(() => {
+			if (typeof window !== "undefined") {
+				return localStorage.getItem("lumi_voice_autosend") === "true"
+			}
+			return false
+		})
+
+		const [soundEnabledVoice, setSoundEnabledVoice] = useState<boolean>(() => {
+			if (typeof window !== "undefined") {
+				return localStorage.getItem("lumi_voice_sound") !== "false"
+			}
+			return true
+		})
+
+		const handleToggleSound = useCallback(() => {
+			setSoundEnabledVoice((prev) => {
+				const next = !prev
+				if (typeof window !== "undefined") {
+					localStorage.setItem("lumi_voice_sound", String(next))
+				}
+				return next
+			})
+		}, [])
+
+		const handleToggleAutoSend = useCallback(() => {
+			setAutoSendVoice((prev) => {
+				const next = !prev
+				if (typeof window !== "undefined") {
+					localStorage.setItem("lumi_voice_autosend", String(next))
+				}
+				return next
+			})
+		}, [])
+
+		const handleVoiceStop = useCallback(() => {
+			toggleVoiceInput()
+			if (autoSendVoice && inputValueRef.current.trim() && !sendingDisabled) {
+				setTimeout(() => {
+					onSend(inputValueRef.current)
+				}, 100)
+			} else {
+				setTimeout(() => {
+					textAreaRef.current?.focus()
+				}, 50)
+			}
+		}, [autoSendVoice, onSend, sendingDisabled, toggleVoiceInput])
+
+		const handleVoiceCancel = useCallback(() => {
+			toggleVoiceInput()
+			setTimeout(() => {
+				textAreaRef.current?.focus()
+			}, 50)
+		}, [toggleVoiceInput])
+
+		// Keyboard shortcut listener (Cmd+Shift+V / Ctrl+Shift+V / Escape) for voice input
+		useEffect(() => {
+			const handleKeyDownShortcut = (e: KeyboardEvent) => {
+				if (e.key === "Escape" && isListening) {
+					e.preventDefault()
+					toggleVoiceInput()
+					return
+				}
+				if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "v" || e.key === "V")) {
+					e.preventDefault()
+					if (isSpeechSupported) {
+						if (isListening) {
+							handleVoiceStop()
+						} else {
+							toggleVoiceInput()
+						}
+					}
+				}
+			}
+
+			window.addEventListener("keydown", handleKeyDownShortcut)
+			return () => window.removeEventListener("keydown", handleKeyDownShortcut)
+		}, [handleVoiceStop, isListening, isSpeechSupported, toggleVoiceInput])
 
 		// Fetch git commits when Git is selected or when typing a hash
 		useEffect(() => {
@@ -1289,6 +1397,42 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						</div>
 					)}
 
+					{isListening && (
+						<VoiceDictationCapsule
+							autoSend={autoSendVoice}
+							detectedLanguage={detectedLanguage}
+							interimTranscript={interimTranscript}
+							onAutoSendToggle={handleToggleAutoSend}
+							onCancel={handleVoiceCancel}
+							onSoundToggle={handleToggleSound}
+							onStop={handleVoiceStop}
+							soundEnabled={soundEnabledVoice}
+						/>
+					)}
+
+					{speechError && (
+						<div className="mx-3 my-1.5 flex items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300">
+							<span className="truncate">{speechError}</span>
+							<div className="flex items-center gap-2 shrink-0">
+								<button
+									className="rounded border border-amber-500/30 bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-200 hover:bg-amber-500/30"
+									onClick={() => {
+										clearSpeechError()
+										toggleVoiceInput()
+									}}
+									type="button">
+									Try Again
+								</button>
+								<button
+									className="text-[10px] text-amber-200/70 hover:underline"
+									onClick={clearSpeechError}
+									type="button">
+									Dismiss
+								</button>
+							</div>
+						</div>
+					)}
+
 					<div
 						className={cn(
 							"chat-control-rail flex min-w-0 items-center justify-between border-t border-[#20202a] pb-2 pt-1.5 px-3",
@@ -1297,12 +1441,15 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							<ChatInputActions
 								attachDisabled={shouldDisableFilesAndImages}
 								composerMode={composerMode}
+								isListening={isListening}
+								isSpeechSupported={isSpeechSupported}
 								modelDisplayName={modelDisplayName}
 								onAttachClick={() => {
 									if (!shouldDisableFilesAndImages) onSelectFilesAndImages()
 								}}
 								onContextClick={handleContextButtonClick}
 								onModelClick={handleModelButtonClick}
+								onVoiceClick={toggleVoiceInput}
 							/>
 						</div>
 						<div className="flex items-center gap-2 shrink-0">

@@ -44,10 +44,10 @@ export function pickCompletionCloser(seed: number): string | null {
 }
 
 /** Stable placeholders — no rotation; quiet availability. */
-const PLACEHOLDER_WITH_TASK = "Message LUMI…"
+const PLACEHOLDER_WITH_TASK = "Message LUMI or tap Voice to speak…"
 const PLACEHOLDER_STEERING = "Add a follow-up or steer the task…"
 const PLACEHOLDER_IDLE_GAP = "Still working — add a follow-up anytime…"
-const PLACEHOLDER_EMPTY = "Ask anything…"
+const PLACEHOLDER_EMPTY = "Ask anything or tap Voice to speak…"
 const PLACEHOLDER_LONG_SESSION = "Still here."
 const PLACEHOLDER_NIGHT = "…"
 

@@ -1,5 +1,6 @@
-import { AtSign, ChevronDown, Paperclip } from "lucide-react"
+import { AtSign, ChevronDown, Mic, MicOff, Paperclip } from "lucide-react"
 import { memo } from "react"
+import { cn } from "@/lib/utils"
 import type { ComposerMode } from "./chat-view/shared/composerState"
 
 interface ChatInputActionsProps {
@@ -9,6 +10,9 @@ interface ChatInputActionsProps {
 	modelDisplayName: string
 	onModelClick: () => void
 	composerMode: ComposerMode
+	isListening?: boolean
+	isSpeechSupported?: boolean
+	onVoiceClick?: () => void
 }
 
 const ACTION_CLASS =
@@ -16,7 +20,17 @@ const ACTION_CLASS =
 
 /** Composer utilities share one bottom-aligned control row with the send action. */
 export const ChatInputActions = memo(
-	({ onContextClick, onAttachClick, attachDisabled, modelDisplayName, onModelClick, composerMode }: ChatInputActionsProps) => (
+	({
+		onContextClick,
+		onAttachClick,
+		attachDisabled,
+		modelDisplayName,
+		onModelClick,
+		composerMode,
+		isListening = false,
+		isSpeechSupported = true,
+		onVoiceClick,
+	}: ChatInputActionsProps) => (
 		<div className="flex min-w-0 flex-1 items-center gap-1.5 select-none">
 			<button
 				aria-label="Mention workspace context"
@@ -38,6 +52,33 @@ export const ChatInputActions = memo(
 				type="button">
 				<Paperclip aria-hidden className="size-3.5" strokeWidth={2} />
 			</button>
+
+			{onVoiceClick && (
+				<button
+					aria-label={isListening ? "Stop voice dictation" : "Voice dictation (Speak to type)"}
+					className={cn(
+						"lumi-icon-action flex h-7 items-center gap-1.5 rounded-lg border border-[#272730] bg-[#1a1a22] px-2 text-[11px] font-medium text-[#faf9f7]/70 transition-colors hover:bg-[#20202a]/60 hover:text-[#faf9f7] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-lumi disabled:cursor-not-allowed disabled:opacity-40 select-none",
+						isListening && "border-red-500/60 bg-red-500/10 text-red-300 hover:bg-red-500/20",
+					)}
+					data-testid="voice-button"
+					disabled={!isSpeechSupported}
+					onClick={onVoiceClick}
+					title={
+						!isSpeechSupported
+							? "Voice input not supported in this environment"
+							: isListening
+								? "Listening... Click to stop"
+								: "Speak to type (Voice dictation)"
+					}
+					type="button">
+					{isListening ? (
+						<MicOff aria-hidden className="size-3.5 text-red-400 shrink-0" strokeWidth={2} />
+					) : (
+						<Mic aria-hidden className="size-3.5 shrink-0" strokeWidth={2} />
+					)}
+					<span className="shrink-0">{isListening ? "Listening" : "Voice"}</span>
+				</button>
+			)}
 
 			<button
 				aria-label={`Change model. Current model: ${modelDisplayName}`}

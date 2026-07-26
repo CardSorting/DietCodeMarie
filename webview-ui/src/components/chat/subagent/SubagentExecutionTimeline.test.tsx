@@ -63,7 +63,7 @@ describe("SubagentExecutionTimeline", () => {
 	it("renders swarm continuity and per-agent phases", () => {
 		render(<SubagentExecutionTimeline status={baseStatus} />)
 
-		expect(screen.getByText("Execution timeline")).toBeInTheDocument()
+		expect(screen.getByText("Council Timeline")).toBeInTheDocument()
 		expect(screen.getByText(/swarm:swarm-ab/)).toBeInTheDocument()
 		expect(screen.getByText("1/2 agents")).toBeInTheDocument()
 		expect(screen.getByText("Completed")).toBeInTheDocument()

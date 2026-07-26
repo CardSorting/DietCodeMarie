@@ -20,7 +20,7 @@ describe("WorkspaceNavigationMenu", () => {
 		await user.click(screen.getByRole("button", { name: "Menu" }))
 		const currentChat = await screen.findByRole("menuitem", { name: /Active chat/ })
 		const pastChats = screen.getByRole("menuitem", { name: /Chat history/ })
-		expect(screen.getAllByRole("menuitem")).toHaveLength(7)
+		expect(screen.getAllByRole("menuitem")).toHaveLength(6)
 		expect(currentChat).toHaveAttribute("aria-current", "page")
 		await waitFor(() => expect(currentChat).toHaveFocus())
 

@@ -49,4 +49,46 @@ describe("ChatInputActions keyboard ergonomics", () => {
 
 		expect(screen.getByRole("button", { name: "Attach a file or image" })).toBeDisabled()
 	})
+
+	it("renders voice input button and triggers callback when clicked", async () => {
+		const user = userEvent.setup()
+		const onVoiceClick = vi.fn()
+
+		render(
+			<ChatInputActions
+				attachDisabled={false}
+				composerMode="ready"
+				isListening={false}
+				isSpeechSupported={true}
+				modelDisplayName="provider:model"
+				onAttachClick={() => {}}
+				onContextClick={() => {}}
+				onModelClick={() => {}}
+				onVoiceClick={onVoiceClick}
+			/>,
+		)
+
+		const voiceButton = screen.getByRole("button", { name: /Voice/i })
+		expect(voiceButton).toBeEnabled()
+		await user.click(voiceButton)
+		expect(onVoiceClick).toHaveBeenCalledOnce()
+	})
+
+	it("disables voice button when speech recognition is unsupported", () => {
+		render(
+			<ChatInputActions
+				attachDisabled={false}
+				composerMode="ready"
+				isListening={false}
+				isSpeechSupported={false}
+				modelDisplayName="provider:model"
+				onAttachClick={() => {}}
+				onContextClick={() => {}}
+				onModelClick={() => {}}
+				onVoiceClick={() => {}}
+			/>,
+		)
+
+		expect(screen.getByRole("button", { name: /Voice/i })).toBeDisabled()
+	})
 })

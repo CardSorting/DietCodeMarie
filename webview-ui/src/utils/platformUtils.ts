@@ -65,3 +65,7 @@ export function getCurrentPlatform() {
 export const isMacOSOrLinux = (): boolean => {
 	return getCurrentPlatform() !== "windows" // Non-Windows
 }
+
+export const isMac = (): boolean => {
+	return getCurrentPlatform() === "mac"
+}
