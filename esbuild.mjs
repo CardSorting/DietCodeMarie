@@ -218,6 +218,8 @@ const baseConfig = {
 	minify: production,
 	sourcemap: !production,
 	logLevel: "silent",
+	target: "node20",
+	treeShaking: true,
 	define: buildEnvVars,
 	tsconfig: path.resolve(__dirname, "tsconfig.json"),
 	plugins: [
