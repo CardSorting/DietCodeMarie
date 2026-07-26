@@ -12,6 +12,7 @@ BroccoliDB v30 is a **stable operational substrate**. These docs describe the fi
 | [Examples](examples.md) | Golden-path scripts in `../examples/` |
 | [Errors](errors.md) | Typed errors with cause, fix, and docs link |
 | [Pass 8 Benchmark](PASS8_BENCHMARK_REPORT.md) | Empirical benchmark report (78% speedup, 4.8s, zero-GC, V8 TurboFan) |
+| [Pass 12 Architecture Report](PASS12_ARCHITECTURAL_REPORT.md) | Full 12-pass mechanical sympathy, zero-GC slabs, work-stealing I/O, & DCE-hardened benchmark report |
 | [Architecture (current)](architecture/current.md) | Layers, flow, runtime modes |
 
 ## Release & policy
