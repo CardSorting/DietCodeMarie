@@ -25,6 +25,19 @@ function restorePackageJson(original) {
 	console.log("[openvsx] restored package.json")
 }
 
+function ensureBuildArtifacts(repoRoot) {
+	const extensionJs = path.join(repoRoot, "dist", "extension.js")
+	const webviewBuild = path.join(repoRoot, "webview-ui", "build")
+	if (!fs.existsSync(extensionJs) || !fs.existsSync(webviewBuild)) {
+		console.log("[openvsx] build artifacts missing; compiling extension and webview via ci:build...")
+		execFileSync(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "ci:build"], {
+			stdio: "inherit",
+			cwd: repoRoot,
+			shell: process.platform === "win32",
+		})
+	}
+}
+
 function main() {
 	const originalPackageJson = fs.readFileSync(packageJsonPath, "utf8")
 	const pkg = JSON.parse(originalPackageJson)
@@ -37,6 +50,7 @@ function main() {
 	fs.mkdirSync(path.dirname(outPath), { recursive: true })
 
 	try {
+		ensureBuildArtifacts(repoRoot)
 		rebuildBetterSqlite3(repoRoot)
 
 		pkg.name = OPENVSX_EXTENSION_NAME

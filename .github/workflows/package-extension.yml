@@ -41,6 +41,9 @@ jobs:
                   HOMEBREW_NO_INSTALL_CLEANUP: "1"
               run: command -v protoc || brew install protobuf
 
+            - name: Build extension artifacts
+              run: npm run ci:build
+
             - name: Package VSIX
               run: npm run package:vsix:all
 

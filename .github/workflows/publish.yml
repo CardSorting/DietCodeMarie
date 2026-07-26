@@ -68,6 +68,7 @@ jobs:
                   OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
                   OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
               run: |
+                  npm run ci:build
                   npm run package:vsix:all
                   npm run doctor -- --ci
 
