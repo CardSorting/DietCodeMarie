@@ -30,6 +30,9 @@ import {
   sortFindingsBySeverity,
   validateSpiderReport,
 } from './AgentDigest.js';
+import { ArenaAllocator } from './ArenaAllocator.js';
+import { ZenIOEngine } from './ZenIOEngine.js';
+import { SpiderWorkerPool } from './SpiderWorkerPool.js';
 
 export interface PhysicalFile {
   filePath: string;
@@ -47,6 +50,9 @@ export class ForensicSpider {
   private readonly diskParityEngine: DiskParityEngine;
   private readonly typeMirrorEngine: TypeMirrorEngine;
   private readonly repairEngine = new RepairDirectiveEngine();
+  public readonly arena = new ArenaAllocator(16 * 1024 * 1024);
+  public readonly zenIO = new ZenIOEngine();
+  public readonly workerPool = new SpiderWorkerPool();
   private lastAuditAt?: string;
   private previousFootprintLocations = new Map<string, string>();
 
@@ -70,6 +76,9 @@ export class ForensicSpider {
   dispose(): void {
     this.footprintEngine.dispose();
     this.previousFootprintLocations.clear();
+    this.zenIO.close();
+    this.arena.reset();
+    this.workerPool.terminate();
   }
 
   scanPhysicalFiles(scope?: Set<string>): PhysicalFile[] {

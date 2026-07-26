@@ -11,6 +11,7 @@ BroccoliDB v30 is a **stable operational substrate**. These docs describe the fi
 | [CLI](cli.md) | `health`, `spider`, `runtime` commands |
 | [Examples](examples.md) | Golden-path scripts in `../examples/` |
 | [Errors](errors.md) | Typed errors with cause, fix, and docs link |
+| [Pass 8 Benchmark](PASS8_BENCHMARK_REPORT.md) | Empirical benchmark report (78% speedup, 4.8s, zero-GC, V8 TurboFan) |
 | [Architecture (current)](architecture/current.md) | Layers, flow, runtime modes |
 
 ## Release & policy
