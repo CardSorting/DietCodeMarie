@@ -71,11 +71,23 @@ const forbiddenWrites = [
 	},
 ]
 
+const IGNORED_DIRS = new Set([
+	"node_modules",
+	"generated",
+	"dist",
+	".git",
+	"out",
+	"build",
+	"coverage",
+	".nyc_output",
+	"test_workspace",
+])
+
 async function walkAsync(directory) {
 	const entries = await fs.promises.readdir(directory, { withFileTypes: true })
 	const files = await Promise.all(
 		entries.map(async (entry) => {
-			if (entry.name === "node_modules" || entry.name === "generated" || entry.name === "dist") return []
+			if (IGNORED_DIRS.has(entry.name)) return []
 			const absolute = path.join(directory, entry.name)
 			if (entry.isDirectory()) {
 				return walkAsync(absolute)
