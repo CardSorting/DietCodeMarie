@@ -74,7 +74,7 @@ export const VoiceDictationCapsule: React.FC<VoiceDictationCapsuleProps> = ({
 					{onSoundToggle && (
 						<button
 							aria-label={soundEnabled ? "Mute dictation sound chimes" : "Unmute dictation sound chimes"}
-							className="flex size-6 items-center justify-center rounded-lg border border-border/40 bg-foreground/5 text-description transition-colors hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+							className="flex size-6 items-center justify-center rounded-lg border border-border/40 bg-foreground/5 text-description transition-all duration-150 hover:bg-foreground/10 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
 							onClick={onSoundToggle}
 							title={soundEnabled ? "Mute dictation sound chimes" : "Unmute dictation sound chimes"}
 							type="button">
@@ -85,7 +85,7 @@ export const VoiceDictationCapsule: React.FC<VoiceDictationCapsuleProps> = ({
 						<button
 							aria-label={autoSend ? "Auto-Send Enabled" : "Auto-Send Disabled"}
 							className={cn(
-								"flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+								"flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-medium transition-all duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
 								autoSend
 									? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25"
 									: "border-border/40 bg-foreground/5 text-description hover:bg-foreground/10 hover:text-foreground",
@@ -99,20 +99,22 @@ export const VoiceDictationCapsule: React.FC<VoiceDictationCapsuleProps> = ({
 					)}
 					{onCancel && (
 						<button
+							aria-keyshortcuts="Escape"
 							aria-label="Cancel voice dictation"
-							className="flex items-center gap-1 rounded-lg border border-border/40 bg-foreground/5 px-2 py-1 text-[11px] font-medium text-description transition-colors hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+							className="flex items-center gap-1 rounded-lg border border-border/40 bg-foreground/5 px-2 py-1 text-[11px] font-medium text-description transition-all duration-150 hover:bg-foreground/10 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
 							onClick={onCancel}
-							title="Cancel voice dictation"
+							title="Cancel voice dictation (Esc)"
 							type="button">
 							<X className="size-3" strokeWidth={2} />
 							<span>Cancel</span>
 						</button>
 					)}
 					<button
+						aria-keyshortcuts="Enter"
 						aria-label="Finish voice dictation"
-						className="flex items-center gap-1 rounded-lg border border-red-500/40 bg-red-500/20 px-2.5 py-1 text-[11px] font-semibold text-red-200 transition-colors hover:bg-red-500/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400"
+						className="flex items-center gap-1 rounded-lg border border-red-500/40 bg-red-500/20 px-2.5 py-1 text-[11px] font-semibold text-red-200 transition-all duration-150 hover:bg-red-500/30 active:scale-95 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400"
 						onClick={onStop}
-						title="Done (Commit voice input)"
+						title="Done · Commit voice input (Enter)"
 						type="button">
 						<Check className="size-3" strokeWidth={2.5} />
 						<span>Done</span>

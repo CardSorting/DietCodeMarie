@@ -102,7 +102,13 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}): UseSpeech
 	const SpeechRecognitionConstructor =
 		typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null
 
-	const isSupported = Boolean(SpeechRecognitionConstructor)
+	const hasMediaDevices =
+		typeof navigator !== "undefined" && Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+
+	const isSupported = Boolean(SpeechRecognitionConstructor) || hasMediaDevices
+
+	const mediaStreamRef = useRef<MediaStream | null>(null)
+	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 
 	const clearSilenceTimer = useCallback(() => {
 		if (silenceTimerRef.current) {
@@ -121,6 +127,24 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}): UseSpeech
 			}
 			recognitionRef.current = null
 		}
+		if (mediaStreamRef.current) {
+			try {
+				mediaStreamRef.current.getTracks().forEach((track) => track.stop())
+			} catch (_err) {
+				// Ignore
+			}
+			mediaStreamRef.current = null
+		}
+		if (mediaRecorderRef.current) {
+			try {
+				if (mediaRecorderRef.current.state !== "inactive") {
+					mediaRecorderRef.current.stop()
+				}
+			} catch (_err) {
+				// Ignore
+			}
+			mediaRecorderRef.current = null
+		}
 		if (isListening) {
 			playDictationStopSound()
 		}
@@ -138,7 +162,7 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}): UseSpeech
 	}, [clearSilenceTimer, silenceTimeoutMs, stopListening])
 
 	const startListening = useCallback(() => {
-		if (!SpeechRecognitionConstructor) {
+		if (!SpeechRecognitionConstructor && !hasMediaDevices) {
 			setError("Speech recognition is not supported in this environment.")
 			return
 		}
@@ -154,77 +178,116 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}): UseSpeech
 			}
 		}
 
-		try {
-			const recognition = new SpeechRecognitionConstructor()
-			recognition.continuous = continuous
-			recognition.interimResults = interimResults
-			recognition.lang = language
+		if (SpeechRecognitionConstructor) {
+			try {
+				const recognition = new SpeechRecognitionConstructor()
+				recognition.continuous = continuous
+				recognition.interimResults = interimResults
+				recognition.lang = language
 
-			recognition.onstart = () => {
-				setIsListening(true)
-				setError(null)
-				playDictationStartSound()
-				resetSilenceTimer()
-			}
+				recognition.onstart = () => {
+					setIsListening(true)
+					setError(null)
+					playDictationStartSound()
+					resetSilenceTimer()
+				}
 
-			recognition.onresult = (event: ISpeechRecognitionEvent) => {
-				resetSilenceTimer()
-				let finalTranscript = ""
-				let currentInterim = ""
+				recognition.onresult = (event: ISpeechRecognitionEvent) => {
+					resetSilenceTimer()
+					let finalTranscript = ""
+					let currentInterim = ""
 
-				for (let i = event.resultIndex; i < event.results.length; i++) {
-					const result = event.results[i]
-					const text = result[0]?.transcript || ""
-					if (result.isFinal) {
-						finalTranscript += text
-					} else {
-						currentInterim += text
+					for (let i = event.resultIndex; i < event.results.length; i++) {
+						const result = event.results[i]
+						const text = result[0]?.transcript || ""
+						if (result.isFinal) {
+							finalTranscript += text
+						} else {
+							currentInterim += text
+						}
+					}
+
+					setInterimTranscript(currentInterim)
+
+					if (finalTranscript && onTranscriptRef.current) {
+						onTranscriptRef.current(finalTranscript, true)
+					} else if (currentInterim && onTranscriptRef.current) {
+						onTranscriptRef.current(currentInterim, false)
 					}
 				}
 
-				setInterimTranscript(currentInterim)
+				recognition.onerror = (event: ISpeechRecognitionErrorEvent) => {
+					const errorCode = event.error || "unknown"
+					let errorMsg = `Voice error: ${errorCode}`
 
-				if (finalTranscript && onTranscriptRef.current) {
-					onTranscriptRef.current(finalTranscript, true)
-				} else if (currentInterim && onTranscriptRef.current) {
-					onTranscriptRef.current(currentInterim, false)
-				}
-			}
+					if (errorCode === "not-allowed" || errorCode === "service-not-allowed") {
+						errorMsg = "Microphone access was denied or is blocked by system settings."
+					} else if (errorCode === "no-speech") {
+						errorMsg = "No speech detected. Please speak clearly into your microphone."
+					} else if (errorCode === "network") {
+						errorMsg = "Speech recognition network connection error."
+					} else if (errorCode === "audio-capture") {
+						errorMsg = "No microphone hardware detected."
+					}
 
-			recognition.onerror = (event: ISpeechRecognitionErrorEvent) => {
-				const errorCode = event.error || "unknown"
-				let errorMsg = `Voice error: ${errorCode}`
-
-				if (errorCode === "not-allowed" || errorCode === "service-not-allowed") {
-					errorMsg = "Microphone access was denied or is blocked by system settings."
-				} else if (errorCode === "no-speech") {
-					errorMsg = "No speech detected. Please speak clearly into your microphone."
-				} else if (errorCode === "network") {
-					errorMsg = "Speech recognition network connection error."
-				} else if (errorCode === "audio-capture") {
-					errorMsg = "No microphone hardware detected."
+					setError(errorMsg)
+					setIsListening(false)
+					setInterimTranscript("")
 				}
 
-				setError(errorMsg)
-				setIsListening(false)
-				setInterimTranscript("")
-			}
+				recognition.onend = () => {
+					clearSilenceTimer()
+					setIsListening(false)
+					setInterimTranscript("")
+				}
 
-			recognition.onend = () => {
+				recognitionRef.current = recognition
+				recognition.start()
+			} catch (err: unknown) {
 				clearSilenceTimer()
+				const errorMessage = err instanceof Error ? err.message : "Failed to start speech recognition."
+				setError(errorMessage)
 				setIsListening(false)
-				setInterimTranscript("")
 			}
+		} else if (hasMediaDevices && navigator.mediaDevices.getUserMedia) {
+			navigator.mediaDevices
+				.getUserMedia({ audio: true })
+				.then((stream) => {
+					mediaStreamRef.current = stream
+					setIsListening(true)
+					setError(null)
+					playDictationStartSound()
+					resetSilenceTimer()
 
-			recognitionRef.current = recognition
-			recognition.start()
-		} catch (err: unknown) {
-			clearSilenceTimer()
-			const errorMessage = err instanceof Error ? err.message : "Failed to start speech recognition."
-			setError(errorMessage)
-			setIsListening(false)
+					if (typeof MediaRecorder !== "undefined") {
+						try {
+							const recorder = new MediaRecorder(stream)
+							mediaRecorderRef.current = recorder
+							recorder.start()
+						} catch (_err) {
+							// MediaRecorder optional
+						}
+					}
+				})
+				.catch((err) => {
+					clearSilenceTimer()
+					const isDenied = err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError"
+					const errorMsg = isDenied
+						? "Microphone access was denied or is blocked by system settings."
+						: "No microphone hardware detected."
+					setError(errorMsg)
+					setIsListening(false)
+				})
 		}
-	}, [SpeechRecognitionConstructor, clearSilenceTimer, continuous, interimResults, language, resetSilenceTimer])
+	}, [
+		SpeechRecognitionConstructor,
+		clearSilenceTimer,
+		continuous,
+		hasMediaDevices,
+		interimResults,
+		language,
+		resetSilenceTimer,
+	])
 
 	const toggleListening = useCallback(() => {
 		if (isListening) {

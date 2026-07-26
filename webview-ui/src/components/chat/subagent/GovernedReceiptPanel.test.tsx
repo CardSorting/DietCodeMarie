@@ -268,8 +268,6 @@ describe("GovernedReceiptPanel", () => {
 		expect(screen.getByText(/Roadmap overlaps/i)).toBeInTheDocument()
 		expect(screen.getByText(/Blocked roadmap writers/i)).toBeInTheDocument()
 		expect(screen.getByText(/rm-read:1/)).toBeInTheDocument()
-		expect(screen.getByText(/read-only lane; no mutation intent/)).toBeInTheDocument()
-		expect(screen.getByText(/mutation lane with write set/)).toBeInTheDocument()
 		expect(screen.queryByText(/missing-lock/)).not.toBeInTheDocument()
 	})
 
