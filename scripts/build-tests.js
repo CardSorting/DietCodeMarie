@@ -41,19 +41,27 @@ const srcConfig = {
 	plugins: [esbuildProblemMatcherPlugin],
 }
 
+const { execFile } = require("child_process")
+const { promisify } = require("util")
+const execFileAsync = promisify(execFile)
+
+async function runTsc() {
+	const isWin = process.platform === "win32"
+	const bin = isWin ? "npx.cmd" : "npx"
+	await execFileAsync(bin, ["tsc", "-p", "./tsconfig.test.json", "--outDir", "out"], { encoding: "utf-8" })
+}
+
 async function main() {
 	const srcCtx = await esbuild.context(srcConfig)
 
 	if (watch) {
+		runTsc().catch(() => {})
 		await srcCtx.watch()
 	} else {
-		await srcCtx.rebuild()
-
+		await Promise.all([runTsc(), srcCtx.rebuild()])
 		await srcCtx.dispose()
 	}
 }
-
-execSync("tsc -p ./tsconfig.test.json --outDir out", { encoding: "utf-8" })
 
 main().catch((e) => {
 	console.error(e)
