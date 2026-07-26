@@ -106,12 +106,14 @@ jobs:
                       playwright-browsers-${{ runner.os }}-
 
             - name: Install root dependencies
-              run: npm ci
+              if: steps.root-cache.outputs.cache-hit != 'true'
+              run: npm ci --prefer-offline
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Install webview-ui dependencies
-              run: cd webview-ui && npm ci
+              if: steps.webview-cache.outputs.cache-hit != 'true'
+              run: cd webview-ui && npm ci --prefer-offline
 
             - name: Install vsce
               run: npm install -g @vscode/vsce@3.2.1
