@@ -32,35 +32,38 @@ import {
 import { SpiderAuditError } from './spider-errors.js';
 
 /** GitHub Actions / VS Code problem matcher patterns for CI log parsing. */
+const STATIC_PROBLEM_MATCHERS: SpiderProblemMatcher[] = [
+  {
+    owner: 'spider',
+    pattern: [
+      {
+        regexp: '^(.*):(\\d+):(\\d+):\\s+(error|warning|info)\\s+(SPI-\\d+)\\s+\\(([^)]+)\\)\\s+(.+)\\s+\\[([a-f0-9]+)\\]$',
+        file: 1,
+        line: 2,
+        column: 3,
+        severity: 4,
+        code: 5,
+        message: 7,
+      },
+      {
+        regexp: '^(.*):(\\d+):\\s+(error|warning|info)\\s+(SPI-\\d+)',
+        file: 1,
+        line: 2,
+        severity: 3,
+        code: 4,
+      },
+    ],
+  },
+];
+
+/** GitHub Actions / VS Code problem matcher patterns for CI log parsing. */
 export function toProblemMatchers(): SpiderProblemMatcher[] {
-  return [
-    {
-      owner: 'spider',
-      pattern: [
-        {
-          regexp: '^(.*):(\\d+):(\\d+):\\s+(error|warning|info)\\s+(SPI-\\d+)\\s+\\(([^)]+)\\)\\s+(.+)\\s+\\[([a-f0-9]+)\\]$',
-          file: 1,
-          line: 2,
-          column: 3,
-          severity: 4,
-          code: 5,
-          message: 7,
-        },
-        {
-          regexp: '^(.*):(\\d+):\\s+(error|warning|info)\\s+(SPI-\\d+)',
-          file: 1,
-          line: 2,
-          severity: 3,
-          code: 4,
-        },
-      ],
-    },
-  ];
+  return STATIC_PROBLEM_MATCHERS;
 }
 
 /** VS Code / GitHub Actions problem matcher config export. */
 export function exportProblemMatcherConfig(): { version: 2; problemMatchers: SpiderProblemMatcher[] } {
-  return { version: 2, problemMatchers: toProblemMatchers() };
+  return { version: 2, problemMatchers: STATIC_PROBLEM_MATCHERS };
 }
 
 export function shouldProceedFromPreflight(audit: SpiderReport): {
@@ -99,7 +102,9 @@ export function buildPriorityQueue(report: SpiderReport): SpiderPriorityItem[] {
   const items: SpiderPriorityItem[] = [];
   let rank = 1;
 
-  for (const p of report.diskParity.filter((d) => d.driftStatus !== 'clean')) {
+  for (let i = 0; i < report.diskParity.length; i++) {
+    const p = report.diskParity[i];
+    if (p.driftStatus === 'clean') continue;
     items.push({
       rank: rank++,
       kind: 'drift',
@@ -109,7 +114,9 @@ export function buildPriorityQueue(report: SpiderReport): SpiderPriorityItem[] {
     });
   }
 
-  for (const finding of report.findings.filter((f) => f.severity === 'ERROR')) {
+  for (let i = 0; i < report.findings.length; i++) {
+    const finding = report.findings[i];
+    if (finding.severity !== 'ERROR') continue;
     const ref = toFindingRef(finding);
     items.push({
       rank: rank++,
@@ -121,9 +128,11 @@ export function buildPriorityQueue(report: SpiderReport): SpiderPriorityItem[] {
     });
   }
 
-  for (const directive of [...report.repairDirectives].sort(
+  const sortedDirectives = report.repairDirectives.slice().sort(
     (a, b) => (riskRank[a.riskLevel] ?? 2) - (riskRank[b.riskLevel] ?? 2)
-  )) {
+  );
+  for (let i = 0; i < sortedDirectives.length; i++) {
+    const directive = sortedDirectives[i];
     items.push({
       rank: rank++,
       kind: 'repair',
@@ -135,7 +144,9 @@ export function buildPriorityQueue(report: SpiderReport): SpiderPriorityItem[] {
     });
   }
 
-  for (const finding of report.findings.filter((f) => f.severity === 'WARN')) {
+  for (let i = 0; i < report.findings.length; i++) {
+    const finding = report.findings[i];
+    if (finding.severity !== 'WARN') continue;
     const ref = toFindingRef(finding);
     items.push({
       rank: rank++,

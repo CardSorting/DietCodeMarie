@@ -21,8 +21,7 @@ export class MetricsEngine {
 		size: { mean: number; stdDev: number }
 		giniCoefficient: number
 	} {
-		const values = Array.from(nodes.values())
-		const totalFiles = values.length
+		const totalFiles = nodes.size
 		if (totalFiles === 0) {
 			return {
 				complexity: { mean: 0, stdDev: 0 },
@@ -32,20 +31,45 @@ export class MetricsEngine {
 			}
 		}
 
-		const getStats = (nums: number[]) => {
-			const mean = nums.reduce((a, b) => a + b, 0) / totalFiles
-			const variance = nums.reduce((a, b) => a + (b - mean) ** 2, 0) / totalFiles
-			return { mean, stdDev: Math.sqrt(variance) }
+		let sumComp = 0
+		let sumCoup = 0
+		let sumSize = 0
+		const couplings: number[] = new Array(totalFiles)
+		let idx = 0
+
+		for (const node of nodes.values()) {
+			const comp = node.astComplexity || 0
+			const coup = node.afferentCoupling || 0
+			const sz = comp / 10 + (node.exports ? node.exports.length * 5 : 0)
+
+			sumComp += comp
+			sumCoup += coup
+			sumSize += sz
+			couplings[idx++] = coup
 		}
 
-		// Approximate line counts
-		const estimatedLines = values.map((n) => n.astComplexity / 10 + n.exports.length * 5)
+		const meanComp = sumComp / totalFiles
+		const meanCoup = sumCoup / totalFiles
+		const meanSize = sumSize / totalFiles
+
+		let varComp = 0
+		let varCoup = 0
+		let varSize = 0
+		for (const node of nodes.values()) {
+			const comp = node.astComplexity || 0
+			const coup = node.afferentCoupling || 0
+			const sz = comp / 10 + (node.exports ? node.exports.length * 5 : 0)
+
+			varComp += (comp - meanComp) ** 2
+			varCoup += (coup - meanCoup) ** 2
+			varSize += (sz - meanSize) ** 2
+		}
 
 		return {
-			complexity: getStats(values.map((n) => n.astComplexity)),
-			coupling: getStats(values.map((n) => n.afferentCoupling)),
-			size: getStats(estimatedLines),
-			giniCoefficient: this.calculateGiniCoefficient(values.map((n) => n.afferentCoupling)),
+			complexity: { mean: meanComp, stdDev: Math.sqrt(varComp / totalFiles) },
+			coupling: { mean: meanCoup, stdDev: Math.sqrt(varCoup / totalFiles) },
+			size: { mean: meanSize, stdDev: Math.sqrt(varSize / totalFiles) },
+			giniCoefficient: this.calculateGiniCoefficient(couplings),
 		}
 	}
 
@@ -55,14 +79,18 @@ export class MetricsEngine {
 	 * A high Gini coefficient (> 0.7) indicates a "Hub and Spoke" (Monolithic) architecture.
 	 */
 	private calculateGiniCoefficient(nums: number[]): number {
-		if (nums.length === 0) return 0
-		const sorted = [...nums].sort((a, b) => a - b)
-		const n = sorted.length
+		const n = nums.length
+		if (n === 0) return 0
+		nums.sort((a, b) => a - b)
 		let sumOfDifferences = 0
+		let totalSum = 0
 		for (let i = 0; i < n; i++) {
-			sumOfDifferences += (2 * i - n - 1) * sorted[i]
+			const val = nums[i]
+			sumOfDifferences += (2 * i - n - 1) * val
+			totalSum += val
 		}
-		return sumOfDifferences / (n * n * (sorted.reduce((a, b) => a + b, 0) / n))
+		if (totalSum === 0) return 0
+		return sumOfDifferences / (n * totalSum)
 	}
 
 	public calculateZScore(value: number, stats: { mean: number; stdDev: number }): number {
@@ -118,17 +146,20 @@ export class MetricsEngine {
 		avgCoupling: number
 		avgFileLineCount: number
 	} {
-		const values = Array.from(nodes.values())
-		if (values.length === 0) {
+		const totalFiles = nodes.size
+		if (totalFiles === 0) {
 			return { avgComplexity: 0, avgCoupling: 0, avgFileLineCount: 0 }
 		}
 
-		const totalComplexity = values.reduce((acc, n) => acc + n.astComplexity, 0)
-		const totalCoupling = values.reduce((acc, n) => acc + n.afferentCoupling, 0)
-		const totalFiles = values.length
+		let totalComplexity = 0
+		let totalCoupling = 0
+		let estimatedTotalLines = 0
 
-		// Approximate line counts (conservative estimate from exports/complexity ratio)
-		const estimatedTotalLines = values.reduce((acc, n) => acc + (n.astComplexity / 10 + n.exports.length * 5), 0)
+		for (const n of nodes.values()) {
+			totalComplexity += n.astComplexity || 0
+			totalCoupling += n.afferentCoupling || 0
+			estimatedTotalLines += (n.astComplexity || 0) / 10 + (n.exports ? n.exports.length * 5 : 0)
+		}
 
 		return {
 			avgComplexity: totalComplexity / totalFiles,
@@ -239,12 +270,12 @@ export class MetricsEngine {
 			// V215: Comprehensive Coupling (Imports + Resolved Re-exports)
 			const imports = node.imports || []
 			const reExports = node.reExports || []
-			const connections = new Set([...imports, ...reExports])
+			const visited = new Set<string>()
 
-			for (const imp of connections) {
-				// V215: Fast-path for already resolved re-exports (which are IDs)
+			const processConnection = (imp: string) => {
+				if (visited.has(imp)) return
+				visited.add(imp)
 				const resolved: string | null = nodes.has(imp) ? imp : this.resolver.resolveImportToNodeId(node.path, imp, nodes)
-
 				if (resolved) {
 					const depSet = dependentsMap.get(resolved)
 					if (depSet) {
@@ -252,6 +283,9 @@ export class MetricsEngine {
 					}
 				}
 			}
+
+			for (let i = 0; i < imports.length; i++) processConnection(imports[i])
+			for (let i = 0; i < reExports.length; i++) processConnection(reExports[i])
 		}
 
 		for (const [id, depSet] of dependentsMap.entries()) {
@@ -526,22 +560,25 @@ export class MetricsEngine {
 	 * Analyzes method/symbol names for vocabulary overlap.
 	 * High fragmentation indicates a violation of the Single Responsibility Principle.
 	 */
+	private static readonly CAMEL_SPLIT_REGEX = /(?=[A-Z])|_/
+
 	public calculateSemanticCohesion(node: SpiderNode): number {
 		if (node.exports.length < 2) return 1.0
 
-		const words = node.exports.flatMap((e: string) => {
-			// Split camelCase/PascalCase into words
-			return e.split(/(?=[A-Z])|_/).map((w: string) => w.toLowerCase())
-		})
-
 		const wordCounts = new Map<string, number>()
-		for (const w of words) {
-			if (w.length < 3) continue
-			wordCounts.set(w, (wordCounts.get(w) || 0) + 1)
+		for (let i = 0; i < node.exports.length; i++) {
+			const parts = node.exports[i].split(MetricsEngine.CAMEL_SPLIT_REGEX)
+			for (let j = 0; j < parts.length; j++) {
+				const w = parts[j].toLowerCase()
+				if (w.length < 3) continue
+				wordCounts.set(w, (wordCounts.get(w) || 0) + 1)
+			}
 		}
 
-		// Calculate overlap: Ratio of recurring words to total unique words
-		const recurring = Array.from(wordCounts.values()).filter((c) => c > 1).length
+		let recurring = 0
+		for (const count of wordCounts.values()) {
+			if (count > 1) recurring++
+		}
 		const totalUnique = wordCounts.size
 		if (totalUnique === 0) return 1.0
 

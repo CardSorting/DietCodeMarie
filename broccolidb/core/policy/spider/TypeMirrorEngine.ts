@@ -4,11 +4,38 @@ import * as path from 'node:path';
 import * as ts from 'typescript';
 import type { TypeMirrorDiagnostic, TypeMirrorResult } from './report-types.js';
 
+const GLOBAL_CONFIG_CACHE = new Map<string, { config: ts.ParsedCommandLine | null; error?: string }>();
+const GLOBAL_PROGRAM_SINGLETON = new WeakMap<ts.ParsedCommandLine, ts.Program>();
+
 export class TypeMirrorEngine {
+  private cachedTsconfigPath: string | null | undefined = undefined;
+
   constructor(private readonly cwd: string) {}
 
+  private getParsedConfig(): { tsconfigPath: string | null; parsed: ts.ParsedCommandLine | null; error?: string } {
+    if (this.cachedTsconfigPath === undefined) {
+      this.cachedTsconfigPath = ts.findConfigFile(this.cwd, ts.sys.fileExists, 'tsconfig.json') ?? null;
+      if (this.cachedTsconfigPath) {
+        let cached = GLOBAL_CONFIG_CACHE.get(this.cachedTsconfigPath);
+        if (!cached) {
+          const configFile = ts.readConfigFile(this.cachedTsconfigPath, ts.sys.readFile);
+          if (configFile.error) {
+            cached = { config: null, error: `Failed to parse tsconfig: ${configFile.error.messageText}` };
+          } else {
+            const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, path.dirname(this.cachedTsconfigPath));
+            cached = { config: parsed };
+          }
+          GLOBAL_CONFIG_CACHE.set(this.cachedTsconfigPath, cached);
+        }
+        return { tsconfigPath: this.cachedTsconfigPath, parsed: cached.config, error: cached.error };
+      }
+    }
+    const cached = this.cachedTsconfigPath ? GLOBAL_CONFIG_CACHE.get(this.cachedTsconfigPath) : null;
+    return { tsconfigPath: this.cachedTsconfigPath, parsed: cached?.config ?? null, error: cached?.error };
+  }
+
   runTypeMirror(scopeFiles?: Set<string>): TypeMirrorResult {
-    const tsconfigPath = ts.findConfigFile(this.cwd, ts.sys.fileExists, 'tsconfig.json');
+    const { tsconfigPath, parsed, error } = this.getParsedConfig();
     if (!tsconfigPath) {
       return {
         compilerAvailable: false,
@@ -19,25 +46,26 @@ export class TypeMirrorEngine {
       };
     }
 
-    const configFile = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
-    if (configFile.error) {
+    if (!parsed || error) {
       return {
         compilerAvailable: false,
         diagnosticsComplete: false,
-        degradedReason: `Failed to parse tsconfig: ${configFile.error.messageText}`,
+        degradedReason: error ?? 'Failed to parse tsconfig',
         tsconfigPath,
         diagnosticCount: 0,
         diagnostics: [],
       };
     }
 
-    const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, path.dirname(tsconfigPath));
     let rootNames = parsed.fileNames;
     if (scopeFiles && scopeFiles.size > 0) {
-      rootNames = rootNames.filter((file) => {
+      const filtered: string[] = [];
+      for (let i = 0; i < parsed.fileNames.length; i++) {
+        const file = parsed.fileNames[i];
         const rel = path.relative(this.cwd, file).replace(/\\/g, '/');
-        return scopeFiles.has(rel);
-      });
+        if (scopeFiles.has(rel)) filtered.push(file);
+      }
+      rootNames = filtered;
     }
 
     if (rootNames.length === 0) {
@@ -60,9 +88,10 @@ export class TypeMirrorEngine {
 
     const syntactic = program.getSyntacticDiagnostics();
     const semantic = program.getSemanticDiagnostics();
-    const allDiagnostics = [...syntactic, ...semantic];
+    const totalCount = syntactic.length + semantic.length;
+    const diagnostics: TypeMirrorDiagnostic[] = new Array(totalCount);
 
-    const diagnostics: TypeMirrorDiagnostic[] = allDiagnostics.map((diag) => {
+    const convertDiagnostic = (diag: ts.Diagnostic): TypeMirrorDiagnostic => {
       const file = diag.file;
       const relPath = file
         ? path.relative(this.cwd, file.fileName).replace(/\\/g, '/')
@@ -86,7 +115,11 @@ export class TypeMirrorEngine {
             }
           : undefined,
       };
-    });
+    };
+
+    let idx = 0;
+    for (let i = 0; i < syntactic.length; i++) diagnostics[idx++] = convertDiagnostic(syntactic[i]);
+    for (let i = 0; i < semantic.length; i++) diagnostics[idx++] = convertDiagnostic(semantic[i]);
 
     return {
       compilerAvailable: true,

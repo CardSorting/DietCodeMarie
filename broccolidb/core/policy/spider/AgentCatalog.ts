@@ -113,7 +113,12 @@ export function formatCatalogPrompt(catalog: {
   phaseWorkflow: readonly { phase: string; when: string }[];
   preferredEntrypoints: { mcpBootstrap: string };
 }): string {
-  const phases = catalog.phaseWorkflow.map((p) => `- ${p.phase}: ${p.when}`).join('\n');
+  let phases = '';
+  for (let i = 0; i < catalog.phaseWorkflow.length; i++) {
+    if (i > 0) phases += '\n';
+    const p = catalog.phaseWorkflow[i];
+    phases += `- ${p.phase}: ${p.when}`;
+  }
   return [
     catalog.runbook,
     '',
@@ -131,12 +136,14 @@ export function formatCatalogPrompt(catalog: {
   ].join('\n');
 }
 
-export function getAgentToolkitCatalog() {
+let cachedCatalog: ReturnType<typeof buildCatalog> | null = null;
+
+function buildCatalog() {
   const base = {
     schema: 'broccolidb.spider.agent-catalog/v1',
     runbook: SPIDER_AGENT_RUNBOOK,
     toolSchema: SPIDER_AGENT_TOOL_SCHEMA,
-    mcpTools: [...SPIDER_MCP_TOOL_NAMES],
+    mcpTools: SPIDER_MCP_TOOL_NAMES as unknown as string[],
     checkOutputSchema: SPIDER_CHECK_OUTPUT_SCHEMA,
     checkInputSchema: SPIDER_CHECK_INPUT_SCHEMA,
     pipelineInputSchema: SPIDER_PIPELINE_INPUT_SCHEMA,
@@ -147,8 +154,8 @@ export function getAgentToolkitCatalog() {
     workflowPresets: SPIDER_WORKFLOW_PRESETS,
     agentScenarios: SPIDER_AGENT_SCENARIOS,
     schemaRegistry: getSpiderSchemaRegistry(),
-    phaseWorkflow: [...SPIDER_PHASE_WORKFLOW],
-    preferredEntrypoints: { ...SPIDER_PREFERRED_ENTRYPOINTS },
+    phaseWorkflow: SPIDER_PHASE_WORKFLOW as unknown as any[],
+    preferredEntrypoints: SPIDER_PREFERRED_ENTRYPOINTS,
     methodGroups: getAgentMethodGroups(),
   };
   return {
@@ -157,4 +164,11 @@ export function getAgentToolkitCatalog() {
     decisionGuide: formatAgentDecisionGuide(),
     quickStart: formatAgentQuickStart(),
   };
+}
+
+export function getAgentToolkitCatalog() {
+  if (!cachedCatalog) {
+    cachedCatalog = buildCatalog();
+  }
+  return cachedCatalog;
 }

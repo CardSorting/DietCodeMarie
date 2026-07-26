@@ -7,7 +7,6 @@ import type {
   RepairDirective,
   SpiderAgentBundle,
   SpiderCodeAction,
-  SpiderDiagnosticId,
   SpiderDiagnosticJson,
   SpiderFinding,
   SpiderGatePolicy,
@@ -18,7 +17,7 @@ import type {
   SpiderSeverity,
 } from './report-types.js';
 import { SPI_LABELS } from './report-types.js';
-import { stableFindingId, toFindingRef } from './AgentDigest.js';
+import { stableFindingId, toFindingRef, type SpiderFindingRef } from './AgentDigest.js';
 import { SPI_RULE_DOCS, formatLocationUri } from './spider-constants.js';
 
 export { SPI_RULE_DOCS, formatLocationUri };
@@ -238,19 +237,44 @@ export function evaluateGate(report: SpiderReport, policy: SpiderGatePolicy = {}
 }
 
 export function diffReports(before: SpiderReport, after: SpiderReport): SpiderReportDiff {
-  const beforeIds = new Set(before.findings.map((f) => f.findingId ?? stableFindingId(f)));
-  const afterIds = new Set(after.findings.map((f) => f.findingId ?? stableFindingId(f)));
+  const beforeIds = new Set<string>();
+  for (let i = 0; i < before.findings.length; i++) {
+    const f = before.findings[i];
+    beforeIds.add(f.findingId ?? stableFindingId(f));
+  }
+  const afterIds = new Set<string>();
+  for (let i = 0; i < after.findings.length; i++) {
+    const f = after.findings[i];
+    afterIds.add(f.findingId ?? stableFindingId(f));
+  }
 
-  const resolved = before.findings.filter((f) => !afterIds.has(f.findingId ?? stableFindingId(f)));
-  const introduced = after.findings.filter((f) => !beforeIds.has(f.findingId ?? stableFindingId(f)));
-  const persistent = after.findings.filter((f) => beforeIds.has(f.findingId ?? stableFindingId(f)));
+  const resolved: SpiderFindingRef[] = [];
+  for (let i = 0; i < before.findings.length; i++) {
+    const f = before.findings[i];
+    const id = f.findingId ?? stableFindingId(f);
+    if (!afterIds.has(id)) {
+      resolved.push(toFindingRef(f));
+    }
+  }
+
+  const introduced: SpiderFindingRef[] = [];
+  const persistent: SpiderFindingRef[] = [];
+  for (let i = 0; i < after.findings.length; i++) {
+    const f = after.findings[i];
+    const id = f.findingId ?? stableFindingId(f);
+    if (beforeIds.has(id)) {
+      persistent.push(toFindingRef(f));
+    } else {
+      introduced.push(toFindingRef(f));
+    }
+  }
 
   return {
     beforeReportId: before.reportId,
     afterReportId: after.reportId,
-    resolved: resolved.map(toFindingRef),
-    introduced: introduced.map(toFindingRef),
-    persistent: persistent.map(toFindingRef),
+    resolved,
+    introduced,
+    persistent,
     entropyDelta: after.entropy - before.entropy,
     verdictChanged: before.verdict !== after.verdict,
     beforeVerdict: before.verdict ?? 'pass',

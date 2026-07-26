@@ -13,6 +13,8 @@ import type {
 } from './report-types.js';
 import type { SpiderNode } from './types.js';
 
+let directiveSeq = 0;
+
 const directive = (
   type: RepairDirectiveType,
   targetFile: string,
@@ -23,7 +25,7 @@ const directive = (
   riskLevel: RepairDirective['riskLevel'],
   evidence: SpiderEvidence
 ): RepairDirective => ({
-  directiveId: randomUUID(),
+  directiveId: `DIR-${++directiveSeq}`,
   type,
   targetFile,
   suggestedValue,
@@ -174,7 +176,13 @@ export class RepairDirectiveEngine {
   }
 
   validateDirectives(directives: RepairDirective[], findings: SpiderFinding[]): RepairDirective[] {
-    const evidenceIds = new Set(findings.flatMap((f) => f.evidence.map((e) => e.diagnosticId)));
+    const evidenceIds = new Set<string>();
+    for (let i = 0; i < findings.length; i++) {
+      const evs = findings[i].evidence;
+      for (let j = 0; j < evs.length; j++) {
+        evidenceIds.add(evs[j].diagnosticId);
+      }
+    }
     return directives.filter((d) => {
       if (d.supportingEvidenceIds.length === 0) return false;
       if (!d.verificationCommand) return false;
@@ -205,10 +213,7 @@ export function detectLayerViolations(
         isViolation = true;
       } else if (node.layer === 'ui' && target.layer === 'infrastructure') {
         isViolation = true;
-      } else if (
-        node.layer === 'plumbing' &&
-        ['domain', 'core', 'infrastructure', 'ui'].includes(target.layer)
-      ) {
+      } else if (node.layer === 'plumbing' && target.layer !== 'plumbing') {
         isViolation = true;
       }
 
@@ -261,7 +266,8 @@ export function violationsToFindings(
 ): SpiderFinding[] {
   const findings: SpiderFinding[] = [];
 
-  for (const v of structural) {
+  for (let i = 0; i < structural.length; i++) {
+    const v = structural[i];
     findings.push({
       diagnosticId: v.diagnosticId,
       severity: v.evidence[0]?.severity ?? 'ERROR',
@@ -272,7 +278,8 @@ export function violationsToFindings(
     });
   }
 
-  for (const layer of layerViolations) {
+  for (let i = 0; i < layerViolations.length; i++) {
+    const layer = layerViolations[i];
     findings.push({
       diagnosticId: 'SPI-005',
       severity: 'ERROR',
@@ -283,7 +290,8 @@ export function violationsToFindings(
     });
   }
 
-  for (const cycle of cycles) {
+  for (let i = 0; i < cycles.length; i++) {
+    const cycle = cycles[i];
     findings.push({
       diagnosticId: 'SPI-004',
       severity: 'ERROR',
@@ -294,7 +302,8 @@ export function violationsToFindings(
     });
   }
 
-  for (const parity of diskParity) {
+  for (let i = 0; i < diskParity.length; i++) {
+    const parity = diskParity[i];
     if (parity.driftStatus === 'clean') continue;
     findings.push({
       diagnosticId: 'SPI-006',

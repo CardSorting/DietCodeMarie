@@ -14,6 +14,14 @@ import { SPI_RULE_DOCS, formatLocationUri } from './spider-constants.js';
 
 export type SpiderVerdict = 'pass' | 'warn' | 'fail';
 
+export const enum NodeStateFlags {
+  None        = 0,
+  IsInternal  = 1 << 0,
+  HasFindings = 1 << 1,
+  IsDeferred  = 1 << 2,
+  IsAnalyzed  = 1 << 3,
+}
+
 export interface SpiderFindingRef {
   findingId: string;
   diagnosticId: SpiderDiagnosticId;
@@ -73,14 +81,46 @@ export function stableFindingId(finding: Pick<SpiderFinding, 'diagnosticId' | 'f
 }
 
 export function assignFindingIds(findings: SpiderFinding[]): SpiderFinding[] {
-  return findings.map((f) => ({
-    ...f,
-    findingId: f.findingId ?? stableFindingId(f),
-    evidence: f.evidence.map((ev, i) => ({
-      ...ev,
-      evidenceId: ev.evidenceId ?? `${stableFindingId(f)}:${i}`,
-    })),
-  }));
+  let needsAssignment = false;
+  for (let i = 0; i < findings.length; i++) {
+    const f = findings[i];
+    if (!f.findingId) {
+      needsAssignment = true;
+      break;
+    }
+    for (let j = 0; j < f.evidence.length; j++) {
+      if (!f.evidence[j].evidenceId) {
+        needsAssignment = true;
+        break;
+      }
+    }
+    if (needsAssignment) break;
+  }
+  if (!needsAssignment) return findings;
+
+  return findings.map((f) => {
+    const fId = f.findingId ?? stableFindingId(f);
+    let evNeedsAssignment = false;
+    for (let i = 0; i < f.evidence.length; i++) {
+      if (!f.evidence[i].evidenceId) {
+        evNeedsAssignment = true;
+        break;
+      }
+    }
+    const evidence = evNeedsAssignment
+      ? f.evidence.map((ev, i) => ({
+          ...ev,
+          evidenceId: ev.evidenceId ?? `${fId}:${i}`,
+        }))
+      : f.evidence;
+
+    if (f.findingId === fId && evidence === f.evidence) return f;
+    return {
+      ...f,
+      findingId: fId,
+      evidence,
+    };
+  });
 }
 
 export function computeVerdict(findings: SpiderFinding[], degraded: boolean): SpiderVerdict {
@@ -98,7 +138,8 @@ export function buildRecommendedActions(
   const actions: SpiderRecommendedAction[] = [];
   const riskRank = { high: 0, medium: 1, low: 2 };
 
-  for (const directive of directives) {
+  for (let i = 0; i < directives.length; i++) {
+    const directive = directives[i];
     const diagId = (directive.supportingEvidenceIds[0] ?? 'SPI-001') as SpiderDiagnosticId;
     actions.push({
       priority: riskRank[directive.riskLevel] ?? 2,
@@ -111,10 +152,17 @@ export function buildRecommendedActions(
     });
   }
 
-  for (const finding of findings.filter((f) => f.severity === 'ERROR')) {
-    if (actions.some((a) => a.filePath === finding.filePath && a.diagnosticId === finding.diagnosticId)) {
-      continue;
+  for (let i = 0; i < findings.length; i++) {
+    const finding = findings[i];
+    if (finding.severity !== 'ERROR') continue;
+    let exists = false;
+    for (let j = 0; j < actions.length; j++) {
+      if (actions[j].filePath === finding.filePath && actions[j].diagnosticId === finding.diagnosticId) {
+        exists = true;
+        break;
+      }
     }
+    if (exists) continue;
     actions.push({
       priority: 3,
       action: `Resolve ${finding.diagnosticId} (${SPI_LABELS[finding.diagnosticId]}): ${finding.message}`,

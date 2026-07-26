@@ -75,11 +75,9 @@ export class ForensicSpider {
   scanPhysicalFiles(scope?: Set<string>): PhysicalFile[] {
     const files: PhysicalFile[] = [];
     const seen = new Set<string>();
-    const candidates = scope
-      ? Array.from(scope)
-      : Array.from(this.engine.nodes.keys());
+    const iterable: Iterable<string> = scope ?? this.engine.nodes.keys();
 
-    for (const filePath of candidates) {
+    for (const filePath of iterable) {
       if (seen.has(filePath)) continue;
       seen.add(filePath);
       const absolutePath = path.resolve(this.cwd, filePath);
@@ -97,20 +95,24 @@ export class ForensicSpider {
   }
 
   buildSymbolIndex(files: PhysicalFile[]): void {
-    for (const file of files) {
-      this.engine.updateNode(file.filePath, file.content, true);
+    for (let i = 0; i < files.length; i++) {
+      this.engine.updateNode(files[i].filePath, files[i].content, true);
     }
     this.engine.resolveAllImports();
   }
 
   computeSemanticFootprints(files: PhysicalFile[]) {
-    const contentByPath = new Map(files.map((f) => [f.filePath, f.content]));
+    const contentByPath = new Map<string, string>();
+    for (let i = 0; i < files.length; i++) {
+      contentByPath.set(files[i].filePath, files[i].content);
+    }
     const footprints = this.footprintEngine.computeFootprints(
       this.engine.nodes,
       contentByPath,
       this.previousFootprintLocations
     );
-    for (const fp of footprints) {
+    for (let i = 0; i < footprints.length; i++) {
+      const fp = footprints[i];
       this.previousFootprintLocations.set(fp.exportIdentity, fp.currentLocation);
     }
     return footprints;

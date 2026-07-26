@@ -109,14 +109,8 @@ export class PersistenceManager {
 			this.snapshots.shift()
 		}
 
-		if (this.cachedHistory === null) {
-			this.cachedHistory = [snapshot]
-		} else {
-			this.cachedHistory.push(snapshot)
-			if (this.cachedHistory.length > 5) {
-				this.cachedHistory.shift()
-			}
-		}
+		// Invalidate decoded object graph history to release uncompressed RAM footprint
+		this.cachedHistory = null
 
 		return snapshot
 	}
@@ -191,6 +185,7 @@ export class PersistenceManager {
 			}
 		}
 
+		oldNodes.clear()
 		return drifts
 	}
 
@@ -204,14 +199,21 @@ export class PersistenceManager {
 	 */
 	public computeSubstrateChecksum(nodes: Map<string, SpiderNode>): string {
 		const hasher = crypto.createHash("sha256")
-		const sortedIds = Array.from(nodes.keys()).sort()
-		for (const id of sortedIds) {
+		const ids: string[] = new Array(nodes.size)
+		let i = 0
+		for (const id of nodes.keys()) {
+			ids[i++] = id
+		}
+		ids.sort()
+		for (let j = 0; j < ids.length; j++) {
+			const id = ids[j]
 			const node = nodes.get(id)
 			if (node) {
 				hasher.update(id)
 				hasher.update(node.hash)
 			}
 		}
+		ids.length = 0
 		return hasher.digest("hex")
 	}
 }

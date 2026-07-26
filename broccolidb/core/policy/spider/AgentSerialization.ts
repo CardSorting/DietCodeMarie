@@ -140,6 +140,16 @@ export function formatWireDigest(wire: SpiderBundleWireFormat, maxCompactLines =
 /** OpenTelemetry-inspired structured log event for observability pipelines. */
 export function toStructuredTelemetry(wire: SpiderBundleWireFormat): Record<string, unknown> {
   validateWireFormat(wire);
+  let blockerCount = 0;
+  let driftCount = 0;
+  let repairCount = 0;
+  for (let i = 0; i < wire.priorityQueue.length; i++) {
+    const kind = wire.priorityQueue[i].kind;
+    if (kind === 'blocker') blockerCount++;
+    else if (kind === 'drift') driftCount++;
+    else if (kind === 'repair') repairCount++;
+  }
+
   return {
     event: 'spider.forensic',
     reportId: wire.reportId,
@@ -147,9 +157,9 @@ export function toStructuredTelemetry(wire: SpiderBundleWireFormat): Record<stri
     proceed: wire.proceed,
     exitCode: wire.exitCode,
     gateConclusion: wire.gate.conclusion,
-    blockerCount: wire.priorityQueue.filter((q) => q.kind === 'blocker').length,
-    driftCount: wire.priorityQueue.filter((q) => q.kind === 'drift').length,
-    repairCount: wire.priorityQueue.filter((q) => q.kind === 'repair').length,
+    blockerCount,
+    driftCount,
+    repairCount,
     topCause: wire.clusters[0]?.cause ?? null,
     workflowSteps: wire.workflow.length,
     truncated: Boolean(wire.truncation),

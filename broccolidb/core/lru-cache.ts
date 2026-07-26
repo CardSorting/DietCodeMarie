@@ -12,15 +12,15 @@ export class LRUCache<K, V> {
   }
 
   get(key: K): V | undefined {
-    if (!this.cache.has(key)) {
+    const val = this.cache.get(key);
+    if (val === undefined && !this.cache.has(key)) {
       this._misses++;
       return undefined;
     }
     this._hits++;
     // Refresh the key by removing and re-adding it
-    const val = this.cache.get(key)!;
     this.cache.delete(key);
-    this.cache.set(key, val);
+    this.cache.set(key, val!);
     return val;
   }
 

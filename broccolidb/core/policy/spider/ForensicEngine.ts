@@ -52,14 +52,21 @@ export class ForensicEngine {
 	 */
 	public calculateHotspotHeat(node: SpiderNode, snapshots: SpiderSnapshot[]): number {
 		if (snapshots.length < 3) return 0
-		const history = snapshots.map((s) => s.nodes.find((n: SpiderNode) => n.id === node.id)).filter(Boolean) as SpiderNode[]
+		const history: SpiderNode[] = []
+		for (let i = 0; i < snapshots.length; i++) {
+			const n = snapshots[i].nodes.find((sn: SpiderNode) => sn.id === node.id)
+			if (n) history.push(n)
+		}
 		if (history.length < 3) return 0
 
 		const first = history[0]
 		const last = history[history.length - 1]
 
 		const complexityRise = (last.astComplexity - first.astComplexity) / Math.max(1, first.astComplexity)
-		const churn = history.filter((h, i) => i > 0 && h.hash !== history[i - 1].hash).length
+		let churn = 0
+		for (let i = 1; i < history.length; i++) {
+			if (history[i].hash !== history[i - 1].hash) churn++
+		}
 
 		return Math.min(1.0, complexityRise * 0.5 + (churn / snapshots.length) * 0.5)
 	}
@@ -86,24 +93,35 @@ export class ForensicEngine {
 	 */
 	public calculateArchitecturalResonance(node: SpiderNode, nodes: Map<string, SpiderNode>): number {
 		const neighborhood = new Set<string>()
-		// Get immediate neighbors (imports and dependents)
 		for (const imp of node.imports) neighborhood.add(imp)
 		for (const dep of node.dependents) neighborhood.add(dep)
 
 		if (neighborhood.size < 3) return 0
 
-		const neighborNodes = Array.from(neighborhood)
-			.map((id) => nodes.get(id))
-			.filter((n): n is SpiderNode => n !== undefined)
+		let count = 0
+		let sum = 0
+		const metrics: number[] = []
 
-		if (neighborNodes.length < 3) return 0
+		for (const id of neighborhood) {
+			const n = nodes.get(id)
+			if (n) {
+				const val = n.astComplexity + n.afferentCoupling * 10
+				metrics.push(val)
+				sum += val
+				count++
+			}
+		}
+
+		if (count < 3) return 0
+
+		const mean = sum / count
+		let variance = 0
+		for (let i = 0; i < count; i++) {
+			variance += (metrics[i] - mean) ** 2
+		}
+		const stdDev = Math.sqrt(variance / count) || 1
 
 		const metric = node.astComplexity + node.afferentCoupling * 10
-		const neighborMetrics = neighborNodes.map((n) => n.astComplexity + n.afferentCoupling * 10)
-
-		const mean = neighborMetrics.reduce((a, b) => a + b, 0) / neighborMetrics.length
-		const stdDev = Math.sqrt(neighborMetrics.reduce((a, b) => a + (b - mean) ** 2, 0) / neighborMetrics.length) || 1
-
 		return Math.min(5.0, Math.abs(metric - mean) / stdDev)
 	}
 

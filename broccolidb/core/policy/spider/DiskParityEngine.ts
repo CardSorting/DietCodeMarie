@@ -38,12 +38,19 @@ export class DiskParityEngine {
       } else {
         const stats = fs.statSync(absolutePath);
         lastModifiedAt = stats.mtimeMs;
-        const content = fs.readFileSync(absolutePath);
-        diskHash = this.hashFileContent(content);
-        const md5Anchor = crypto.createHash('md5').update(content).digest('hex');
-        const graphMatchesDisk = md5Anchor === node.hash;
-        graphHash = graphMatchesDisk ? diskHash : this.sha256Hex(node.hash);
-        driftStatus = graphMatchesDisk ? 'clean' : 'drifted';
+        if (node.mtime && Math.abs(stats.mtimeMs - node.mtime) < 1) {
+          // Fast-Path: Modification timestamp matches indexed mtime, bypass disk read & re-hashing
+          diskHash = this.sha256Hex(node.hash);
+          graphHash = diskHash;
+          driftStatus = 'clean';
+        } else {
+          const content = fs.readFileSync(absolutePath);
+          diskHash = this.hashFileContent(content);
+          const md5Anchor = crypto.createHash('md5').update(content).digest('hex');
+          const graphMatchesDisk = md5Anchor === node.hash;
+          graphHash = graphMatchesDisk ? diskHash : this.sha256Hex(node.hash);
+          driftStatus = graphMatchesDisk ? 'clean' : 'drifted';
+        }
       }
 
       results.push({

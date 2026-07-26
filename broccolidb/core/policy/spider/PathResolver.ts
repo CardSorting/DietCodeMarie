@@ -10,6 +10,16 @@ const asNonEmptyString = (value: unknown): string | null => {
 	return trimmed.length > 0 ? trimmed : null
 }
 
+export function isTypeScriptFile(filePath: string): boolean {
+	const len = filePath.length
+	if (len < 3) return false
+	return (
+		filePath.charCodeAt(len - 1) === 115 && // 's'
+		(filePath.charCodeAt(len - 2) === 116 || filePath.charCodeAt(len - 2) === 106) && // 't' or 'j'
+		filePath.charCodeAt(len - 3) === 46 // '.'
+	)
+}
+
 export class PathResolver {
 	private dynamicAliases: Map<string, string> = new Map()
 	private resolutionCache: Map<string, Map<string, string | null>> = new Map()
@@ -232,12 +242,16 @@ export class PathResolver {
 	 * Removes all cached resolutions originating from a specific file.
 	 */
 	public clearFileFromCache(filePath: string) {
+		this.resolutionCache.get(filePath)?.clear()
 		this.resolutionCache.delete(filePath)
+		this.negativeCache.get(filePath)?.clear()
 		this.negativeCache.delete(filePath)
 	}
 
 	public clearCaches() {
+		for (const sub of this.resolutionCache.values()) sub.clear()
 		this.resolutionCache.clear()
+		for (const sub of this.negativeCache.values()) sub.clear()
 		this.negativeCache.clear()
 		this.canonicalCache.clear()
 		this.stringInterner.clear()
@@ -248,7 +262,9 @@ export class PathResolver {
 	 * Forcefully clears all map references to assist V8 in resource reclamation.
 	 */
 	public dispose() {
+		for (const sub of this.resolutionCache.values()) sub.clear()
 		this.resolutionCache.clear()
+		for (const sub of this.negativeCache.values()) sub.clear()
 		this.negativeCache.clear()
 		this.canonicalCache.clear()
 		this.stringInterner.clear()
@@ -273,7 +289,10 @@ export class PathResolver {
 		const pruneMap = (map: Map<string, any>, label: string) => {
 			if (map.size > MAX_ENTRIES) {
 				let count = 0
-				for (const key of map.keys()) {
+				for (const [key, val] of map.entries()) {
+					if (val && typeof val === "object" && typeof val.clear === "function") {
+						val.clear()
+					}
 					map.delete(key)
 					count++
 					if (count >= 2500) break
@@ -295,29 +314,33 @@ export class PathResolver {
 	 */
 	public isInternalPath(p: string): boolean {
 		const norm = this.canonicalize(p)
-		const segments = norm.split("/")
 
-		// Exclude known system/agentic directories at any level
-		const excludedFolders = [".gemini", ".spider", "node_modules", ".git", "dist", "build", "out", "target"]
-		if (segments.some((s) => excludedFolders.includes(s))) return true
+		// Fast directory check without splitting path into arrays
+		if (
+			norm.includes("/.gemini/") || norm.startsWith(".gemini/") ||
+			norm.includes("/.spider/") || norm.startsWith(".spider/") ||
+			norm.includes("/node_modules/") || norm.startsWith("node_modules/") ||
+			norm.includes("/.git/") || norm.startsWith(".git/") ||
+			norm.includes("/dist/") || norm.startsWith("dist/") ||
+			norm.includes("/build/") || norm.startsWith("build/") ||
+			norm.includes("/out/") || norm.startsWith("out/") ||
+			norm.includes("/target/") || norm.startsWith("target/")
+		) {
+			return true
+		}
 
-		// Exclude non-code assets
-		const excludedExts = [
-			".png",
-			".jpg",
-			".jpeg",
-			".gif",
-			".svg",
-			".ico",
-			".woff",
-			".woff2",
-			".ttf",
-			".eot",
-			".mp4",
-			".wav",
-			".mp3",
-		]
-		if (excludedExts.some((ext) => norm.endsWith(ext))) return true
+		// Fast extension check without array allocations
+		const lastDot = norm.lastIndexOf(".")
+		if (lastDot !== -1) {
+			const ext = norm.slice(lastDot)
+			if (
+				ext === ".png" || ext === ".jpg" || ext === ".jpeg" || ext === ".gif" ||
+				ext === ".svg" || ext === ".ico" || ext === ".woff" || ext === ".woff2" ||
+				ext === ".ttf" || ext === ".eot" || ext === ".mp4" || ext === ".wav" || ext === ".mp3"
+			) {
+				return true
+			}
+		}
 
 		return false
 	}
@@ -345,9 +368,8 @@ export class PathResolver {
 					if (item.isDirectory()) {
 						stack.push(full)
 					} else if (
-						item.name.endsWith(".ts") ||
+						isTypeScriptFile(item.name) ||
 						item.name.endsWith(".tsx") ||
-						item.name.endsWith(".js") ||
 						item.name.endsWith(".jsx")
 					) {
 						results.push(itemRel)

@@ -1,12 +1,7 @@
 // [LAYER: CORE]
 import type { SpiderCauseCluster, SpiderDiagnosticId, SpiderReport } from './report-types.js';
 import { SPI_LABELS } from './report-types.js';
-import * as crypto from 'node:crypto';
-
-function stableFindingId(finding: Pick<SpiderReport['findings'][number], 'diagnosticId' | 'filePath' | 'message' | 'symbolName'>): string {
-  const key = [finding.diagnosticId, finding.filePath, finding.symbolName ?? '', finding.message].join('|');
-  return crypto.createHash('sha256').update(key).digest('hex').slice(0, 16);
-}
+import { stableFindingId } from './AgentDigest.js';
 
 const CAUSE_BY_SPI: Record<SpiderDiagnosticId, SpiderCauseCluster['cause']> = {
   'SPI-001': 'import-contract',

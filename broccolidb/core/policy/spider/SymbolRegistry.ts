@@ -18,6 +18,9 @@ export class SymbolRegistry {
   private exportsByFile: Map<string, SymbolProvider[]> = new Map(); // filePath -> [SymbolProviders]
   private footprintToProvider: Map<string, SymbolProvider> = new Map(); // footprint -> SymbolProvider (O(1) lookup)
   private transitions: Map<string, { from: string, to: string, timestamp: number }> = new Map(); // symbolName -> moveData
+  private providerArrayCache: Map<Set<string>, string[]> = new Map();
+
+  private static readonly EMPTY_ARRAY: string[] = [];
 
   public register(provider: SymbolProvider) {
     let existing = this.providers.get(provider.symbolName);
@@ -26,13 +29,21 @@ export class SymbolRegistry {
       this.providers.set(provider.symbolName, existing);
     }
     existing.add(provider.filePath);
+    this.providerArrayCache.delete(existing);
 
     let fileExports = this.exportsByFile.get(provider.filePath);
     if (!fileExports) {
       fileExports = [];
       this.exportsByFile.set(provider.filePath, fileExports);
     }
-    if (!fileExports.some(p => p.symbolName === provider.symbolName)) {
+    let exists = false;
+    for (let i = 0; i < fileExports.length; i++) {
+      if (fileExports[i].symbolName === provider.symbolName) {
+        exists = true;
+        break;
+      }
+    }
+    if (!exists) {
       fileExports.push(provider);
     }
     this.footprintToProvider.set(provider.footprint, provider);
@@ -45,16 +56,25 @@ export class SymbolRegistry {
             const providers = this.providers.get(exp.symbolName);
             if (providers) {
                 providers.delete(filePath);
+                this.providerArrayCache.delete(providers);
                 if (providers.size === 0) this.providers.delete(exp.symbolName);
             }
             this.footprintToProvider.delete(exp.footprint);
         }
+        exports.length = 0;
     }
     this.exportsByFile.delete(filePath);
   }
 
   public findProviders(symbolName: string): string[] {
-      return Array.from(this.providers.get(symbolName) || []);
+      const providers = this.providers.get(symbolName);
+      if (!providers) return SymbolRegistry.EMPTY_ARRAY;
+      let arr = this.providerArrayCache.get(providers);
+      if (!arr) {
+          arr = Array.from(providers);
+          this.providerArrayCache.set(providers, arr);
+      }
+      return arr;
   }
 
   public findProviderByFootprint(footprint: string): SymbolProvider | null {
@@ -62,6 +82,7 @@ export class SymbolRegistry {
   }
 
   private sweepExpiredTransitions(now = Date.now()) {
+      if (this.transitions.size === 0) return;
       for (const [symbol, trans] of this.transitions.entries()) {
           if (now - trans.timestamp > 5000) {
               this.transitions.delete(symbol);
@@ -100,10 +121,19 @@ export class SymbolRegistry {
   }
 
   public clear() {
-      this.footprintToProvider.clear();
+      for (const set of this.providers.values()) {
+          set.clear();
+      }
       this.providers.clear();
+
+      for (const arr of this.exportsByFile.values()) {
+          arr.length = 0;
+      }
       this.exportsByFile.clear();
+
+      this.footprintToProvider.clear();
       this.transitions.clear();
+      this.providerArrayCache.clear();
   }
 
   public dispose() {
