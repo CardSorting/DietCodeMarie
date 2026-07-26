@@ -40,15 +40,17 @@ export class AuditLogService {
 	public async log(entry: Omit<AuditEntry, "ts">): Promise<void> {
 		if (!this.logPath) return
 
-		const fullEntry: AuditEntry = {
-			...entry,
-			ts: Date.now(),
-		}
+		const maskedArgs = entry.args.map((arg) => SensitiveDataMasker.mask(arg))
+		const maskedError = entry.error ? SensitiveDataMasker.mask(entry.error) : undefined
 
-		// Mask sensitive data in args and error messages
-		fullEntry.args = fullEntry.args.map((arg) => SensitiveDataMasker.mask(arg))
-		if (fullEntry.error) {
-			fullEntry.error = SensitiveDataMasker.mask(fullEntry.error)
+		const fullEntry: AuditEntry = {
+			ts: Date.now(),
+			command: entry.command,
+			args: maskedArgs,
+			duration: entry.duration,
+			exitCode: entry.exitCode,
+			error: maskedError,
+			metadata: entry.metadata,
 		}
 
 		const line = JSON.stringify(fullEntry) + "\n"

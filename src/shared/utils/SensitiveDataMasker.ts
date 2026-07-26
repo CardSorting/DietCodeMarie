@@ -22,12 +22,15 @@ export class SensitiveDataMasker {
 		/[a-f0-9]{32}/g,
 	]
 
+	private static readonly QUICK_CHECK_REGEX = /sk-|AIza|ghp_|xox|[a-f0-9]{32}/
+
 	/**
 	 * Mask sensitive information in a string.
 	 * Replaces detected keys with a masked version (e.g., sk-an...****)
 	 */
 	public static mask(text: string | undefined): string {
 		if (!text) return ""
+		if (!SensitiveDataMasker.QUICK_CHECK_REGEX.test(text)) return text
 
 		let maskedText = text
 		for (const pattern of SensitiveDataMasker.PATTERNS) {
