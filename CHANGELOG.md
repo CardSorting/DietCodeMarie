@@ -6,6 +6,12 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+## [10.5.0] - 2026-07-26
+
+### Changed
+
+- Bumped extension version to 10.5.0.
+
 ## [6.0.0] - 2026-07-26
 
 ### Added
