@@ -27,7 +27,6 @@ jobs:
         uses: ./.github/workflows/test.yml
 
     build-targets:
-        needs: test
         strategy:
             fail-fast: false
             matrix:
@@ -80,7 +79,7 @@ jobs:
                   if-no-files-found: error
 
     publish:
-        needs: build-targets
+        needs: [test, build-targets]
         name: Publish Extension
         runs-on: ubuntu-latest
         environment: publish

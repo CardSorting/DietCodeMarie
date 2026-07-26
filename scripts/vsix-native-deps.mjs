@@ -448,33 +448,35 @@ export function assertVsixHasNativeModule(vsixPath) {
 	console.log(`[vsix] verified native dependencies in ${path.basename(vsixPath)}`)
 }
 
-const vsixFilesMemo = new Map()
-export function discoverVsixFiles(distDir = path.resolve("dist")) {
+export function discoverVsixFiles(distDir = path.resolve("dist"), { version } = {}) {
 	if (!fs.existsSync(distDir)) {
 		return []
 	}
-	const mtimeMs = fs.statSync(distDir).mtimeMs
-	const key = `${distDir}:${mtimeMs}`
-	if (vsixFilesMemo.has(key)) return vsixFilesMemo.get(key)
 
-	const pkgPath = path.join(path.dirname(distDir), "package.json")
-	if (fs.existsSync(pkgPath)) {
-		const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"))
-		const version = pkg.version
-		const res = fs
+	let targetVersion = version
+	if (!targetVersion) {
+		const pkgPath = path.join(path.dirname(distDir), "package.json")
+		if (fs.existsSync(pkgPath)) {
+			try {
+				const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"))
+				targetVersion = pkg.version
+			} catch {}
+		}
+	}
+
+	if (targetVersion) {
+		return fs
 			.readdirSync(distDir)
 			.filter((entry) => {
-				const universal = entry === `lumi-vscode-${version}.vsix` || entry === `lumi-${version}.vsix`
-				const targeted = entry.startsWith(`lumi-vscode-${version}-`) || entry.startsWith(`lumi-${version}-`)
+				const universal = entry === `lumi-vscode-${targetVersion}.vsix` || entry === `lumi-${targetVersion}.vsix`
+				const targeted = entry.startsWith(`lumi-vscode-${targetVersion}-`) || entry.startsWith(`lumi-${targetVersion}-`)
 				return entry.endsWith(".vsix") && (universal || (targeted && inferVsixTarget(entry) !== null))
 			})
 			.map((entry) => path.join(distDir, entry))
 			.sort((a, b) => a.localeCompare(b))
-		vsixFilesMemo.set(key, res)
-		return res
 	}
 
-	const res = fs
+	return fs
 		.readdirSync(distDir)
 		.filter(
 			(entry) =>
@@ -483,8 +485,6 @@ export function discoverVsixFiles(distDir = path.resolve("dist")) {
 		)
 		.map((entry) => path.join(distDir, entry))
 		.sort((a, b) => a.localeCompare(b))
-	vsixFilesMemo.set(key, res)
-	return res
 }
 
 const lumiExtensionsMemo = new Map()
