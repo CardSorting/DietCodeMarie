@@ -27,6 +27,8 @@ runs:
           node_modules
           webview-ui/node_modules
         key: node-modules-${{ runner.os }}-${{ inputs.node-version }}-${{ hashFiles('package-lock.json', 'webview-ui/package-lock.json') }}
+        restore-keys: |
+          node-modules-${{ runner.os }}-${{ inputs.node-version }}-
 
     - name: Cache build artifacts
       uses: actions/cache@v4
@@ -38,13 +40,13 @@ runs:
           src/shared/proto
           src/generated
           dist/proto
-        key: build-cache-${{ runner.os }}-${{ inputs.node-version }}-${{ github.sha }}
+        key: build-cache-${{ runner.os }}-${{ inputs.node-version }}-${{ hashFiles('package-lock.json', 'tsconfig.json', 'esbuild.mjs', 'webview-ui/vite.config.ts') }}
         restore-keys: |
           build-cache-${{ runner.os }}-${{ inputs.node-version }}-
 
     - name: Set Node memory and cache limits
       shell: bash
-      run: echo "NODE_OPTIONS=--max-old-space-size=4096" >> $GITHUB_ENV
+      run: echo "NODE_OPTIONS=--max-old-space-size=8192 --max-semi-space-size=128" >> $GITHUB_ENV
 
     - name: Install root dependencies
       if: steps.node-modules-cache.outputs.cache-hit != 'true'

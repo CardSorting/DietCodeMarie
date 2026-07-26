@@ -22,9 +22,10 @@ const aliasResolverPlugin = {
 	setup(build) {
 		const fsMemo = new Map()
 		const cachedExists = (target) => {
-			if (fsMemo.has(target)) return fsMemo.get(target)
-			const res = fs.existsSync(target)
-			fsMemo.set(target, res)
+			const key = path.normalize(target)
+			if (fsMemo.has(key)) return fsMemo.get(key)
+			const res = fs.existsSync(key)
+			fsMemo.set(key, res)
 			return res
 		}
 
@@ -42,9 +43,10 @@ const aliasResolverPlugin = {
 
 		const statMemo = new Map()
 		const cachedStat = (target) => {
-			if (statMemo.has(target)) return statMemo.get(target)
-			const res = fs.statSync(target)
-			statMemo.set(target, res)
+			const key = path.normalize(target)
+			if (statMemo.has(key)) return statMemo.get(key)
+			const res = fs.statSync(key)
+			statMemo.set(key, res)
 			return res
 		}
 

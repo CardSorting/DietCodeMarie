@@ -89,7 +89,11 @@ async function main() {
 	}
 
 	// Repo-wide DietCodeDefaultTool value imports (excluding type-only files is ok if no value use)
-	const tsFiles = await globby("src/**/*.ts", { cwd: repoRoot, gitignore: true, ignore: ["src/generated/**"] })
+	const tsFiles = await globby("src/**/*.ts", {
+		cwd: repoRoot,
+		gitignore: true,
+		ignore: ["src/generated/**", "**/__tests__/**", "**/*.test.ts", "**/*.spec.ts", "dist/**", "out/**"],
+	})
 
 	await Promise.all(
 		tsFiles.map(async (rel) => {

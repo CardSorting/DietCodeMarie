@@ -34,15 +34,13 @@ function main() {
 		execFileSync("git", ["add", "package.json"], { cwd: repoRoot })
 		console.log(`[vscode] patched name → "lumi-vscode" (CardSorting.lumi-vscode)`)
 
-		execFileSync(
-			process.platform === "win32" ? "vsce.cmd" : "vsce",
-			["package", "--target", target, "--allow-package-secrets", "sendgrid", "--out", outPath],
-			{
-				stdio: "inherit",
-				cwd: repoRoot,
-				shell: process.platform === "win32",
-			},
-		)
+		const vsceArgs = ["package", "--target", target, "--allow-package-secrets", "sendgrid", "--out", outPath]
+
+		execFileSync(process.platform === "win32" ? "vsce.cmd" : "vsce", vsceArgs, {
+			stdio: "inherit",
+			cwd: repoRoot,
+			shell: process.platform === "win32",
+		})
 		assertVsixHasNativeModule(outPath)
 		console.log(`[vscode] packaged ${outPath}`)
 	} catch (error) {
