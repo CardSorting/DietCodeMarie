@@ -6,7 +6,19 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
-## [10.5.0] - 2026-07-26
+## [11.0.0] - 2026-07-26
+
+### Added
+
+- **Provider-Centric Settings Navigation** — Replaced classic API Keys tab with dedicated, specialized tabs for supported providers (**OpenRouter**, **ChatGPT / OpenAI**, **NousResearch**, **Cloudflare**, **Cerebras**, **ClinePass**, **Grok / xAI**, **Qwen Token Plan**, **Z AI**).
+- **Embedded Credentials & API Keys** — Embedded API key input, OAuth login, and account token setup directly within each dedicated provider view.
+- **Ultra-Compressed Paginated Model List** — Compact 24px single-row model items with 4 models per page and micro pagination controls (`‹ Prev`, `Page X of Y`, `Next ›`) engineered specifically for narrow sidebar extensions.
+- **Streamlined Recency Filtering** — Simplified filter pills and badge chips to focus strictly on model recency (`NEW` badge chip).
+
+### Changed
+
+- Bumped extension version to **11.0.0**.
+- Refactored model selection handlers to use field-masked partial configuration updates over gRPC `ModelsServiceClient`.
 
 ### Changed
 
