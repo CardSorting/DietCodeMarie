@@ -60,7 +60,12 @@ function resolveLink(fromFile, target) {
 	if (!target) return null
 	if (target.startsWith("file://")) {
 		try {
-			return fileURLToPath(target.split("#")[0])
+			let p = fileURLToPath(target.split("#")[0])
+			const marker = "/codemarie-new/"
+			if (p.includes(marker)) {
+				p = path.join(repoRoot, p.substring(p.indexOf(marker) + marker.length))
+			}
+			return p
 		} catch {
 			return null
 		}
