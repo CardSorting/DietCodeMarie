@@ -216,6 +216,7 @@ if (process.env.OTEL_METRIC_EXPORT_INTERVAL) {
 const baseConfig = {
 	bundle: true,
 	minify: production,
+	legalComments: "none",
 	sourcemap: !production,
 	logLevel: "silent",
 	target: "node20",

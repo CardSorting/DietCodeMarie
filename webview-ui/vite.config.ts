@@ -73,6 +73,7 @@ export default defineConfig({
 	build: {
 		outDir: "build",
 		reportCompressedSize: false,
+		cssMinify: "esbuild",
 		// Only minify in production build
 		minify: !isDevBuild,
 		// Enable inline source maps for dev build
