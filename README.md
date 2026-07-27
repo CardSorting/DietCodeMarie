@@ -408,6 +408,28 @@ completed turn
 
 “Recoverable” means the exact source remains available and digest-verifiable. The smaller prompt projection intentionally omits detail and is not described as semantically lossless.
 
+### Developer Onboarding & Comparison Guide
+
+| Paradigm | Traditional Context Pruning | LUMI Recoverable Compaction |
+|----------|-----------------------------|-----------------------------|
+| **Historical Source Integrity** | Irrecoverable truncation or string slicing | **Zero-loss exact source** Brotli-compressed in sharded BroccoliDB CAS |
+| **Commit Security Barrier** | In-memory string replacement without verification | **Strict SQLite transaction** before marker publication; rolls back to raw block on failure |
+| **Model Prompt Safety** | Model sees raw truncated text or broken syntax | **Trusted XML boundary** with explicit system policy preventing tool hallucination |
+| **Multi-Agent Scalability** | Uncoordinated or global context bloat | **Scoped parent/subagent stores** sharing central WAL-backed SQLite authority |
+
+#### Verifying Context Compaction Locally
+
+```bash
+# Check local BroccoliDB substrate health and active CAS blobs
+npx broccolidb health --format json
+
+# Run the dedicated context compaction verification suite
+TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha --no-config \
+  -r ts-node/register -r tsconfig-paths/register -r source-map-support/register -r ./src/test/requires.cjs \
+  src/core/context/__tests__/ContextPruner.test.ts \
+  src/core/context/context-management/__tests__/ContextManager.test.ts
+```
+
 Implementation details, limits, failure behavior, and validation commands: **[Recoverable Context Compaction](.wiki/recoverable-context-compaction.md)** · Decision rationale: **[MEOW-013](.wiki/adr/MEOW-013-recoverable-context-projection.md)**
 
 ---
