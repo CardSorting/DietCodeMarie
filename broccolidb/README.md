@@ -70,17 +70,11 @@ Additionally, BroccoliDB includes enterprise-grade resilience infrastructure:
 
 See [the public API](docs/public-api.md#context-compaction), [current architecture](docs/architecture/current.md), [ADR 009: Universal Zenith Hardening](docs/architecture/ADR_UNIVERSAL_ZENITH_PASS.md), and [Master Architectural Decision Index](../.wiki/adr/MASTER_ADR_INDEX.md).
 
-## ADR Automation Tooling
+## Architectural Decision Governance
 
-BroccoliDB and the workspace use automated MADR 3.0 CLI tooling to scaffold, validate, and compile Architectural Decision Records:
+BroccoliDB operates under a strict, automated MADR 3.0 governance model. Every non-trivial system change is captured in a formal Architecture Decision Record (ADR) detailing operational context (**The Why**), architectural contracts (**The What**), and concrete code surfaces (**The How**). 
 
-```bash
-npm run scaffold:adr "<Title>"  # Scaffolds pre-formatted MADR 3.0 file in .wiki/adr/
-npm run audit:adr               # Audits all ADRs against MADR rules and link existence
-npm run link:adr                # Generates interactive Mermaid ADR dependency graph
-npm run export:adr              # Compiles all ADRs into MASTER_ADR_INDEX.md
-npm run docs:check-repo         # Runs all repo documentation checks and ADR auditors in parallel
-```
+The workspace automatically scaffolds new decision records, audits link integrity across disk surfaces, renders visual Mermaid dependency graphs, and compiles all decisions into the central [Master Architectural Decision Index](../.wiki/adr/MASTER_ADR_INDEX.md).
 
 ## Documentation
 
