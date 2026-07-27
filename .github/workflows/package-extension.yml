@@ -39,6 +39,7 @@ jobs:
               env:
                   HOMEBREW_NO_AUTO_UPDATE: "1"
                   HOMEBREW_NO_INSTALL_CLEANUP: "1"
+                  HOMEBREW_NO_REQUIRE_TAP_TRUST: "1"
               run: command -v protoc || brew install protobuf
 
             - name: Build extension artifacts
