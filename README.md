@@ -61,7 +61,7 @@ code --install-extension CardSorting.lumi
 - [Governed subagent execution](#governed-subagent-execution)
 - [Recoverable context compaction](#recoverable-context-compaction)
 - [Workspace Knowledge System](#workspace-knowledge-system)
-- [LUMI Designer-in-Residence & MoD v3.0](#lumi-designer-in-residence--mod-v30)
+- [Master of Design (MoD) Architecture](#master-of-design-mod-architecture)
 - [Plan & Act modes](#plan--act-modes)
 - [Built-in slash commands](#built-in-slash-commands)
 - [Lifecycle hooks](#lifecycle-hooks)
@@ -245,7 +245,7 @@ flowchart LR
 ```
 
 1. **Open LUMI**: Click the LUMI icon in the VS Code Activity Bar.
-2. **Configure Provider**: Go to **LUMI Settings → API Configuration** and set up your preferred model provider (OpenRouter, ChatGPT Subscription, Anthropic, Cloudflare, etc.).
+2. **Configure Provider**: Go to **LUMI Settings → API Configuration** and set up your preferred model provider (OpenRouter, ChatGPT Subscription, NousResearch, Cloudflare, etc.).
 3. **Plan Before Acting**: Start with **Plan Mode** (`plan_mode_respond`) to explore codebases, analyze architecture, and formulate plans safely before making changes.
 4. **Human-in-the-Loop Approval**: Switch to **Act Mode** (`act_mode_respond`) to execute file edits and terminal commands. Review exact diffs and tool parameters before approving.
 5. **Zero-Config Context Scaling**: As sessions accumulate tool output, **BroccoliDB Context Compaction** silently compacts prompt projections into sharded CAS blobs without interrupting execution or losing exact historical source bytes.
@@ -452,7 +452,7 @@ flowchart TD
 - **Observability Seatbelt:** System errors (e.g. read-only filesystem or full disk) log to diagnostics but degrade gracefully, ensuring knowledge updates never block task completion or tool executions.
 - **Append-Only Event Log (`diagnostics.jsonl`):** Diagnostics are written to an append-only JSON Lines event log.
 - **Read-Only Health API:** Downstream tools check status via `getKnowledgeHealth()`, which parses diagnostic lines, returns status (`healthy | degraded`), and compiles actionable recovery hints.
-- **Human-Readable Dashboard:** Exposes active system health alerts and collapsible diagnostics lists directly at the top of [workspace-intelligence.md](file:///.wiki/intelligence/workspace-intelligence.md).
+- **Human-Readable Dashboard:** Exposes active system health alerts and collapsible diagnostics lists directly at the top of `workspace-intelligence.md` (`.wiki/intelligence/workspace-intelligence.md`).
 
 ---
 
