@@ -60,6 +60,9 @@ See [examples/runtime-replay.ts](../examples/runtime-replay.ts).
 | Knowledge search | `ctx.query.search()` | `ServiceContext.searchKnowledge` |
 | Structural impact | `ctx.graph.getStructuralImpact()` | raw `GraphService` |
 | Spider audit / gate | `ctx.graph.spider` | `SpiderService` directly |
+| Epistemic PageRank | `ctx.reasoning.calculateEpistemicPageRank()` | raw confidence fields |
+| 4-Pillar Forensic Probe | `ctx.audit.runZenithDiagnosticProbe(ctx)` | isolated disk probes |
+| Task DAG Scheduler | `ctx.tasks.getExecutableTasks()` | unsequenced task loops |
 | Repairs & verification | `ctx.runtime` | ad-hoc file writes |
 | Health | `await ctx.health()` | internal registry probes |
 | Snapshots / replay / story | `ctx.runtime.snapshot`, `.replay`, `.story` | in-memory-only session state |
