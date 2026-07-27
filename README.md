@@ -480,12 +480,12 @@ LUMI includes **Master of Design (MoD)**, a prompt-steered execution mode that i
 
 LUMI runs in **`plan`** or **`act`** mode. Each mode can use a different provider and model.
 
-| Mode | Response tool | Behavior |
-|------|---------------|----------|
-| **Plan** | `plan_mode_respond` | Strategy, exploration, read-only tools |
-| **Act** | `act_mode_respond` | Implementation — mutating tools with approval |
+| Mode | Response tool | Behavior | Context Compaction Integration |
+|------|---------------|----------|--------------------------------|
+| **Plan** | `plan_mode_respond` | Strategy, exploration, read-only tools | Large repository traversals and file searches compact structural outlines into BroccoliDB CAS, keeping architectural context active without token bloat. |
+| **Act** | `act_mode_respond` | Implementation — mutating tools with approval | Command logs and tool evidence are compact-projected under strict SQLite transactions, ensuring file diff approvals remain fast and reliable. |
 
-Typical flow: gather context in Plan → approve direction → Act executes writes → `attempt_completion` through completion gates.
+Typical flow: gather context in Plan → approve direction → Act executes writes → `attempt_completion` through completion gates. During long sessions, **BroccoliDB Recoverable Compaction** operates automatically across both modes at turn boundaries.
 
 Guide: [docs/core-workflows/plan-and-act.mdx](docs/core-workflows/plan-and-act.mdx)
 
