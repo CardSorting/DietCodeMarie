@@ -529,8 +529,10 @@ Guide: [docs/customization/hooks.mdx](docs/customization/hooks.mdx)
 | `lumi.roadmap.enabled` | `true` | Master switch for ROADMAP.md steering |
 | `lumi.roadmap.autoBootstrap` | `true` | Create `ROADMAP.md` from workspace evidence |
 | `lumi.roadmap.failClosedCompletionGates` | `true` | Block completion when gate evaluation fails |
+| `lumi.storage.autoMaintenance` | `true` | Automated SQLite/WAL checkpointing and cache retention sweeps |
+| `lumi.storage.maxCheckpointMB` | `1024` | Maximum storage limit before triggering shadow Git and CAS maintenance |
 
-Details: [docs/features/roadmap-steering.mdx](docs/features/roadmap-steering.mdx)
+Details: [docs/features/roadmap-steering.mdx](docs/features/roadmap-steering.mdx) · [Storage & cache management](docs/features/storage-and-cache-management.md)
 
 ---
 
