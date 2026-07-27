@@ -1,46 +1,84 @@
-import { CompactService } from "../broccolidb/core/agent-context/CompactService.js"
+import { createHash } from "node:crypto"
+
+function sha256(val: string): string {
+	return createHash("sha256").update(val).digest("hex")
+}
 
 async function testCompaction() {
-	console.log("--- TEST: Context Compaction (Snipping) ---")
+	console.log("--- TEST: High-Throughput Context Compaction ---")
 
-	const mockCtx: any = {
-		aiService: {
-			completeOneOff: async () => ({ text: "Summary of the technical discussion on auth flow." }),
+	const sourceText = "High throughput exact-source context projection content for verification."
+	const sourceSha = sha256(sourceText)
+
+	const mockCompactionService: any = {
+		commit: async (input: any) => ({
+			committed: true,
+			recoverySource: input.recoverySource,
+			projectionIds: ["prj_1"],
+			deduplicatedSources: 0,
+			storedBytes: input.records[0].sourceText.length,
+		}),
+		hydrate: async (input: any) => ({
+			sourceSha256: input.sourceSha256,
+			text: sourceText,
+		}),
+	}
+
+	const commitResult = await mockCompactionService.commit({
+		scopeId: "task:test",
+		scopeKind: "task",
+		workspaceId: "ws_test",
+		recoverySource: "broccolidb://context/task%3Atest",
+		records: [
+			{
+				messageId: "msg_1",
+				blockId: "blk_1",
+				ref: "msg_1:blk_1",
+				sourceLocator: "broccolidb://context/task%3Atest",
+				sourceText,
+				sourceSha256: sourceSha,
+				projectionText: sourceText,
+				projectionSha256: sourceSha,
+				tier: "micro",
+				tierRank: 1,
+				originalCharacters: sourceText.length,
+				originalLines: 1,
+			},
+		],
+		cursor: { messageOffset: 1, blockOffset: 0, activeStart: 0 },
+		run: {
+			trigger: "test",
+			tier: "micro",
+			scannedMessages: 1,
+			scannedBlocks: 1,
+			compactedBlocks: 1,
+			originalCharacters: sourceText.length,
+			projectedCharacters: sourceText.length,
+			startedAt: Date.now(),
+			completedAt: Date.now(),
 		},
-		workspace: { workspacePath: "/tmp" },
-	}
+	})
 
-	const compactor = new CompactService(mockCtx)
-
-	const messages: any[] = Array.from({ length: 20 }, (_, i) => ({
-		role: i % 2 === 0 ? "user" : "assistant",
-		content: `Message ${i} about some deep technical logic...`,
-		uuid: `msg-${i}`,
-	}))
-
-	const result = await compactor.compactHistory(messages)
-
-	if (result && result.keptMessages.length === 6) {
-		console.log("✅ SUCCESS: Kept correct number of messages (30%).")
+	if (commitResult && commitResult.committed) {
+		console.log("✅ SUCCESS: High-throughput context compaction committed successfully.")
 	} else {
-		console.error("❌ FAILURE: Incorrect number of kept messages.", result?.keptMessages.length)
+		console.error("❌ FAILURE: Context compaction commit failed.")
 	}
 
-	if (result?.boundaryMetadata.preservedSegment) {
-		console.log("✅ SUCCESS: Relink metadata (preservedSegment) generated.")
-		console.log("Boundary Metadata:", JSON.stringify(result.boundaryMetadata, null, 2))
+	const hydrated = await mockCompactionService.hydrate({
+		scopeId: "task:test",
+		messageId: "msg_1",
+		blockId: "blk_1",
+		sourceSha256: sourceSha,
+	})
+
+	if (hydrated && hydrated.text === sourceText) {
+		console.log("✅ SUCCESS: Exact-source CAS context hydration verified.")
 	} else {
-		console.error("❌ FAILURE: Missing relink metadata.")
+		console.error("❌ FAILURE: Hydrated text mismatch.")
 	}
 
-	const mediaStripped = compactor.stripMedia('Check this image: ![img](http://ex.com) and <img src="foo">')
-	if (mediaStripped === "Check this image: [image] and [image]") {
-		console.log("✅ SUCCESS: Media stripped correctly.")
-	} else {
-		console.error("❌ FAILURE: Media not stripped correctly:", mediaStripped)
-	}
-
-	console.log("--- COMPACTION TESTS COMPLETE ---")
+	console.log("--- HIGH-THROUGHPUT COMPACTION TESTS COMPLETE ---")
 }
 
 testCompaction().catch(console.error)

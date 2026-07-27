@@ -91,6 +91,8 @@ export interface TaskItem {
   status: 'pending' | 'active' | 'completed' | 'failed';
   description: string;
   linkedKnowledgeIds?: string[];
+  dependsOnTaskIds?: string[];
+  blockedByTaskIds?: string[];
   result?: any;
   createdAt: number;
   updatedAt: number;
@@ -205,7 +207,7 @@ export interface ServiceContext {
         character: number 
     }[] 
   };
-  compact: import('./CompactService.js').CompactService;
+  compact: import('./capabilities/CompactionCapability.js').CompactionCapability;
   storage: import('../../infrastructure/storage/StorageService.js').StorageService;
   token: import('./TokenService.js').TokenService;
   lsp: LspService;

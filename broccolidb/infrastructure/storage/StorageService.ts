@@ -16,6 +16,7 @@ export class StorageService {
   private lifecycleState: 'new' | 'started' | 'stopped' = 'new';
   private corruptCount = 0;
   private migratedPasteCount = 0;
+  private casMemoryCache = new Set<string>();
 
   constructor(private ctx: ServiceContext) {
     this.baseDir = join(this.ctx.workspace.workspacePath, '.broccolidb', 'storage');
@@ -69,12 +70,17 @@ export class StorageService {
 
   private async writeBlobInternal(content: Buffer | string): Promise<string> {
     const hash = createHash('sha256').update(content).digest('hex');
+    if (this.casMemoryCache.has(hash)) {
+      return hash;
+    }
+
     const shard = hash.slice(0, 2);
     const shardDir = join(this.baseDir, 'blobs', shard);
     const filePath = join(shardDir, hash);
 
     try {
       await fs.access(filePath);
+      this.casMemoryCache.add(hash);
       // Blob exists, deduplication hit.
       return hash;
     } catch {
@@ -83,6 +89,7 @@ export class StorageService {
 
     await fs.mkdir(shardDir, { recursive: true });
     await fs.writeFile(filePath, content);
+    this.casMemoryCache.add(hash);
     console.log(`[Storage] 📦 CAS Write: ${hash.slice(0, 8)}... (shard: ${shard})`);
     return hash;
   }
@@ -105,6 +112,7 @@ export class StorageService {
           reason: 'sha256_mismatch',
         });
       }
+      this.casMemoryCache.add(hash);
       return content;
     } catch (error: any) {
       if (error instanceof StorageIntegrityError) throw error;
@@ -118,10 +126,12 @@ export class StorageService {
    */
   async exists(hash: string): Promise<boolean> {
     this.assertOperational('exists');
+    if (this.casMemoryCache.has(hash)) return true;
     const shard = hash.slice(0, 2);
     const filePath = join(this.baseDir, 'blobs', shard, hash);
     try {
       await fs.access(filePath);
+      this.casMemoryCache.add(hash);
       return true;
     } catch {
       return false;
@@ -129,10 +139,48 @@ export class StorageService {
   }
 
   /**
+   * Batch checks if multiple blobs exist in CAS in parallel.
+   */
+  async existsMany(hashes: readonly string[]): Promise<Map<string, boolean>> {
+    this.assertOperational('existsMany');
+    const results = new Map<string, boolean>();
+    const missingHashes: string[] = [];
+
+    for (const hash of hashes) {
+      if (this.casMemoryCache.has(hash)) {
+        results.set(hash, true);
+      } else {
+        missingHashes.push(hash);
+      }
+    }
+
+    if (missingHashes.length === 0) {
+      return results;
+    }
+
+    await Promise.all(
+      missingHashes.map(async (hash) => {
+        const shard = hash.slice(0, 2);
+        const filePath = join(this.baseDir, 'blobs', shard, hash);
+        try {
+          await fs.access(filePath);
+          this.casMemoryCache.add(hash);
+          results.set(hash, true);
+        } catch {
+          results.set(hash, false);
+        }
+      })
+    );
+
+    return results;
+  }
+
+  /**
    * Deletes a blob from CAS.
    */
   async deleteBlob(hash: string): Promise<void> {
     this.assertOperational('deleteBlob');
+    this.casMemoryCache.delete(hash);
     const shard = hash.slice(0, 2);
     const filePath = join(this.baseDir, 'blobs', shard, hash);
     try {

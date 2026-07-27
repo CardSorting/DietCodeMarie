@@ -185,4 +185,69 @@ export class InvariantEngine {
 
     return violations;
   }
+
+  /**
+   * Universal Zenith Diagnostic Probe: Runs 4-pillar forensic health audit across
+   * disk invariants, CAS storage integrity, database connection pool, and graph topology.
+   */
+  public async runZenithDiagnosticProbe(ctx?: any): Promise<{
+    ok: boolean;
+    timestamp: number;
+    violations: string[];
+    pillarReports: {
+      diskInvariants: { passed: boolean; violations: string[] };
+      casStorageIntegrity: { checked: number; healthy: number; corrupted: number };
+      dbPoolHealth: { lockContentionCount: number; failedWriteCount: number; totalLockWaitMs: number };
+      epistemicGraph: { totalNodes: number; avgConnectivity: number };
+    };
+  }> {
+    const violations = await this.auditInvariants();
+    let casStats = { checked: 0, healthy: 0, corrupted: 0 };
+    let dbMetrics = { lockContentionCount: 0, failedWriteCount: 0, totalLockWaitMs: 0 };
+    let graphStats = { totalNodes: 0, avgConnectivity: 0 };
+
+    if (ctx) {
+      if (ctx.compactionService?.verifyIntegrity) {
+        try {
+          casStats = await ctx.compactionService.verifyIntegrity();
+        } catch {
+          // Best effort
+        }
+      }
+      if (ctx.db?.getMetrics) {
+        try {
+          const m = ctx.db.getMetrics();
+          dbMetrics = {
+            lockContentionCount: m.lockContentionCount || 0,
+            failedWriteCount: m.failedWriteCount || 0,
+            totalLockWaitMs: m.totalLockWaitMs || 0,
+          };
+        } catch {
+          // Best effort
+        }
+      }
+      if (ctx.reasoning?.getGraphMetrics) {
+        try {
+          const g = await ctx.reasoning.getGraphMetrics();
+          graphStats = { totalNodes: g.totalNodes || 0, avgConnectivity: g.avgConnectivity || 0 };
+        } catch {
+          // Best effort
+        }
+      }
+    }
+
+    const ok = violations.length === 0 && casStats.corrupted === 0;
+
+    return {
+      ok,
+      timestamp: Date.now(),
+      violations,
+      pillarReports: {
+        diskInvariants: { passed: violations.length === 0, violations },
+        casStorageIntegrity: casStats,
+        dbPoolHealth: dbMetrics,
+        epistemicGraph: graphStats,
+      },
+    };
+  }
 }

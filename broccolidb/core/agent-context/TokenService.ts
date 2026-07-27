@@ -38,3 +38,52 @@ export class TokenService {
     return this.estimateMessages(messages);
   }
 }
+
+/**
+ * TokenRateGovernor provides thread-safe Token Bucket rate governance
+ * for managing AI model token consumption and multi-agent swarm backpressure.
+ */
+export class TokenRateGovernor {
+  private tokens: number;
+  private lastRefill: number;
+
+  constructor(
+    private readonly capacity: number = 100000,
+    private readonly fillRatePerMs: number = 100000 / 60000
+  ) {
+    this.tokens = capacity;
+    this.lastRefill = Date.now();
+  }
+
+  private refill(): void {
+    const now = Date.now();
+    const elapsed = now - this.lastRefill;
+    this.tokens = Math.min(this.capacity, this.tokens + elapsed * this.fillRatePerMs);
+    this.lastRefill = now;
+  }
+
+  public async acquire(requiredTokens: number): Promise<{ acquired: boolean; waitMs: number }> {
+    this.refill();
+    if (this.tokens >= requiredTokens) {
+      this.tokens -= requiredTokens;
+      return { acquired: true, waitMs: 0 };
+    }
+    const missing = requiredTokens - this.tokens;
+    const waitMs = Math.ceil(missing / this.fillRatePerMs);
+    return { acquired: false, waitMs };
+  }
+
+  public async acquireOrWait(requiredTokens: number): Promise<void> {
+    const res = await this.acquire(requiredTokens);
+    if (!res.acquired && res.waitMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, Math.min(res.waitMs, 5000)));
+      this.refill();
+      this.tokens = Math.max(0, this.tokens - requiredTokens);
+    }
+  }
+
+  public getAvailableTokens(): number {
+    this.refill();
+    return Math.round(this.tokens);
+  }
+}

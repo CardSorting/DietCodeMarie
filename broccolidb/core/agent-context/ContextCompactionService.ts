@@ -125,18 +125,24 @@ export class ContextCompactionService {
 
   async commit(input: ContextCompactionCommitInput): Promise<ContextCompactionCommitResult> {
     this.assertPersistent();
+    const startTime = Date.now();
     const validated = this.validateCommit(input);
     const uniqueRecords = this.uniqueSources(validated.records);
     const existingRows = await this.loadSourceRows(uniqueRecords.map((record) => record.sourceSha256));
     const existingByHash = new Map(existingRows.map((row) => [row.sourceSha256, row]));
     let deduplicatedSources = 0;
 
+    const existingBlobHashes = existingRows.map((row) => row.blobHash);
+    const existingBlobsFound = await this.storage.existsMany(existingBlobHashes);
+
+    const adaptiveConcurrency = Math.min(8, Math.max(COMPRESSION_CONCURRENCY, Math.ceil(uniqueRecords.length / 4)));
+
     const preparedSources = await mapWithConcurrency(
       uniqueRecords,
-      COMPRESSION_CONCURRENCY,
+      adaptiveConcurrency,
       async (record): Promise<PreparedSource> => {
         const existing = existingByHash.get(record.sourceSha256);
-        if (existing && (await this.storage.exists(existing.blobHash))) {
+        if (existing && existingBlobsFound.get(existing.blobHash)) {
           deduplicatedSources++;
           return { ...existing, lastAccessedAt: Date.now(), newlyStored: false };
         }
@@ -191,6 +197,7 @@ export class ContextCompactionService {
             originalCharacters: record.originalCharacters,
             originalLines: record.originalLines,
             createdAt: now,
+            parentProjectionId: record.parentProjectionId ?? null,
           },
           layer: 'infrastructure',
         })
@@ -269,6 +276,10 @@ export class ContextCompactionService {
       })
     );
 
+    const totalOriginalBytes = preparedSources.reduce((acc, s) => acc + s.originalBytes, 0);
+    const totalStoredBytes = preparedSources.reduce((acc, s) => acc + s.storedBytes, 0);
+    const durationMs = Date.now() - startTime;
+
     return {
       committed: true,
       recoverySource: validated.recoverySource,
@@ -277,6 +288,13 @@ export class ContextCompactionService {
       storedBytes: preparedSources
         .filter((source) => source.newlyStored)
         .reduce((total, source) => total + source.storedBytes, 0),
+      telemetry: {
+        originalBytes: totalOriginalBytes,
+        storedBytes: totalStoredBytes,
+        compressionRatio: totalOriginalBytes > 0 ? Number((totalStoredBytes / totalOriginalBytes).toFixed(4)) : 1.0,
+        compressionTimeMs: durationMs,
+        deduplicationHitRate: uniqueRecords.length > 0 ? Number((deduplicatedSources / uniqueRecords.length).toFixed(4)) : 0.0,
+      },
     };
   }
 
@@ -318,6 +336,7 @@ export class ContextCompactionService {
       originalCharacters: row.originalCharacters,
       originalLines: row.originalLines,
       createdAt: row.createdAt,
+      parentProjectionId: (row as any).parentProjectionId ?? null,
     }));
     const cursor = cursors[0]
       ? {
@@ -335,6 +354,7 @@ export class ContextCompactionService {
     const messageId = requireBoundedString(input.messageId, 'messageId', 256);
     const blockId = requireBoundedString(input.blockId, 'blockId', 256);
     const sourceSha256 = this.requireHash(input.sourceSha256, 'sourceSha256');
+
     const projections = await this.db.selectWhere(
       'context_compaction_projections',
       [
@@ -381,7 +401,52 @@ export class ContextCompactionService {
         `Hydrated context source metadata mismatch for ${sourceSha256}`
       );
     }
+
     return { sourceSha256, text };
+  }
+
+  /**
+   * Verifies the cryptographic storage integrity of all compaction source blobs.
+   */
+  async verifyIntegrity(scopeId?: string): Promise<{ checked: number; healthy: number; healed: number; corrupted: number }> {
+    this.assertPersistent();
+    let sources: SourceRow[];
+    if (scopeId) {
+      const projections = await this.db.selectWhere('context_compaction_projections', {
+        column: 'scopeId',
+        value: scopeId,
+      });
+      const uniqueHashes = [...new Set(projections.map((p) => p.sourceSha256))];
+      sources = await this.loadSourceRows(uniqueHashes);
+    } else {
+      sources = await this.db.selectWhere('context_compaction_sources', []);
+    }
+
+    let checked = 0;
+    let healthy = 0;
+    let healed = 0;
+    let corrupted = 0;
+
+    for (const source of sources) {
+      checked++;
+      const stored = await this.storage.readBlob(source.blobHash);
+      if (!stored) {
+        corrupted++;
+        continue;
+      }
+      try {
+        const raw = source.codec === 'brotli' ? await decompressBrotli(stored) : stored;
+        if (raw.byteLength === source.originalBytes && sha256(raw) === source.sourceSha256) {
+          healthy++;
+        } else {
+          corrupted++;
+        }
+      } catch {
+        corrupted++;
+      }
+    }
+
+    return { checked, healthy, healed, corrupted };
   }
 
   private assertPersistent(): void {
@@ -474,6 +539,9 @@ export class ContextCompactionService {
       record.projectionSha256,
       `${field}.projectionSha256`
     );
+    const parentProjectionId = record.parentProjectionId
+      ? requireBoundedString(record.parentProjectionId, `${field}.parentProjectionId`, 512)
+      : undefined;
     const sourceBytes = Buffer.byteLength(record.sourceText, 'utf8');
     const projectionBytes = Buffer.byteLength(record.projectionText, 'utf8');
     if (sourceBytes > MAX_SOURCE_BYTES) {
@@ -523,6 +591,7 @@ export class ContextCompactionService {
         `${field}.originalCharacters`
       ),
       originalLines: requireNonNegativeInteger(record.originalLines, `${field}.originalLines`),
+      parentProjectionId,
     };
   }
 
@@ -560,9 +629,10 @@ export class ContextCompactionService {
     let payload = original;
     let codec: PreparedSource['codec'] = 'identity';
     if (original.byteLength >= BROTLI_MINIMUM_BYTES) {
+      const quality = original.byteLength > 1024 * 1024 ? 6 : original.byteLength > 16 * 1024 ? 5 : 4;
       const compressed = await compressBrotli(original, {
         params: {
-          [zlibConstants.BROTLI_PARAM_QUALITY]: 4,
+          [zlibConstants.BROTLI_PARAM_QUALITY]: quality,
           [zlibConstants.BROTLI_PARAM_SIZE_HINT]: original.byteLength,
         },
       });

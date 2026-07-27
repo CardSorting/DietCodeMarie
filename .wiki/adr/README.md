@@ -54,3 +54,33 @@ Decisions governing the completion lifecycle and deferred observability.
 * **[MEOW-007: Asynchronous Audit Persistence](MEOW-007-async-audit-persistence.md)**
   Defers non-authoritative logging and audit serialization until after result presentation.
   * *Implementing Surface:* [completionAudit.ts](file:///Users/bozoegg/Downloads/codemarie-new/src/shared/audit/completionAudit.ts)
+* **[MEOW-009: Latency Instrumentation](MEOW-009-latency-instrumentation.md)**
+  Defers telemetry aggregation and latency instrumentation outside critical mutation execution boundaries.
+  * *Implementing Surface:* `src/core/task/latency/TaskLatencyTracker.ts`
+
+## 6. Resilience & Epistemic Substrate
+Decisions governing tool circuit breaking, transient read caching, lock jitter, epistemic confidence propagation, 4-pillar forensic probing, and task DAG scheduling.
+* **[MEOW-014: Universal Zenith Resilience Engineering & Epistemic Graph Infrastructure](MEOW-014-universal-zenith-resilience.md)**
+  Establishes sliding-window circuit breakers, 500ms speculative read caching, adaptive lock backoff jitter, Epistemic PageRank confidence scoring, 4-pillar forensic diagnostic probes, and Task DAG dependency scheduling.
+  * *Implementing Surfaces:* `broccolidb/core/agent-context/StreamingToolExecutor.ts`, `broccolidb/infrastructure/db/BufferedDbPool.ts`, `broccolidb/core/agent-context/ReasoningService.ts`, `broccolidb/core/agent-context/TaskService.ts`
+
+
+## Architectural Decision Dependency Graph
+
+```mermaid
+flowchart LR
+  MEOW-001["MEOW-001: Authoritative Completion"]
+  MEOW-002["MEOW-002: Fast Path and Governed Mutation"]
+  MEOW-003["MEOW-003: Risk-Proportional Governance"]
+  MEOW-004["MEOW-004: Structured Sibling Concurrency"]
+  MEOW-005["MEOW-005: Invocation-Local Presentation Context"]
+  MEOW-006["MEOW-006: Dependency-Based Scheduling"]
+  MEOW-007["MEOW-007: Asynchronous Audit Persistence"]
+  MEOW-008["MEOW-008: Cache Generation Invalidation"]
+  MEOW-009["MEOW-009: Latency Instrumentation"]
+  MEOW-010["MEOW-010: Deterministic Result Projection"]
+  MEOW-011["MEOW-011: Approval Is Execution Admission"]
+  MEOW-012["MEOW-012: Transactional Task Lifecycle Authority"]
+  MEOW-013["MEOW-013: Recoverable Turn-Boundary Context Projection"]
+  MEOW-014["MEOW-014: Universal Zenith Resilience Engineering & Epistemic Graph Infrastructure"]
+```

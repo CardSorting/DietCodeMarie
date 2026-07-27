@@ -42,6 +42,7 @@ Last validated: 2026-07-26
   shares the central store under an isolated subagent scope. Immutable
   `<transcript>.context/` records remain the no-central-store fallback.
 - Master of Design (MoD) System Prompt Steering Toggle Architecture: `src/core/prompts/system-prompt/components/mod_designer_steering.ts` & `src/core/task/index.ts`. MoD Mode mirrors the unified coding agent task loop with 100% tool parity (`read_file`, `replace_in_file`, `execute_command`, `browser_action`, subagents, MCP tools), automatically steered by senior design engineering instincts (tokens, 7-state UI matrix, WCAG 2.1 AA, responsive grid ergonomics, 5-Whys).
+- BroccoliDB Universal Zenith Resilience & Epistemic Substrate ([MEOW-014](file:///Users/bozoegg/Downloads/codemarie-new/.wiki/adr/MEOW-014-universal-zenith-resilience.md)): `broccolidb/core/agent-context/StreamingToolExecutor.ts` (circuit breaker & read cache), `BufferedDbPool.ts` (adaptive lock backoff jitter), `ReasoningService.ts` (Epistemic PageRank confidence scoring), `InvariantEngine.ts` (4-pillar forensic probe), `TaskService.ts` (Task DAG dependency scheduler), and `TokenService.ts` (Token Bucket rate governor).
 
 ## Orientation Loop
 

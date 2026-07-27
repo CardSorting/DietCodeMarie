@@ -6,7 +6,7 @@
 export const AGENT_CONTEXT_CLASSIFICATIONS = {
   AuditService: 'PURE_SERVICE',
   CleanupService: 'OWNED_SERVICE',
-  CompactService: 'PURE_SERVICE',
+  ContextCompactionService: 'OWNED_SERVICE',
   CoordinatorService: 'OWNED_SERVICE',
   DiagnosisService: 'PURE_SERVICE',
   GraphService: 'PURE_SERVICE',

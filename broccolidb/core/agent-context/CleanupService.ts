@@ -171,17 +171,47 @@ export class CleanupService {
   }
 
   private async _reapUnreferencedCASBlobs(): Promise<number> {
-    const [knowledgeRows, compactionSources] = await Promise.all([
+    const LEASE_GRACE_PERIOD_MS = 5 * 60 * 1000;
+    const now = Date.now();
+
+    // Phase 1 (Mark & Purge Orphaned Source Metadata):
+    // Identify compaction sources with no active projections referencing them, older than grace period.
+    const [allSources, allProjections, knowledgeRows] = await Promise.all([
+      this.ctx.db.selectWhere('context_compaction_sources', []),
+      this.ctx.db.selectWhere('context_compaction_projections', []),
       this.ctx.db.selectWhere('knowledge', [
         { column: 'content', value: 'CAS:%', operator: 'LIKE' },
       ]),
-      this.ctx.db.selectWhere('context_compaction_sources', []),
     ]);
 
-    const referencedHashes = new Set(knowledgeRows.map((r) => (r.content as string).substring(4)));
-    for (const source of compactionSources) {
+    const activeSourceHashes = new Set(allProjections.map((p) => p.sourceSha256));
+    const orphanSources = allSources.filter(
+      (s) => !activeSourceHashes.has(s.sourceSha256) && now - s.createdAt > LEASE_GRACE_PERIOD_MS
+    );
+
+    if (orphanSources.length > 0) {
+      for (const orphan of orphanSources) {
+        await this.ctx.db.push({
+          type: 'delete',
+          table: 'context_compaction_sources',
+          where: { column: 'sourceSha256', value: orphan.sourceSha256 },
+          layer: 'infrastructure',
+        });
+      }
+    }
+
+    // Phase 2 (Sweep Unreferenced CAS Blobs with Grace Window Protection):
+    const remainingSources = allSources.filter(
+      (s) => activeSourceHashes.has(s.sourceSha256) || now - s.createdAt <= LEASE_GRACE_PERIOD_MS
+    );
+
+    const referencedHashes = new Set(
+      knowledgeRows.map((r) => (r.content as string).substring(4))
+    );
+    for (const source of remainingSources) {
       referencedHashes.add(source.blobHash);
     }
+
     return this.ctx.storage.pruneUnreferencedBlobs(referencedHashes);
   }
 

@@ -151,6 +151,7 @@ export interface Schema {
     description: string;
     complexity: number;
     linkedKnowledgeIds: string; // JSON string
+    dependsOnTaskIds?: string | null; // JSON string
     result: string | null; // JSON string
     createdAt: number;
     updatedAt: number;
@@ -298,6 +299,7 @@ export interface Schema {
     originalCharacters: number;
     originalLines: number;
     createdAt: number;
+    parentProjectionId: string | null;
   };
   context_compaction_cursors: {
     cursorId: string;
@@ -421,6 +423,7 @@ export async function getDb(): Promise<Kysely<Schema>> {
       await execute('PRAGMA temp_store = MEMORY;');
       await execute('PRAGMA cache_size = -64000;');
       await execute('PRAGMA mmap_size = 268435456;');
+      await execute('PRAGMA busy_timeout = 5000;');
       await execute('PRAGMA foreign_keys = ON;');
 
       // Schema Initialization
@@ -598,12 +601,18 @@ export async function getDb(): Promise<Kysely<Schema>> {
         description TEXT NOT NULL,
         complexity REAL,
         linkedKnowledgeIds TEXT,
+        dependsOnTaskIds TEXT,
         result TEXT,
         createdAt BIGINT,
         updatedAt BIGINT,
         FOREIGN KEY(userId) REFERENCES users(id),
         FOREIGN KEY(agentId) REFERENCES agents(id)
       )`);
+      try {
+        await execute(`ALTER TABLE tasks ADD COLUMN dependsOnTaskIds TEXT`);
+      } catch {
+        // Column already exists
+      }
 
       await execute(`CREATE TABLE IF NOT EXISTS audit_events (
         id TEXT PRIMARY KEY,
@@ -807,10 +816,18 @@ export async function getDb(): Promise<Kysely<Schema>> {
           originalCharacters INTEGER NOT NULL,
           originalLines INTEGER NOT NULL,
           createdAt BIGINT NOT NULL,
+          parentProjectionId TEXT,
           UNIQUE(scopeId, messageId, blockId, projectionSha256),
           FOREIGN KEY(sourceSha256) REFERENCES context_compaction_sources(sourceSha256)
         )`
       );
+      try {
+        await execute(
+          `ALTER TABLE context_compaction_projections ADD COLUMN parentProjectionId TEXT`
+        );
+      } catch {
+        // Column already exists
+      }
       await execute(
         `CREATE TABLE IF NOT EXISTS context_compaction_cursors (
           cursorId TEXT PRIMARY KEY,
@@ -859,6 +876,14 @@ export async function getDb(): Promise<Kysely<Schema>> {
       await execute(
         `CREATE INDEX IF NOT EXISTS idx_context_compaction_projection_identity
          ON context_compaction_projections(scopeId, messageId, blockId)`
+      );
+      await execute(
+        `CREATE INDEX IF NOT EXISTS idx_context_compaction_projection_source_sha
+         ON context_compaction_projections(sourceSha256)`
+      );
+      await execute(
+        `CREATE INDEX IF NOT EXISTS idx_context_compaction_projection_parent
+         ON context_compaction_projections(parentProjectionId)`
       );
       await execute(
         `CREATE INDEX IF NOT EXISTS idx_context_compaction_cursor_scope

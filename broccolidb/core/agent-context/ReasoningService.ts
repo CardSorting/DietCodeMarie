@@ -45,6 +45,76 @@ export class ReasoningService {
   }
 
   /**
+   * Epistemic PageRank (EP-Rank): Calculates graph-propagated knowledge confidence scores.
+   * Iteratively updates node confidence based on supporting edge weights, hub centrality,
+   * and contradiction decays.
+   */
+  async calculateEpistemicPageRank(
+    iterations = 10,
+    dampingFactor = 0.85
+  ): Promise<Record<string, number>> {
+    const allRows = await this.ctx.db.selectWhere('knowledge', [
+      { column: 'userId', value: this.ctx.userId }
+    ]);
+
+    if (allRows.length === 0) return {};
+
+    const items = await Promise.all(
+      allRows.map((r) => this.graph.getKnowledge(r.id).catch(() => null))
+    );
+    const validItems = items.filter((item): item is KnowledgeBaseItem => item !== null);
+    if (validItems.length === 0) return {};
+
+    const ranks = new Map<string, number>();
+
+    // Initialize with base confidence
+    for (const node of validItems) {
+      ranks.set(node.itemId, Math.max(0.1, node.confidence ?? 0.5));
+    }
+
+    const nodeMap = new Map(validItems.map((n) => [n.itemId, n]));
+
+    for (let iter = 0; iter < iterations; iter++) {
+      const nextRanks = new Map<string, number>();
+
+      for (const node of validItems) {
+        const base = Math.max(0.05, node.confidence ?? 0.5);
+        let inboundSupportSum = 0;
+        let contradictionPenalty = 0;
+
+        for (const inbound of node.inboundEdges || []) {
+          const sourceRank = ranks.get(inbound.targetId) ?? 0.5;
+          const sourceNode = nodeMap.get(inbound.targetId);
+          const outboundCount = Math.max(1, (sourceNode?.edges || []).length);
+          const weight = inbound.weight ?? 1.0;
+
+          if (inbound.type === 'supports') {
+            inboundSupportSum += (sourceRank * weight) / outboundCount;
+          } else if (inbound.type === 'contradicts') {
+            contradictionPenalty += (sourceRank * weight) * 0.2;
+          }
+        }
+
+        const newRank = Math.min(
+          1.0,
+          Math.max(0.01, (1 - dampingFactor) * base + dampingFactor * inboundSupportSum - contradictionPenalty)
+        );
+        nextRanks.set(node.itemId, Number(newRank.toFixed(4)));
+      }
+
+      for (const [id, r] of nextRanks.entries()) {
+        ranks.set(id, r);
+      }
+    }
+
+    const result: Record<string, number> = {};
+    for (const [id, r] of ranks.entries()) {
+      result[id] = r;
+    }
+    return result;
+  }
+
+  /**
    * Returns the reasoning lineage (pedigree) for a given node.
    */
   async getReasoningPedigree(nodeId: string, maxDepth = 5): Promise<Pedigree> {

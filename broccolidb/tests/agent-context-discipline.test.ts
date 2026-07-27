@@ -111,7 +111,7 @@ async function runTest() {
 
   assert.deepStrictEqual(
     OWNED_SERVICES.sort(),
-    ['BufferedDbPool', 'CleanupService', 'CoordinatorService', 'LspService', 'MutexService', 'StorageService'].sort()
+    ['BufferedDbPool', 'CleanupService', 'ContextCompactionService', 'CoordinatorService', 'LspService', 'MutexService', 'StorageService'].sort()
   );
 
   for (const exception of COMPATIBILITY_EXCEPTIONS) {

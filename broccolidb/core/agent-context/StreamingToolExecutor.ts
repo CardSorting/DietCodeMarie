@@ -93,6 +93,61 @@ class ToolTimeoutError extends Error {
 
 type ToolCallCollector = (call: ToolCall) => void;
 
+export class ToolCircuitBreaker {
+  private failures = new Map<string, number[]>();
+  private openUntil = new Map<string, number>();
+
+  recordSuccess(toolName: string): void {
+    this.failures.delete(toolName);
+    this.openUntil.delete(toolName);
+  }
+
+  recordFailure(toolName: string): void {
+    const now = Date.now();
+    const history = (this.failures.get(toolName) || []).filter((t) => now - t < 60000);
+    history.push(now);
+    this.failures.set(toolName, history);
+
+    if (history.length >= 3) {
+      this.openUntil.set(toolName, now + 30000);
+    }
+  }
+
+  isOpen(toolName: string): boolean {
+    const until = this.openUntil.get(toolName);
+    if (!until) return false;
+    if (Date.now() >= until) {
+      this.openUntil.delete(toolName);
+      return false;
+    }
+    return true;
+  }
+}
+
+export class TransientReadCache {
+  private cache = new Map<string, { result: ToolResult; expiresAt: number }>();
+
+  get(toolName: string, input: unknown): ToolResult | null {
+    const key = `${toolName}:${JSON.stringify(input ?? {})}`;
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) {
+      this.cache.delete(key);
+      return null;
+    }
+    return entry.result;
+  }
+
+  set(toolName: string, input: unknown, result: ToolResult, ttlMs = 500): void {
+    const key = `${toolName}:${JSON.stringify(input ?? {})}`;
+    this.cache.set(key, { result, expiresAt: Date.now() + ttlMs });
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+}
+
 /**
  * StreamingToolExecutor orchestrates tool calls received from the AI.
  * It manages concurrency, safety checks, and provides real-time progress.
@@ -100,6 +155,8 @@ type ToolCallCollector = (call: ToolCall) => void;
  */
 export class StreamingToolExecutor {
   private inProgress = new Set<string>();
+  public readonly circuitBreaker = new ToolCircuitBreaker();
+  public readonly readCache = new TransientReadCache();
   private readonly options: Required<Omit<ToolExecutorOptions, 'onProgress'>> &
     Pick<ToolExecutorOptions, 'onProgress'>;
 
@@ -197,6 +254,29 @@ export class StreamingToolExecutor {
 
     const warnings: string[] = [];
     const normalizedInput = this.normalizeInput(input);
+
+    if (this.circuitBreaker.isOpen(name)) {
+      const content = `Tool execution halted: Circuit breaker is OPEN for tool '${name}' due to recent repeated failures.`;
+      await this.recordAuditEvent(name, toolUseId, startedAt, false, ['circuit_breaker_open'], content);
+      return this.makeResult(name, toolUseId, content, true, startedAt, false, false, ['circuit_breaker_open']);
+    }
+
+    if (tool.isSearchOrReadCommand) {
+      const cached = this.readCache.get(name, normalizedInput);
+      if (cached) {
+        return {
+          ...cached,
+          toolUseId,
+          metadata: cached.metadata
+            ? {
+                ...cached.metadata,
+                warnings: [...cached.metadata.warnings, 'transient_read_cache_hit'],
+              }
+            : undefined,
+        };
+      }
+    }
+
     this.inProgress.add(toolUseId);
     this.emitProgress(toolUseId, name, 'queued', startedAt);
 
@@ -291,57 +371,56 @@ export class StreamingToolExecutor {
             }
           }
 
-          if (mirrorResult.diagnostics.length > 0) {
-            finalContent += '\n\nCOMPILER ERRORS DETECTED:';
-            for (const diag of mirrorResult.diagnostics) {
-              finalContent += `\n- Line ${diag.line}: ${diag.message}`;
-            }
-            finalContent += '\n\nAction: Anchor on these real breakages before continuing.';
-          }
-
-          try {
-            const check = await this.ctx.spider.check({
+          if (this.options.failOnPostEditBlockers) {
+            const postEdit = await this.ctx.spider.check({
               phase: 'post-edit',
-              scope: [mutationPath.relativePath],
+              filePath: mutationPath.relativePath,
               neighborhoodDepth: 1,
               correlationId: toolUseId,
               includeTypes: false,
               includeRepairDirectives: true,
             });
-            if (check.exitCode !== 0) {
-              const postDigest = formatCheckDigest(check);
-              finalContent += `\n\n${postDigest}`;
+
+            if (postEdit.exitCode !== 0) {
               warnings.push('spider_post_edit_gate_failed');
-              if (this.options.failOnPostEditBlockers) {
-                const failure = formatFailureFromCheck(check);
-                await this.recordAuditEvent(name, toolUseId, startedAt, false, warnings, postDigest);
-                return this.makeResult(name, toolUseId, postDigest, true, startedAt, false, mirrored, warnings, failure);
-              }
+              const failure = formatFailureFromCheck(postEdit);
+              const postEditNote = formatCheckDigest(postEdit);
+              await this.recordAuditEvent(name, toolUseId, startedAt, false, warnings, postEditNote);
+              this.circuitBreaker.recordFailure(name);
+              return this.makeResult(
+                name,
+                toolUseId,
+                `${finalContent}\n\n${postEditNote}`,
+                true,
+                startedAt,
+                truncated,
+                mirrored,
+                warnings,
+                failure
+              );
             }
-          } catch {
-            // Forensic append is best-effort; mutation result already captured.
           }
-        } catch {
-          if (!this.hasInlineReplacement(normalizedInput)) {
-            await this.ctx.spider.applyChanges([{ filePath: mutationPath.relativePath }]);
-            mirrored = true;
-          }
+        } catch (err: any) {
+          warnings.push(`mirror_failed:${err?.message || 'unknown'}`);
         }
       }
 
-      if (preEditNote) {
-        finalContent += `\n\n${preEditNote}`;
-      }
-
+      this.circuitBreaker.recordSuccess(name);
+      await this.recordAuditEvent(name, toolUseId, startedAt, true, warnings, finalContent);
       this.emitProgress(toolUseId, name, 'completed', startedAt);
-      await this.recordAuditEvent(name, toolUseId, startedAt, true, warnings);
-      return this.makeResult(name, toolUseId, finalContent, false, startedAt, truncated, mirrored, warnings);
-    } catch (e: any) {
-      const timedOut = e instanceof ToolTimeoutError;
-      this.emitProgress(toolUseId, name, timedOut ? 'timeout' : 'failed', startedAt, e.message);
-      const content = this.redactSensitiveText(`Error executing tool '${name}': ${e.message || String(e)}`);
+      const res = this.makeResult(name, toolUseId, finalContent, false, startedAt, truncated, mirrored, warnings);
+      if (tool.isSearchOrReadCommand) {
+        this.readCache.set(name, normalizedInput, res);
+      }
+      return res;
+    } catch (error: any) {
+      this.circuitBreaker.recordFailure(name);
+      const isTimeout = error instanceof ToolTimeoutError;
+      const phase: ToolExecutionPhase = isTimeout ? 'timeout' : 'failed';
+      const content = error?.message || String(error);
+      this.emitProgress(toolUseId, name, phase, startedAt, content);
       await this.recordAuditEvent(name, toolUseId, startedAt, false, warnings, content);
-      return this.makeResult(name, toolUseId, content, true, startedAt, false, false, warnings);
+      return this.makeResult(name, toolUseId, `Error executing tool '${name}': ${content}`, true, startedAt, false, false, warnings);
     } finally {
       this.inProgress.delete(toolUseId);
     }

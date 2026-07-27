@@ -21,24 +21,53 @@ const health = await ctx.health({ deep?: boolean });
 | `flush()` | Flush durable writes (db, intent traces) |
 | `health()` | Lifecycle + per-capability health |
 
-## Capability getters
-
 | Getter | Purpose |
 |--------|---------|
 | `ctx.query` | Knowledge search, structural impact |
 | `ctx.graph` | Graph traversal; **Spider** at `ctx.graph.spider` |
 | `ctx.runtime` | Sessions, plans, execution, verification, state views |
-| `ctx.audit` | Invariant checks |
+| `ctx.audit` | Invariant checks and 4-pillar forensic probes (`runZenithDiagnosticProbe`) |
 | `ctx.storage` | Blob storage (CAS) |
-| `ctx.compaction` | Durable context projections, cursors, and exact-source hydration |
+| `ctx.compaction` | Durable context projections, cursors, exact-source hydration, and Brotli telemetry |
 | `ctx.snapshots` | Context snapshots |
-| `ctx.recovery` | Recovery operations |
+| `ctx.recovery` | Recovery operations & Two-Phase Mark-Sweep GC |
 | `ctx.telemetry` | Telemetry events |
 | `ctx.coordination` | Mutex and agent coordination |
-| `ctx.reasoning` | Reasoning chains |
-| `ctx.tasks` | Task board |
+| `ctx.reasoning` | Reasoning chains & Epistemic PageRank (`calculateEpistemicPageRank`) |
+| `ctx.tasks` | Task board, DAG dependency scheduling (`getExecutableTasks`, `resolveTaskCascade`) |
 | `ctx.scratchpad` | Agent scratchpad |
 | `ctx.mailbox` | Inter-agent mailbox |
+
+### Zenith Resilience & Epistemic Infrastructure
+
+#### Epistemic PageRank (`ctx.reasoning.calculateEpistemicPageRank`)
+Calculates graph-propagated knowledge confidence across knowledge items by evaluating support edge weights, hub centrality, and contradiction decay penalties:
+```typescript
+const ranks = await ctx.reasoning.calculateEpistemicPageRank(10, 0.85);
+// Returns: Record<string, number> mapping node ID to confidence score [0.0, 1.0]
+```
+
+#### 4-Pillar Forensic Probe (`ctx.audit.runZenithDiagnosticProbe`)
+Executes unified structural health audits across Disk Invariants, CAS Storage Integrity, DB Pool & WAL Health, and Epistemic Graph Connectivity:
+```typescript
+const probe = await ctx.audit.runZenithDiagnosticProbe(serviceContext);
+// Returns: { ok: boolean, timestamp: number, violations: string[], pillarReports: ... }
+```
+
+#### Multi-Agent Task DAG Scheduler (`ctx.tasks`)
+Schedules tasks declaring `dependsOnTaskIds?: string[]` and resolves completion/failure cascades:
+```typescript
+const readyTasks = await ctx.tasks.getExecutableTasks();
+const cascadeResult = await ctx.tasks.resolveTaskCascade('parent-task-id', 'completed');
+```
+
+#### Token Bucket Rate Governor (`TokenRateGovernor`)
+Manages AI completion token consumption rates per minute and applies smooth backpressure:
+```typescript
+import { TokenRateGovernor } from '@noorm/broccolidb';
+const governor = new TokenRateGovernor(100000, 100000 / 60000);
+await governor.acquireOrWait(4000);
+```
 
 ### Context compaction
 

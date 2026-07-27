@@ -48,6 +48,15 @@ Composite operations use the same parent decision and permit only when every del
 
 Tool execution success remains distinct from task completion. Only `CompletionFunnel` may complete a task.
 
+## Technical Implementation (The How)
+
+- **Primary Authority Monolith**: `src/core/task/tools/execution/ExecutionFunnel.ts`
+- **Execution Adapters**: [`ToolExecutor.ts`](file:///Users/bozoegg/Downloads/codemarie-new/src/core/task/ToolExecutor.ts) and [`ToolExecutorCoordinator.ts`](file:///Users/bozoegg/Downloads/codemarie-new/src/core/task/tools/ToolExecutorCoordinator.ts)
+- **Lifecycle Funnel Integration**: [`TaskLifecycleFunnel.ts`](file:///Users/bozoegg/Downloads/codemarie-new/src/core/task/lifecycle/TaskLifecycleFunnel.ts)
+- **Contract Interface**: `src/core/task/tools/execution/ExecutionFunnelTypes.ts`
+
+Handlers implement `getApprovalIntent(block)` which returns a pure `ApprovalIntent` object. `ExecutionFunnel.execute()` evaluates policy, issues the permit, and dispatches the task generation.
+
 ## Consequences
 
 - Parent, sibling, and subagent transports share identical approval semantics.

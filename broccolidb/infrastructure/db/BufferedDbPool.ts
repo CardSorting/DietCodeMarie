@@ -265,6 +265,7 @@ export class BufferedDbPool {
   private lastFlushLatency = 0;
   private failedWriteCount = 0;
   private lockContentionCount = 0;
+  private totalLockWaitMs = 0;
 
   public getDeadLetterQueue() {
     return this.deadLetterQueue;
@@ -691,7 +692,7 @@ export class BufferedDbPool {
       release();
     }
 
-    if (shadowOpsCount > 0) {
+    if (shadowOpsCount > 0 || this.activeBufferSize >= 1000) {
       this.scheduleFlush(0);
     }
   }
@@ -856,34 +857,56 @@ export class BufferedDbPool {
       let totalFlushed = 0;
       this.totalTransactions++;
 
-      await db.transaction().execute(async (trx) => {
-        const processedGroups = this.groupOps(opsToFlush);
+      let attempt = 0;
+      const maxRetries = 5;
+      while (true) {
+        try {
+          await db.transaction().execute(async (trx) => {
+            const processedGroups = this.groupOps(opsToFlush);
+            totalFlushed = 0;
 
-        for (const group of processedGroups) {
-          const first = group[0];
-          if (!first) continue;
-          const table = first.table;
+            for (const group of processedGroups) {
+              const first = group[0];
+              if (!first) continue;
+              const table = first.table;
 
-          // High-Performance Path: Chunked Raw SQL (Level 3 Quantum Boost)
-          if (group.length >= 100 && first.type === 'insert' && this.rawDb) {
-            totalFlushed += await this.executeChunkedRawInsert(table, group);
-          } else if (group.length > 1 && first.type === 'insert') {
-            totalFlushed += await this.executeBulkInsert(trx, table, group);
-          } else if (group.length > 1 && first.type === 'update') {
-            totalFlushed += await this.executeBulkUpdate(trx, table, group);
-          } else {
-            for (const op of group) {
-              try {
-                await this.executeSingleOp(trx, op);
-              } catch (error) {
-                Logger.error(`[DbPool] Write failed: ${op.type} ${String(op.table)}`);
-                throw error;
+              // High-Performance Path: Chunked Raw SQL (Level 3 Quantum Boost)
+              if (group.length >= 100 && first.type === 'insert' && this.rawDb) {
+                totalFlushed += await this.executeChunkedRawInsert(table, group);
+              } else if (group.length > 1 && first.type === 'insert') {
+                totalFlushed += await this.executeBulkInsert(trx, table, group);
+              } else if (group.length > 1 && first.type === 'update') {
+                totalFlushed += await this.executeBulkUpdate(trx, table, group);
+              } else {
+                for (const op of group) {
+                  try {
+                    await this.executeSingleOp(trx, op);
+                  } catch (error) {
+                    Logger.error(`[DbPool] Write failed: ${op.type} ${String(op.table)}`);
+                    throw error;
+                  }
+                  totalFlushed++;
+                }
               }
-              totalFlushed++;
             }
+          });
+          break;
+        } catch (error: any) {
+          attempt++;
+          const isBusyOrLocked =
+            error?.code === 'SQLITE_BUSY' ||
+            error?.code === 'SQLITE_LOCKED' ||
+            error?.message?.includes('database is locked') ||
+            error?.message?.includes('database table is locked');
+
+          if (isBusyOrLocked && attempt <= maxRetries) {
+            const delay = Math.min(100, Math.pow(2, attempt) * 10 + Math.random() * 15);
+            await new Promise((res) => setTimeout(res, delay));
+            continue;
           }
+          throw error;
         }
-      });
+      }
 
       const duration = Date.now() - startTime;
       this.lastSuccessfulFlush = Date.now();
@@ -923,7 +946,9 @@ export class BufferedDbPool {
 
       if (isRetryable && retryCount < 3) {
           this.lockContentionCount++;
-          const delay = Math.pow(2, retryCount) * 100;
+          const baseDelay = Math.pow(2, retryCount) * 100;
+          const delay = Math.round(baseDelay * (0.8 + 0.4 * Math.random()));
+          this.totalLockWaitMs += delay;
           console.warn(`[DbPool] ⚠️ Flush conflict (SQLITE_BUSY). Retrying in ${delay}ms... (Attempt ${retryCount + 1})`);
           await new Promise(r => setTimeout(r, delay));
           return this.runFlushCycle(retryCount + 1);
@@ -1599,6 +1624,8 @@ export class BufferedDbPool {
       lastFlushLatency: this.lastFlushLatency,
       failedWriteCount: this.failedWriteCount,
       lockContentionCount: this.lockContentionCount,
+      totalLockWaitMs: this.totalLockWaitMs,
+      avgLockWaitMs: this.lockContentionCount > 0 ? Number((this.totalLockWaitMs / this.lockContentionCount).toFixed(2)) : 0,
       latencies: {
         enqueue: {
           p95: this.calculatePercentile(this.enqueueLatencies, 95),

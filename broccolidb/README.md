@@ -55,17 +55,20 @@ npx broccolidb runtime story <sessionId>
 
 Full reference: [docs/cli.md](docs/cli.md).
 
-## Durable context projections
+## Durable Context Projections & Universal Hardening
 
-`ctx.compaction` provides a strict publication barrier for long-running agent
-context. It deduplicates exact source in sharded CAS, stores one current
-projection per immutable message/block identity, persists scan cursors and run
-telemetry in SQLite, and verifies exact bytes during hydration.
+`ctx.compaction` provides a strict publication barrier for long-running agent context. It deduplicates exact source in sharded CAS, stores immutable projection DAGs (`parentProjectionId`), runs 2-phase mark-sweep garbage collection, and cryptographically verifies blob hashes against disk.
 
-The high-level invariant is simple: await `ctx.compaction.commit(...)` before a
-projection marker enters a model request. If the strict transaction fails, keep
-the raw source. See [the public API](docs/public-api.md#context-compaction) and
-[current architecture](docs/architecture/current.md#context-projection-durability).
+Additionally, BroccoliDB includes enterprise-grade resilience infrastructure:
+- **Tool Execution Circuit Breaker**: Auto-trips on repeated tool failures, preventing subagent timeout loops.
+- **Transient Speculative Read Cache**: 500ms TTL cache deduplicating read commands (`view_file`, `list_dir`, `grep_search`).
+- **Adaptive Jittered Lock Backoff**: Eliminates database lock contention via randomized backoff jitter.
+- **Epistemic PageRank Engine**: Calculates graph-propagated confidence scores with support weighting and contradiction decay.
+- **4-Pillar Forensic Diagnostic Probe**: Unified health audit across Disk Invariants, CAS Integrity, DB Pool, and Graph Topology.
+- **Multi-Agent Task DAG Scheduler**: Dependency-based task scheduling (`dependsOnTaskIds`) with failure cascade resolution.
+- **Token Bucket Rate Governor**: Global rate governor managing token-per-minute limits and swarm backpressure.
+
+See [the public API](docs/public-api.md#context-compaction), [current architecture](docs/architecture/current.md), and [ADR 009: Universal Zenith Hardening](docs/architecture/ADR_UNIVERSAL_ZENITH_PASS.md).
 
 ## Documentation
 

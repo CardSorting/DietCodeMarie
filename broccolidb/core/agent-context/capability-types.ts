@@ -95,6 +95,7 @@ export interface ContextCompactionProjectionInput {
   tierRank: number;
   originalCharacters: number;
   originalLines: number;
+  parentProjectionId?: string;
 }
 
 export interface ContextCompactionRunInput {
@@ -119,12 +120,21 @@ export interface ContextCompactionCommitInput extends CapabilityIntentFields {
   run: ContextCompactionRunInput;
 }
 
+export interface CompactionTelemetry {
+  originalBytes: number;
+  storedBytes: number;
+  compressionRatio: number;
+  compressionTimeMs: number;
+  deduplicationHitRate: number;
+}
+
 export interface ContextCompactionCommitResult {
   committed: true;
   recoverySource: string;
   projectionIds: string[];
   deduplicatedSources: number;
   storedBytes: number;
+  telemetry?: CompactionTelemetry;
 }
 
 export interface ContextCompactionLoadInput extends CapabilityIntentFields {
@@ -147,6 +157,7 @@ export interface ContextCompactionProjectionRecord {
   originalCharacters: number;
   originalLines: number;
   createdAt: number;
+  parentProjectionId?: string | null;
 }
 
 export interface ContextCompactionLoadResult {

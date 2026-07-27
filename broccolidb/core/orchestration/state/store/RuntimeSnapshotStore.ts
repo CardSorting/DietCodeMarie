@@ -7,6 +7,8 @@ import type { RuntimeStateGraph } from '../RuntimeStateGraph.js';
 import { RuntimeGraphSerializer } from './RuntimeGraphSerializer.js';
 import type { RuntimeSnapshot, SerializedRuntimeGraph } from './types.js';
 
+const MAX_SERIALIZED_CACHE_SIZE = 64;
+
 export class RuntimeSnapshotStore {
   private readonly snapshots = new Map<string, RuntimeSnapshot>();
   private readonly serializedCache = new Map<string, SerializedRuntimeGraph>();
@@ -53,6 +55,10 @@ export class RuntimeSnapshotStore {
 
     this.snapshots.set(snapshot.snapshotId, snapshot);
     this.serializedCache.set(snapshot.snapshotId, serialized);
+    if (this.serializedCache.size > MAX_SERIALIZED_CACHE_SIZE) {
+      const oldestKey = this.serializedCache.keys().next().value;
+      if (oldestKey) this.serializedCache.delete(oldestKey);
+    }
     this.lastSuccessfulSnapshot = snapshot.createdAt;
 
     if (this.db && this.userId) {

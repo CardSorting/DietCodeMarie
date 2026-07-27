@@ -229,4 +229,88 @@ export class TaskService {
 
     return { task, resolvedGraph };
   }
+
+  private parseTaskDeps(val: any): string[] {
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string') {
+      try {
+        const parsed = JSON.parse(val);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
+
+  /**
+   * Returns tasks ready for execution (pending/active tasks with all upstream dependencies completed).
+   */
+  async getExecutableTasks(): Promise<TaskItem[]> {
+    const rows = await this.ctx.db.selectWhere('tasks', []);
+    const tasks: TaskItem[] = rows.map((row) => ({
+      ...row,
+      taskId: row.id,
+      linkedKnowledgeIds: JSON.parse(row.linkedKnowledgeIds || '[]'),
+      dependsOnTaskIds: this.parseTaskDeps((row as any).dependsOnTaskIds),
+      result: row.result ? JSON.parse(row.result) : undefined,
+    })) as any;
+
+    const completedTaskIds = new Set(
+      tasks.filter((t) => t.status === 'completed').map((t) => t.taskId)
+    );
+
+    return tasks.filter((t) => {
+      if (t.status !== 'pending' && t.status !== 'active') return false;
+      const deps = t.dependsOnTaskIds || [];
+      return deps.every((depId) => completedTaskIds.has(depId));
+    });
+  }
+
+  /**
+   * Resolves DAG dependency cascades when an upstream task completes or fails.
+   */
+  async resolveTaskCascade(taskId: string, status: 'completed' | 'failed'): Promise<string[]> {
+    await this.updateTaskStatus(taskId, status);
+
+    const rows = await this.ctx.db.selectWhere('tasks', []);
+    const tasks: TaskItem[] = rows.map((row) => ({
+      ...row,
+      taskId: row.id,
+      linkedKnowledgeIds: JSON.parse(row.linkedKnowledgeIds || '[]'),
+      dependsOnTaskIds: this.parseTaskDeps((row as any).dependsOnTaskIds),
+      result: row.result ? JSON.parse(row.result) : undefined,
+    })) as any;
+
+    const resolvedIds: string[] = [taskId];
+
+    if (status === 'failed') {
+      const failDependent = async (failedId: string) => {
+        const dependent = tasks.filter((t) => (t.dependsOnTaskIds || []).includes(failedId));
+        for (const dep of dependent) {
+          if (dep.status !== 'failed') {
+            await this.updateTaskStatus(dep.taskId, 'failed', { error: `Upstream task ${failedId} failed` });
+            resolvedIds.push(dep.taskId);
+            await failDependent(dep.taskId);
+          }
+        }
+      };
+      await failDependent(taskId);
+    } else {
+      const completedTaskIds = new Set(
+        tasks.filter((t) => t.status === 'completed' || t.taskId === taskId).map((t) => t.taskId)
+      );
+
+      const dependent = tasks.filter((t) => (t.dependsOnTaskIds || []).includes(taskId));
+      for (const dep of dependent) {
+        const allDepsReady = (dep.dependsOnTaskIds || []).every((dId) => completedTaskIds.has(dId));
+        if (allDepsReady && dep.status === 'pending') {
+          await this.updateTaskStatus(dep.taskId, 'active');
+          resolvedIds.push(dep.taskId);
+        }
+      }
+    }
+
+    return resolvedIds;
+  }
 }

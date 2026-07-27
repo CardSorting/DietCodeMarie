@@ -27,6 +27,7 @@ This ledger now routes to the current LUMI workspace operating docs and preserve
 - [**MEOW-011: Approval Is Execution Admission**](adr/MEOW-011-execution-approval-admission.md) — Central approval, causal permit, and handler-intent contract.
 - [**MEOW-012: Transactional Task Lifecycle Authority**](adr/MEOW-012-transactional-task-lifecycle.md) — Generation-bound state transitions, cancellation, resume, parent/child propagation, and immutable events.
 - [**MEOW-013: Recoverable Turn-Boundary Context Projection**](adr/MEOW-013-recoverable-context-projection.md) — Durable-source, bounded, stream-safe context projection.
+- [**MEOW-014: Universal Zenith Resilience Engineering & Epistemic Graph Infrastructure**](adr/MEOW-014-universal-zenith-resilience.md) — Circuit breakers, speculative read caching, adaptive lock backoff jitter, Epistemic PageRank confidence scoring, 4-pillar forensic diagnostic probes, and Task DAG dependency scheduling.
 - [**MEOW Migration Report**](meow-migration.md) — Before/after evolution and measured evidence.
 - [**00 Forensic Substrate Report**](00-forensics.md) — Historical forensic report; refresh before treating as current.
 

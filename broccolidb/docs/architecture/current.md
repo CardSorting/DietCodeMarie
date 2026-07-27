@@ -37,8 +37,6 @@ flowchart TB
    scan cursors, and run telemetry before a smaller projection may enter a
    model request.
 
-## Core components
-
 | Component | Location | Public access |
 |-----------|----------|---------------|
 | `AgentContext` | `core/agent-context.ts` | `new AgentContext(...)` |
@@ -46,9 +44,17 @@ flowchart TB
 | `OrchestrationRuntime` | `core/orchestration/` | `ctx.runtime` |
 | `RuntimeStateGraph` | `core/orchestration/state/` | via `ctx.runtime.state()` etc. |
 | Durable store | `core/orchestration/state/store/` | `snapshot`, `replay`, `story` |
-| Context compaction | `core/agent-context/ContextCompactionService.ts` | `ctx.compaction` |
+| Context Compaction | `core/agent-context/ContextCompactionService.ts` | `ctx.compaction` |
+| Tool Circuit Breaker | `core/agent-context/StreamingToolExecutor.ts` | Sliding window failure circuit breaker |
+| Transient Read Cache | `core/agent-context/StreamingToolExecutor.ts` | 500ms TTL speculative read cache |
+| Epistemic PageRank | `core/agent-context/ReasoningService.ts` | `calculateEpistemicPageRank()` |
+| 4-Pillar Forensic Probe | `core/agent-context/InvariantEngine.ts` | `runZenithDiagnosticProbe()` |
+| Task DAG Scheduler | `core/agent-context/TaskService.ts` | `getExecutableTasks()`, `resolveTaskCascade()` |
+| Token Rate Governor | `core/agent-context/TokenService.ts` | `TokenRateGovernor` |
 | Spider engine | `core/policy/spider/` | `ctx.graph.spider` only |
 | CLI | `cli/` | `npx broccolidb` |
+
+For detailed design rationale, see [ADR 009: Universal Zenith Hardening](ADR_UNIVERSAL_ZENITH_PASS.md).
 
 ## Runtime modes
 

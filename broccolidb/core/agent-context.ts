@@ -9,7 +9,6 @@ import { MutexService } from './agent-context/MutexService.js';
 import { ReasoningService } from './agent-context/ReasoningService.js';
 import { SpiderService } from './agent-context/SpiderService.js';
 import { TaskService } from './agent-context/TaskService.js';
-import { CompactService } from './agent-context/CompactService.js';
 import { TokenService } from './agent-context/TokenService.js';
 import { CoordinatorService } from './agent-context/CoordinatorService.js';
 import { ScratchpadService } from './agent-context/ScratchpadService.js';
@@ -93,7 +92,6 @@ export class AgentContext {
   private readonly _mutexService: MutexService;
   private readonly _cleanupService: CleanupService;
   private readonly _lspService: LspService;
-  private readonly _compactService: CompactService;
   private readonly _tokenService: TokenService;
   private readonly _coordinatorService: CoordinatorService;
   private readonly _scratchpadService: ScratchpadService;
@@ -168,7 +166,6 @@ export class AgentContext {
     this._spiderService = new SpiderService(this._serviceContext);
     this._mailboxService = new MailboxService(this._serviceContext);
     this._mutexService = new MutexService(this._serviceContext);
-    this._compactService = new CompactService(this._serviceContext);
     this._tokenService = new TokenService();
     this._coordinatorService = new CoordinatorService(this._serviceContext);
     this._scratchpadService = new ScratchpadService(this._serviceContext);
@@ -321,7 +318,7 @@ export class AgentContext {
       this._graphCapability.getStructuralImpact({ filePath });
 
     const ctx = this._serviceContext as any;
-    ctx.compact = this._compactService;
+    ctx.compact = this._compactionCapability;
     ctx.storage = this._storageService;
     ctx.token = this._tokenService;
     ctx.lsp = this._lspService;
