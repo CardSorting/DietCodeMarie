@@ -1,5 +1,16 @@
 # Key Findings
 
+## 2026-07-26 Recoverable Turn-Boundary Context Compaction
+
+- **No stream interruption**: passive pruning and complete-pair rollover execute only after the preceding request/tool turn has settled and before a new provider request. The mechanism does not inject a compaction alert or consume an extra model/tool turn.
+- **Honest recovery model**: the durable API history and governed subagent JSONL transcript remain unchanged. Prompt projections carry source/message/block coordinates, original line count, and SHA-256 digest. “Recoverable” means exact source bytes remain available; the reduced prompt is intentionally lossy.
+- **One threshold authority**: `context-window-utils.ts` computes monotonic `normal → micro → ast_prune → zero_loss_ledger → emergency` thresholds while preserving the existing provider hard allowance. Custom auto-condense settings are clamped between passive and emergency fences.
+- **Bounded high-throughput passes**: every tier caps scanned messages, inspected/transformed blocks, sampled candidate lines, and output lines. A two-level cursor resumes inside block-heavy messages. Pathological individual payloads materialize at most 2,000,000 JavaScript characters of deterministic full-span windows for line analysis while retaining the full-source digest and exact line count.
+- **Evidence-aware compression**: deterministic code outlines retain declarations/exports and head/tail context; command projections rank failures, assertions, stack frames, and summaries. Dense-error output still obeys the output budget.
+- **Safety exclusions**: recent turns, short blocks, unknown tools, completion evidence, and mutation outputs remain raw. Higher tiers may refine an earlier projection only when the new form produces a meaningful reduction.
+- **Atomic invisible continuity**: silent rollover preserves the original user objective and retained assistant text byte-for-byte, records internal continuity metadata atomically under a mutex, and emits existing auto-compaction telemetry without a model-visible alert.
+- **Verification evidence**: context suites passed 43/43; the complete subagent suite passed 17/17; TypeScript, handler-import, task-lifecycle boundary, targeted Biome, and `git diff --check` validation passed. The subagent suite’s real file-listing case requires its explicit 10-second I/O test budget and completes in roughly 2.3–2.6 seconds in this workspace.
+
 ## 2026-07-24 MoD Upstream Grounded Investigation & Strict Downstream Resolution
 
 - **Golden Invariant Rule**: Implementation subagents must NEVER be handed arbitrary downstream file boundaries that were not explicitly inspected and selected during the design investigation phase.

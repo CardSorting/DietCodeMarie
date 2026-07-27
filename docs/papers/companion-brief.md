@@ -27,7 +27,7 @@
 | Minimum VS Code engine | `^1.84.0` | `package.json` |
 | Minimum Node engine | `^20.19.43` | `package.json` |
 | Core developer license | Apache-2.0 | `LICENSE` |
-| Extension version | **10.8.0** | `package.json` |
+| Extension version | **11.0.0** | `package.json` |
 | Registered VS Code commands | **~25** `lumi.*` | `package.json` `contributes.commands` |
 | Static tool enum values | **64** | `DietCodeDefaultTool` in `src/shared/tools.ts` |
 | Tool handler files | **55** | `src/core/task/tools/handlers/` |
@@ -222,8 +222,11 @@ Each mode can use a **different provider and model** (`planModeApiProvider`, `ac
 | `openai-codex` | ChatGPT Subscription |
 | `nousResearch` | NousResearch |
 | `cloudflare` | Cloudflare Workers AI |
-
-Additional provider files exist under `src/core/api/providers/` but are **not registered** in `buildApiHandler` today.
+| `cerebras` | Cerebras |
+| `cline-pass` | ClinePass |
+| `xai-oauth` | Grok/X Subscription |
+| `qwen-token-plan` | Qwen Token Plan |
+| `zai` | Z AI (GLM) |
 
 ---
 

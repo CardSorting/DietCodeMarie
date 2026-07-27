@@ -5,6 +5,7 @@ This ledger now routes to the current LUMI workspace operating docs and preserve
 ## 🗺️ Navigation
 
 - [**Agent Playbook**](../AGENT_PLAYBOOK.md) — Current-state operating brief for future agents.
+- [**Recoverable Context Compaction**](recoverable-context-compaction.md) — Why context is projected, how tiers/recovery/rollover work, limits, failure semantics, and validation.
 - [**Agent Fast Orientation**](agent/playbook.md) — Current execution hot paths and validation loop.
 - [**Agent Memory**](agent/agent-memory.md) — Durable constraints and safety boundaries.
 - [**Key Findings**](agent/key-findings.md) — Evidence-backed execution and throughput findings.
@@ -23,6 +24,7 @@ This ledger now routes to the current LUMI workspace operating docs and preserve
 - [**MEOW Architecture Decision Records (ADRs)**](adr/README.md) — Decision records for the execution model.
 - [**MEOW-011: Approval Is Execution Admission**](adr/MEOW-011-execution-approval-admission.md) — Central approval, causal permit, and handler-intent contract.
 - [**MEOW-012: Transactional Task Lifecycle Authority**](adr/MEOW-012-transactional-task-lifecycle.md) — Generation-bound state transitions, cancellation, resume, parent/child propagation, and immutable events.
+- [**MEOW-013: Recoverable Turn-Boundary Context Projection**](adr/MEOW-013-recoverable-context-projection.md) — Durable-source, bounded, stream-safe context projection.
 - [**MEOW Migration Report**](meow-migration.md) — Before/after evolution and measured evidence.
 - [**00 Forensic Substrate Report**](00-forensics.md) — Historical forensic report; refresh before treating as current.
 
@@ -37,6 +39,7 @@ This ledger now routes to the current LUMI workspace operating docs and preserve
 | Current handoff exists | [x] `HANDOFF.md` |
 | Sibling concurrency and latency evidence recorded | [x] [Agent key findings](agent/key-findings.md) |
 | I/O authority, backend, and fixture evidence recorded | [x] [Agent key findings](agent/key-findings.md) |
+| Recoverable turn-boundary context compaction documented | [x] [Architecture guide](recoverable-context-compaction.md) |
 | Lease reconciliation, deadlock, and completion CAS evidence recorded | [x] [Agent key findings](agent/key-findings.md) |
 | One central completion funnel and modern terminal event documented | [x] [Agent key findings](agent/key-findings.md) |
 | One central execution funnel and modern terminal tool event documented | [x] [Agent key findings](agent/key-findings.md) |
@@ -55,4 +58,4 @@ This ledger now routes to the current LUMI workspace operating docs and preserve
 
 ---
 *Custodian: LUMI Agent*
-*Last Updated: 2026-07-18*
+*Last Updated: 2026-07-26*

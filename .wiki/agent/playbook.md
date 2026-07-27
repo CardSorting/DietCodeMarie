@@ -1,6 +1,6 @@
 # Agent Fast Orientation
 
-Last validated: 2026-07-24
+Last validated: 2026-07-26
 
 ## Current Snapshot
 
@@ -29,6 +29,9 @@ Last validated: 2026-07-24
 - Read/list/search/definition backends: `src/integrations/misc/`, `src/services/glob/`, `src/services/ripgrep/`, and `src/services/tree-sitter/`.
 - Reproducible I/O fixture: `scripts/meow-io-benchmark.ts` (`npm run benchmark:meow-io`).
 - Native sibling delta identity: `src/core/api/transform/tool-call-processor.ts`.
+- Recoverable context compaction: `src/core/context/context-management/ContextManager.ts`, `ContextCompactionTypes.ts`, `context-window-utils.ts`, and `src/core/context/ContextPruner.ts`. Compaction runs only between completed turns, keeps the durable source transcript unchanged, emits hash-addressed prompt projections, and uses hard per-pass work/output budgets. Pathological blocks use deterministic full-span sampling capped at 2,000,000 JavaScript characters for line analysis while retaining an exact full-source digest and line count.
+- Main-task rollover authority: `src/core/task/index.ts`. When bounded projections cannot recover enough space, it advances the complete-pair deletion range at the request boundary without consuming a model/tool turn. Active streams and child work settle before this path is reachable.
+- Subagent compaction: `src/core/task/tools/subagent/SubagentRunner.ts`. It uses the same tier authority and points recovery references at the governed subagent transcript artifact.
 - Master of Design (MoD) System Prompt Steering Toggle Architecture: `src/core/prompts/system-prompt/components/mod_designer_steering.ts` & `src/core/task/index.ts`. MoD Mode mirrors the unified coding agent task loop with 100% tool parity (`read_file`, `replace_in_file`, `execute_command`, `browser_action`, subagents, MCP tools), automatically steered by senior design engineering instincts (tokens, 7-state UI matrix, WCAG 2.1 AA, responsive grid ergonomics, 5-Whys).
 
 ## Orientation Loop
@@ -54,6 +57,7 @@ npm run check:task-lifecycle-boundary
 npm run ci:build
 npm run roadmap:audit
 npm run benchmark:meow-io
+TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha --no-config -r ts-node/register -r tsconfig-paths/register -r source-map-support/register -r ./src/test/requires.cjs src/core/context/__tests__/ContextPruner.test.ts src/core/context/context-management/__tests__/ContextManager.test.ts
 ```
 
 `mocha` must use `--no-config` for a truly focused run; `.mocharc.json` otherwise adds every `src/**/__tests__/*.ts` test.
@@ -64,12 +68,16 @@ For execution work, start with `ExecutionFunnel.test.ts` and the parent/sibling/
 
 For task lifecycle work, start with `TaskLifecycleFunnel.test.ts`, then run execution, completion, and subagent integration suites. Every transition must name the exact generation and causal source. A committed cancellation request fences execution; a terminal generation is monotonic; persistence must commit record and event before publication. Run `npm run check:task-lifecycle-boundary` to prevent direct writers from returning.
 
+For context compaction work, preserve the durable transcript as the recovery authority and mutate only request projections. Use `getCompactionTierFromTokens()` as the single threshold authority. Keep compaction at a completed-turn/request boundary; never run it from a partial stream callback. Every compacted block must carry its source, message/block index, original line count, and SHA-256 digest. Run both context suites plus the complete `SubagentRunner.test.ts`; follow the Node/Electron `better-sqlite3` rebuild sequence in troubleshooting.
+
 For Task-level focused tests, also require `./src/test/requires.cjs` so the VS Code shim is installed.
 
 The benchmark reports deterministic local-fixture evidence. Its “cold” mode clears task caches only; it does not claim control over the OS page cache. Service rows intentionally call backends directly; controlled tests verify the runtime total/class budgets.
 
 ## Links
 
+- [Recoverable context compaction architecture](../recoverable-context-compaction.md)
+- [MEOW-013 context projection decision](../adr/MEOW-013-recoverable-context-projection.md)
 - [Agent memory](agent-memory.md)
 - [Key findings](key-findings.md)
 - [Troubleshooting](troubleshooting.md)

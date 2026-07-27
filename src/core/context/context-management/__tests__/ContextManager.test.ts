@@ -1,13 +1,17 @@
+import fs from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 import { Anthropic } from "@anthropic-ai/sdk"
+import type { ApiHandler } from "@core/api"
 import { DietCodeMessage } from "@shared/ExtensionMessage"
 import { expect } from "chai"
 import { ContextManager } from "../ContextManager"
 
 // Minimal mock for ApiHandler — only getModel().info.contextWindow is used by shouldCompactContextWindow
-function createMockApi(contextWindow: number) {
+function createMockApi(contextWindow: number): ApiHandler {
 	return {
 		getModel: () => ({ id: "test-model", info: { contextWindow } }),
-	} as any
+	} as unknown as ApiHandler
 }
 
 function createApiReqMessage(tokens: {
@@ -427,7 +431,7 @@ describe("ContextManager", () => {
 			expect(result).to.equal(true)
 		})
 
-		it("compacts at only 10K tokens when threshold is accidentally set to 0.05", () => {
+		it("clamps an accidentally tiny threshold to the passive-compaction floor", () => {
 			const contextWindow = 200_000
 			const accidentalThreshold = 0.05
 			// floor(200000 * 0.05) = 10000 — this is the bug case from PR #9348.
@@ -442,26 +446,26 @@ describe("ContextManager", () => {
 			const dietcodeMessages: DietCodeMessage[] = [createApiReqMessage({ tokensIn, tokensOut })]
 
 			const result = contextManager.shouldCompactContextWindow(dietcodeMessages, api, 0, accidentalThreshold)
-			expect(result).to.equal(true)
+			expect(result).to.equal(false)
+
+			const safelyHighUsage = [createApiReqMessage({ tokensIn: 88_000 })]
+			expect(contextManager.shouldCompactContextWindow(safelyHighUsage, api, 0, accidentalThreshold)).to.equal(true)
 		})
 
-		it("falls back to maxAllowedSize when threshold is undefined", () => {
+		it("uses the conservative emergency fence when threshold is undefined", () => {
 			const api = createMockApi(200_000)
-			// 155K tokens — above 0.75 threshold (150K) but below maxAllowedSize (160K)
 			const dietcodeMessages: DietCodeMessage[] = [createApiReqMessage({ tokensIn: 150_000, tokensOut: 5_000 })]
 
 			const result = contextManager.shouldCompactContextWindow(dietcodeMessages, api, 0, undefined)
-			// undefined → uses maxAllowedSize (160K), so 155K < 160K → false
-			expect(result).to.equal(false)
+			expect(result).to.equal(true)
 		})
 
-		it("falls back to maxAllowedSize when threshold is 0", () => {
+		it("treats a zero threshold as unset instead of compacting every turn", () => {
 			const api = createMockApi(200_000)
 			const dietcodeMessages: DietCodeMessage[] = [createApiReqMessage({ tokensIn: 150_000, tokensOut: 5_000 })]
 
-			// 0 is falsy, so ternary falls back to maxAllowedSize (160K)
 			const result = contextManager.shouldCompactContextWindow(dietcodeMessages, api, 0, 0)
-			expect(result).to.equal(false)
+			expect(result).to.equal(true)
 		})
 
 		it("includes cacheWrites and cacheReads in total token count", () => {
@@ -483,13 +487,360 @@ describe("ContextManager", () => {
 			expect(result).to.equal(false)
 		})
 
-		it("threshold is capped at maxAllowedSize even when percentage is very high", () => {
+		it("caps a high custom threshold at the conservative emergency fence", () => {
 			const api = createMockApi(200_000)
-			// threshold of 1.0 → floor(200000 * 1.0) = 200000, but min(200000, 160000) = 160000
-			const dietcodeMessages: DietCodeMessage[] = [createApiReqMessage({ tokensIn: 165_000 })]
+			const dietcodeMessages: DietCodeMessage[] = [createApiReqMessage({ tokensIn: 138_000 })]
 
 			const result = contextManager.shouldCompactContextWindow(dietcodeMessages, api, 0, 1.0)
 			expect(result).to.equal(true)
+		})
+	})
+
+	describe("evaluateCompactionTier", () => {
+		let contextManager: ContextManager
+
+		beforeEach(() => {
+			contextManager = new ContextManager()
+		})
+
+		it("evaluates progressive compaction tiers correctly", () => {
+			const api = createMockApi(200_000)
+
+			expect(contextManager.evaluateCompactionTier(50_000, api)).to.equal("normal")
+			expect(contextManager.evaluateCompactionTier(90_000, api)).to.equal("micro")
+			expect(contextManager.evaluateCompactionTier(110_000, api)).to.equal("ast_prune")
+			expect(contextManager.evaluateCompactionTier(126_000, api)).to.equal("zero_loss_ledger")
+			expect(contextManager.evaluateCompactionTier(140_000, api)).to.equal("emergency")
+			expect(contextManager.evaluateCompactionTier(165_000, api)).to.equal("emergency")
+		})
+	})
+
+	describe("token safety profiles & context pruner", () => {
+		it("calculates token safety profile correctly", () => {
+			const { getTokenSafetyProfile, getCompactionTierFromTokens } = require("../context-window-utils")
+			const api = createMockApi(128_000)
+
+			const profile = getTokenSafetyProfile(api)
+			expect(profile.contextWindow).to.equal(128_000)
+			expect(profile.maxAllowedSize).to.equal(98_000)
+			expect(profile.safeHighWaterMark).to.equal(76_440)
+			expect(profile.microCompactThreshold).to.be.lessThan(profile.astPruneThreshold)
+			expect(profile.astPruneThreshold).to.be.lessThan(profile.ledgerCompactThreshold)
+			expect(profile.ledgerCompactThreshold).to.be.lessThan(profile.emergencyCompactThreshold)
+			expect(profile.emergencyCompactThreshold).to.be.at.most(profile.maxAllowedSize)
+
+			expect(getCompactionTierFromTokens(50_000, api)).to.equal("normal")
+			expect(getCompactionTierFromTokens(60_000, api)).to.equal("micro")
+			expect(getCompactionTierFromTokens(70_000, api)).to.equal("ast_prune")
+			expect(getCompactionTierFromTokens(80_000, api)).to.equal("zero_loss_ledger")
+			expect(getCompactionTierFromTokens(85_000, api)).to.equal("emergency")
+		})
+
+		it("generates a recoverable markdown summary and injection-safe inline pointer", () => {
+			const { ContextPruner } = require("../../ContextPruner")
+			const pruner = new ContextPruner()
+
+			const ledger = {
+				primaryObjective: "Optimize context window compactor",
+				architecturalDiscoveries: ["Micro-compaction saves 30% tokens"],
+				modifiedAndVerifiedFiles: ["ContextManager.ts"],
+				activeStateAndErrors: [],
+				pendingActions: ["Run unit tests"],
+				timestamp: Date.now(),
+			}
+
+			const ledgerSummary = pruner.createHierarchicalLedgerSummary(ledger)
+			expect(ledgerSummary).to.include("Primary Objective: Optimize context window compactor")
+			expect(ledgerSummary).to.include("Micro-compaction saves 30% tokens")
+			expect(ledgerSummary).to.include("ContextManager.ts")
+
+			const pointerTag = pruner.createSilentInlineLedgerPointer(ledger)
+			expect(pointerTag).to.match(
+				/^<context_ledger ref="sha256:[a-f0-9]{64}" discoveries="1" modified_files="1" active_errors="0"\/>$/,
+			)
+		})
+
+		it("persists silent continuity changes without injecting the warning notice", async () => {
+			const manager = new ContextManager()
+			const taskDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "context-manager-"))
+			const messages: Anthropic.Messages.MessageParam[] = [
+				{ role: "user", content: [{ type: "text", text: "Original objective" }] },
+				{ role: "assistant", content: [{ type: "text", text: "Original response" }] },
+			]
+
+			try {
+				await manager.triggerApplyStandardContextTruncationNoticeChange(Date.now(), taskDirectory, messages, true)
+				const altered = manager.getTruncatedMessages(messages, undefined)
+				const firstUser = altered[0].content as Anthropic.Messages.ContentBlockParam[]
+				const firstAssistant = altered[1].content as Anthropic.Messages.ContentBlockParam[]
+				expect(firstUser[0]).to.deep.include({ type: "text", text: "Original objective" })
+				expect(firstAssistant[0]).to.deep.include({
+					type: "text",
+					text: "Original response",
+				})
+				expect(JSON.stringify(altered)).not.to.include("Some previous conversation history")
+				expect(JSON.stringify(altered)).not.to.include("context_continuity")
+
+				const persisted = JSON.parse(await fs.readFile(path.join(taskDirectory, "context_history.json"), "utf8"))
+				expect(persisted).to.have.lengthOf(1)
+				expect(JSON.stringify(persisted)).to.include("silent-compaction-v2")
+			} finally {
+				await fs.rm(taskDirectory, { recursive: true, force: true })
+			}
+		})
+
+		it("skeletonizes TypeScript and Python code preserving type signatures and exports", () => {
+			const { ContextPruner } = require("../../ContextPruner")
+			const pruner = new ContextPruner({ maxLines: 10 })
+
+			const tsCode =
+				Array.from({ length: 30 }, (_, i) => `// line ${i}`).join("\n") +
+				"\nexport interface UserConfig { id: string }\n" +
+				Array.from({ length: 20 }, (_, i) => `const x${i} = ${i}`).join("\n")
+
+			const result = pruner.skeletonizeCode(tsCode, 15)
+			expect(result.foldedLines).to.be.greaterThan(0)
+			expect(result.skeletonText).to.include("export interface UserConfig")
+			expect(result.skeletonText).to.include("AST SKELETON")
+		})
+
+		it("hyper-compresses command output preserving headers, footers, and error lines", () => {
+			const { ContextPruner } = require("../../ContextPruner")
+			const pruner = new ContextPruner()
+
+			const output = Array.from({ length: 200 }, (_, i) =>
+				i === 50 ? "ERROR: Failed to connect to database" : `Log output line ${i}`,
+			).join("\n")
+
+			const result = pruner.compressCommandOutput(output, 40)
+			expect(result.hasError).to.be.true
+			expect(result.foldedLines).to.be.greaterThan(0)
+			expect(result.compressedText).to.include("ERROR: Failed to connect to database")
+			expect(result.compressedText).to.include("COMMAND OUTPUT COMPACTED")
+		})
+	})
+
+	describe("applyProgressiveContextCompaction", () => {
+		it("runs passive compaction at the request boundary without changing the source transcript", async () => {
+			const manager = new ContextManager()
+			const taskDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "context-boundary-"))
+			const largeRead = `[read_file for 'src/huge.ts'] Result:\n${Array.from(
+				{ length: 800 },
+				(_, index) => `const value${index} = ${index}`,
+			).join("\n")}`
+			const messages: Anthropic.Messages.MessageParam[] = [
+				{ role: "user", content: "Initial" },
+				{ role: "assistant", content: "Ready" },
+				{ role: "user", content: [{ type: "text", text: largeRead }] },
+				{ role: "assistant", content: "Turn 1" },
+				{ role: "user", content: "Turn 2" },
+				{ role: "assistant", content: "Turn 3" },
+				{ role: "user", content: "Turn 4" },
+				{ role: "assistant", content: "Turn 5" },
+				{ role: "user", content: "Turn 6" },
+				{ role: "assistant", content: "Turn 7" },
+				{ role: "user", content: "Turn 8" },
+				{ role: "assistant", content: "Turn 9" },
+			]
+			const usage = createApiReqMessage({ tokensIn: 58_000, tokensOut: 2_000 })
+
+			try {
+				const result = await manager.getNewContextMessagesAndMetadata(
+					messages,
+					[usage],
+					createMockApi(128_000),
+					undefined,
+					0,
+					taskDirectory,
+					true,
+				)
+				const projectedBlock = (
+					result.truncatedConversationHistory[2].content as Anthropic.Messages.ContentBlockParam[]
+				)[0] as Anthropic.Messages.TextBlockParam
+
+				expect(result.updatedConversationHistoryDeletedRange).to.equal(false)
+				expect(projectedBlock.text).to.include("recoverable_projection")
+				expect((messages[2].content as Anthropic.Messages.TextBlockParam[])[0].text).to.equal(largeRead)
+				expect(await fs.readFile(path.join(taskDirectory, "context_history.json"), "utf8")).to.include(
+					"recoverable-projection-v1",
+				)
+			} finally {
+				await fs.rm(taskDirectory, { recursive: true, force: true })
+			}
+		})
+
+		it("compacts only old supported tool results and keeps exact recovery references", () => {
+			const manager = new ContextManager()
+			const oldCommand = `[execute_command for 'npm test'] Result:\n${Array.from({ length: 300 }, (_, index) =>
+				index === 150 ? "ERROR: suite failed" : `test log ${index}`,
+			).join("\n")}`
+			const oldFile = Array.from({ length: 300 }, (_, index) =>
+				index === 175 ? "export interface ImportantContract { id: string }" : `const value${index} = ${index}`,
+			).join("\n")
+			const recentLargeResult = `[search_files for 'TODO'] Result:\n${Array.from(
+				{ length: 300 },
+				(_, index) => `recent ${index}`,
+			).join("\n")}`
+			const messages: Anthropic.Messages.MessageParam[] = [
+				{ role: "user", content: [{ type: "text", text: "Initial objective" }] },
+				{ role: "assistant", content: [{ type: "text", text: "Starting" }] },
+				{ role: "user", content: [{ type: "text", text: oldCommand }] },
+				{
+					role: "assistant",
+					content: [{ type: "tool_use", id: "read-1", name: "read_file", input: { path: "src/large.ts" } }],
+				},
+				{ role: "user", content: [{ type: "tool_result", tool_use_id: "read-1", content: oldFile }] },
+				{ role: "assistant", content: [{ type: "text", text: "Continuing" }] },
+				{ role: "user", content: [{ type: "text", text: recentLargeResult }] },
+				{ role: "assistant", content: [{ type: "text", text: "Latest response" }] },
+			]
+
+			const result = manager.applyProgressiveContextCompaction(messages, 2, 123, "emergency")
+			const projected = manager.getTruncatedMessages(messages, undefined)
+			const projectedCommand = (projected[2].content as Anthropic.Messages.ContentBlockParam[])[0]
+			const projectedFile = (projected[4].content as Anthropic.Messages.ContentBlockParam[])[0]
+			const projectedRecent = (projected[6].content as Anthropic.Messages.ContentBlockParam[])[0]
+
+			expect(result.compactedBlocks).to.equal(2)
+			expect(result.references).to.have.lengthOf(2)
+			expect(result.projectedCharacters).to.be.lessThan(result.originalCharacters)
+			expect(projectedCommand).to.have.property("text").that.includes('ref="api_conversation_history.json#2:0"')
+			expect(projectedCommand).to.have.property("text").that.includes("ERROR: suite failed")
+			expect(projectedFile).to.have.nested.property("content").that.includes('ref="api_conversation_history.json#4:0"')
+			expect(projectedFile).to.have.nested.property("content").that.includes("ImportantContract")
+			expect(projectedRecent).to.deep.equal(messages[6].content[0])
+			expect((messages[2].content as Anthropic.Messages.ContentBlockParam[])[0]).to.deep.equal({
+				type: "text",
+				text: oldCommand,
+			})
+			expect(result.references.every((reference) => /^[a-f0-9]{64}$/.test(reference.sha256))).to.equal(true)
+			expect(result.references.every((reference) => reference.source === "api_conversation_history.json")).to.equal(true)
+		})
+
+		it("leaves unknown, recent, and short tool output untouched", () => {
+			const manager = new ContextManager()
+			const longUnknown = `[attempt_completion] Result:\n${Array.from({ length: 500 }, (_, index) => `line ${index}`).join("\n")}`
+			const messages: Anthropic.Messages.MessageParam[] = [
+				{ role: "user", content: "Initial" },
+				{ role: "assistant", content: "Ready" },
+				{ role: "user", content: [{ type: "text", text: longUnknown }] },
+				{ role: "assistant", content: "Still working" },
+				{ role: "user", content: [{ type: "text", text: "[execute_command for 'pwd'] Result:\nshort" }] },
+				{ role: "assistant", content: "Latest" },
+			]
+
+			const result = manager.applyProgressiveContextCompaction(messages, 2, 123, "emergency")
+
+			expect(result.compactedBlocks).to.equal(0)
+			expect(manager.getTruncatedMessages(messages, undefined)).to.deep.equal(messages)
+		})
+
+		it("refines an existing micro projection at a more conservative tier", () => {
+			const manager = new ContextManager()
+			const largeRead = `[read_file for 'src/huge.ts'] Result:\n${Array.from({ length: 1_000 }, (_, index) =>
+				index === 500 ? "export interface Midpoint { id: string }" : `const value${index} = ${index}`,
+			).join("\n")}`
+			const messages: Anthropic.Messages.MessageParam[] = [
+				{ role: "user", content: "Initial" },
+				{ role: "assistant", content: "Ready" },
+				{ role: "user", content: [{ type: "text", text: largeRead }] },
+				{ role: "assistant", content: "Turn 1" },
+				{ role: "user", content: "Turn 2" },
+				{ role: "assistant", content: "Turn 3" },
+				{ role: "user", content: "Turn 4" },
+				{ role: "assistant", content: "Turn 5" },
+				{ role: "user", content: "Turn 6" },
+				{ role: "assistant", content: "Turn 7" },
+				{ role: "user", content: "Turn 8" },
+				{ role: "assistant", content: "Turn 9" },
+			]
+
+			const micro = manager.applyProgressiveContextCompaction(messages, 2, 100, "micro")
+			const microText = (
+				(manager.getTruncatedMessages(messages, undefined)[2].content as Anthropic.Messages.ContentBlockParam[])[0] as
+					| Anthropic.Messages.TextBlockParam
+					| undefined
+			)?.text
+			const emergency = manager.applyProgressiveContextCompaction(messages, 2, 200, "emergency")
+			const emergencyText = (
+				(manager.getTruncatedMessages(messages, undefined)[2].content as Anthropic.Messages.ContentBlockParam[])[0] as
+					| Anthropic.Messages.TextBlockParam
+					| undefined
+			)?.text
+
+			expect(micro.compactedBlocks).to.equal(1)
+			expect(emergency.compactedBlocks).to.equal(1)
+			expect(emergencyText?.length).to.be.lessThan(microText?.length ?? 0)
+			expect(emergency.references[0].sha256).to.equal(micro.references[0].sha256)
+			expect(emergencyText).to.include("Midpoint")
+		})
+
+		it("enforces message and block work budgets on very long histories", () => {
+			const noCandidateManager = new ContextManager()
+			const longHistory: Anthropic.Messages.MessageParam[] = [
+				{ role: "user", content: "Initial" },
+				{ role: "assistant", content: "Ready" },
+				...Array.from({ length: 5_000 }, (_, index) => ({
+					role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
+					content: `short turn ${index}`,
+				})),
+			]
+			const scanOnly = noCandidateManager.applyProgressiveContextCompaction(longHistory, 2, 100, "emergency")
+
+			expect(scanOnly.scannedMessages).to.equal(1_200)
+			expect(scanOnly.compactedBlocks).to.equal(0)
+
+			const blockBudgetManager = new ContextManager()
+			const largeOutput = `[execute_command for 'test'] Result:\n${Array.from(
+				{ length: 100 },
+				(_, index) => `output ${index}`,
+			).join("\n")}`
+			const denseHistory: Anthropic.Messages.MessageParam[] = [
+				{ role: "user", content: "Initial" },
+				{ role: "assistant", content: "Ready" },
+			]
+			for (let index = 0; index < 200; index++) {
+				denseHistory.push({ role: "user", content: [{ type: "text", text: largeOutput }] })
+				denseHistory.push({ role: "assistant", content: `turn ${index}` })
+			}
+
+			const bounded = blockBudgetManager.applyProgressiveContextCompaction(denseHistory, 2, 100, "emergency")
+			expect(bounded.compactedBlocks).to.equal(64)
+			expect(bounded.references).to.have.lengthOf(64)
+			expect(bounded.scannedMessages).to.be.lessThan(1_200)
+			expect(bounded.scannedBlocks).to.equal(64)
+		})
+
+		it("resumes within a block-heavy message after the inspected-block budget", () => {
+			const manager = new ContextManager()
+			const largeOutput = `[execute_command for 'test'] Result:\n${Array.from(
+				{ length: 100 },
+				(_, index) => `output ${index}`,
+			).join("\n")}`
+			const messages: Anthropic.Messages.MessageParam[] = [
+				{ role: "user", content: "Initial" },
+				{ role: "assistant", content: "Ready" },
+				{
+					role: "user",
+					content: [
+						...Array.from({ length: 700 }, (_, index) => ({ type: "text" as const, text: `short block ${index}` })),
+						{ type: "text", text: largeOutput },
+					],
+				},
+				{ role: "assistant", content: "Older turn" },
+				...Array.from({ length: 10 }, (_, index) => ({
+					role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
+					content: `recent ${index}`,
+				})),
+			]
+
+			const firstPass = manager.applyProgressiveContextCompaction(messages, 2, 100, "emergency")
+			const secondPass = manager.applyProgressiveContextCompaction(messages, 2, 200, "emergency")
+
+			expect(firstPass.scannedBlocks).to.equal(512)
+			expect(firstPass.compactedBlocks).to.equal(0)
+			expect(secondPass.scannedBlocks).to.be.at.most(512)
+			expect(secondPass.compactedBlocks).to.equal(1)
 		})
 	})
 })

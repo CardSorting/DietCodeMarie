@@ -32,6 +32,7 @@ Do not merge these narratives. LUMI owns IDE session behavior and approvals. Bro
 | Providers | `src/core/api/`, `src/shared/providers/providers.json` | Five active provider keys in current code/UI |
 | Prompts | `src/core/prompts/system-prompt/` | Variant-specific system prompts and tool descriptions |
 | Context/rules/skills | `src/core/context/`, `.dietcoderules/`, `.agents/skills/` | User/project instructions and optional skills |
+| Context window projection | `src/core/context/context-management/`, `src/core/context/ContextPruner.ts`, `src/core/task/index.ts` | Durable-source, turn-boundary, progressively bounded context compaction; see [Recoverable Context Compaction](.wiki/recoverable-context-compaction.md) |
 | Master of Design (MoD) | `src/core/prompts/system-prompt/components/mod_designer_steering.ts` | Unified System Prompt Steering Toggle. Runs through the standard coding task loop with 100% tool parity (`read_file`, `replace_in_file`, `execute_command`, `browser_action`, subagents, MCP tools), automatically steered by senior design engineering instincts (tokens, 7-state UI matrix, WCAG 2.1 AA, responsive grid ergonomics, 5-Whys). |
 | Storage & Cache Manager | `src/services/storage/StorageManager.ts` | Multi-tiered storage engine, shadow Git vacuuming (`git gc --prune=now`), dynamic exclusions, and background maintenance |
 | Webview UI | `webview-ui/` | React/Vite sidebar, settings, message rendering |
@@ -117,7 +118,7 @@ The finalizer writes managed sections so generated playbook content can be refre
 
 ## Provider Contracts
 
-Current provider truth comes from implementation:
+Current provider truth comes from `src/shared/providers/providers.json` and `src/core/api/index.ts`:
 
 | Provider key | Handler | UI label |
 |---|---|---|
@@ -125,9 +126,13 @@ Current provider truth comes from implementation:
 | `openai-codex` | `OpenAiCodexHandler` | ChatGPT Subscription |
 | `nousResearch` | `NousResearchHandler` | NousResearch |
 | `cloudflare` | `CloudflareHandler` | Cloudflare Workers AI |
+| `cerebras` | `CerebrasHandler` | Cerebras |
 | `cline-pass` | `ClinePassHandler` | ClinePass |
+| `xai-oauth` | `XAIOauthHandler` | Grok/X Subscription |
+| `qwen-token-plan` | `QwenTokenPlanHandler` | Qwen Token Plan |
+| `zai` | `ZAiHandler` | Z AI (GLM) |
 
-If docs say four providers, they are stale.
+If docs say fewer than nine wired providers, they are stale.
 
 ## Setup And Environment
 

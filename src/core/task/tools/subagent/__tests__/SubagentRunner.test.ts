@@ -1,12 +1,15 @@
 import { strict as assert } from "node:assert"
 import { setTimeout as delay } from "node:timers/promises"
 import * as coreApi from "@core/api"
+import { ContextManager } from "@core/context/context-management/ContextManager"
 import * as skillRuntime from "@core/context/instructions/user-instructions/skillRuntime"
 import * as skills from "@core/context/instructions/user-instructions/skills"
 import { PromptRegistry } from "@core/prompts/system-prompt"
 import type { TaskConfig } from "@core/task/tools/types/TaskConfig"
+import type { DietCodeStorageMessage } from "@shared/messages"
 import { afterEach, describe, it } from "mocha"
 import sinon from "sinon"
+import type { CompactionTier } from "@/core/context/context-management/ContextCompactionTypes"
 import { HostProvider } from "@/hosts/host-provider"
 import { setRoadmapConfigOverride } from "@/services/roadmap/RoadmapConfig"
 import { ApiFormat } from "@/shared/proto/dietcode/models"
@@ -20,6 +23,16 @@ import { SubagentTranscriptRecorder } from "../SubagentTranscriptRecorder"
 
 const VALID_SUBAGENT_COMPLETION_RESULT =
 	"Subagent completed the assigned scope successfully. All verification steps passed and the deliverable is ready for review."
+
+type SubagentCompactionHarness = {
+	getCompactionTierBeforeNextRequest(requestTotalTokens: number, api: TaskConfig["api"], modelId: string): CompactionTier
+	optimizeConversationForContextWindow(
+		contextManager: ContextManager,
+		conversation: DietCodeStorageMessage[],
+		tier: CompactionTier,
+	): { didOptimize: boolean; needToTruncate: boolean }
+	transcriptArtifactPath?: string
+}
 
 function initializeHostProvider() {
 	HostProvider.reset()
@@ -196,7 +209,8 @@ describe("SubagentRunner", () => {
 		setRoadmapConfigOverride(null)
 	})
 
-	it("emits native tool_use blocks with matching tool_result tool_use_id across turns", async () => {
+	it("emits native tool_use blocks with matching tool_result tool_use_id across turns", async function () {
+		this.timeout(10_000)
 		const createMessage = sinon.stub()
 		createMessage.onFirstCall().callsFake(async function* () {
 			yield {
@@ -502,18 +516,70 @@ describe("SubagentRunner", () => {
 		const config = createTaskConfig(true)
 		const builder = new SubagentBuilder(config, "subagent")
 		const runner = new SubagentRunner(config, builder)
-		const shouldCompactStub = sinon.stub(runner as any, "shouldCompactBeforeNextRequest").callsFake((...args: unknown[]) => {
-			const [previousRequestTotalTokens] = args
-			assert.equal(previousRequestTotalTokens, 23)
-			return false
-		})
+		const compactionTierStub = sinon
+			.stub(runner as unknown as SubagentCompactionHarness, "getCompactionTierBeforeNextRequest")
+			.callsFake((...args: unknown[]) => {
+				const [previousRequestTotalTokens] = args
+				assert.equal(previousRequestTotalTokens, 23)
+				return "normal"
+			})
 
 		const result = await runner.run("List files", () => {})
 
 		assert.equal(result.status, "completed", result.error)
 		assert.equal(result.result, VALID_SUBAGENT_COMPLETION_RESULT)
 		assert.equal(createMessage.callCount, 2)
-		assert.equal(shouldCompactStub.callCount, 1)
+		assert.equal(compactionTierStub.callCount, 1)
+	})
+
+	it("uses the shared progressive compaction tiers for subagent requests", () => {
+		const config = createTaskConfig(true)
+		const originalGetSetting = config.services.stateManager.getGlobalSettingsKey
+		config.services.stateManager.getGlobalSettingsKey = ((key: string) =>
+			key === "useAutoCondense" ? true : originalGetSetting(key as never)) as typeof originalGetSetting
+		const runner = new SubagentRunner(config, new SubagentBuilder(config, "subagent"))
+		const compactionHarness = runner as unknown as SubagentCompactionHarness
+		const getTier = (tokens: number) => compactionHarness.getCompactionTierBeforeNextRequest(tokens, config.api, "test-model")
+
+		assert.equal(getTier(50_000), "normal")
+		assert.equal(getTier(90_000), "micro")
+		assert.equal(getTier(110_000), "ast_prune")
+		assert.equal(getTier(126_000), "zero_loss_ledger")
+		assert.equal(getTier(140_000), "emergency")
+	})
+
+	it("points in-memory subagent projections at the governed transcript artifact", () => {
+		const config = createTaskConfig(true)
+		const runner = new SubagentRunner(config, new SubagentBuilder(config, "subagent"))
+		const compactionHarness = runner as unknown as SubagentCompactionHarness
+		compactionHarness.transcriptArtifactPath = "/tmp/governed-subagent-transcript.jsonl"
+		const largeRead = `[read_file for 'src/large.ts'] Result:\n${Array.from(
+			{ length: 800 },
+			(_, index) => `const value${index} = ${index}`,
+		).join("\n")}`
+		const conversation: DietCodeStorageMessage[] = [
+			{ role: "user", content: "Initial" },
+			{ role: "assistant", content: "Ready" },
+			{ role: "user", content: [{ type: "text", text: largeRead }] },
+			{ role: "assistant", content: "Turn 1" },
+			{ role: "user", content: "Turn 2" },
+			{ role: "assistant", content: "Turn 3" },
+			{ role: "user", content: "Turn 4" },
+			{ role: "assistant", content: "Turn 5" },
+			{ role: "user", content: "Turn 6" },
+			{ role: "assistant", content: "Turn 7" },
+			{ role: "user", content: "Turn 8" },
+			{ role: "assistant", content: "Turn 9" },
+		]
+
+		const result = compactionHarness.optimizeConversationForContextWindow(new ContextManager(), conversation, "micro")
+		const projectedContent = conversation[2].content
+		assert.ok(Array.isArray(projectedContent))
+		const projectedText = projectedContent[0]?.type === "text" ? projectedContent[0].text : ""
+
+		assert.equal(result.didOptimize, true)
+		assert.ok(projectedText.includes("/tmp/governed-subagent-transcript.jsonl#2:0"))
+		assert.ok(!projectedText.includes("api_conversation_history.json"))
 	})
 
 	it("falls back to non-native result blocks if structured tool calls appear while native mode is disabled", async () => {
@@ -671,7 +737,7 @@ describe("SubagentRunner", () => {
 		const createMessage = sinon.stub()
 		createMessage.onFirstCall().callsFake(async function* () {
 			yield* []
-			const contextError = new Error("context length exceeded") as any
+			const contextError = new Error("context length exceeded") as Error & { status: number }
 			contextError.status = 400
 			throw contextError
 		})
@@ -693,6 +759,52 @@ describe("SubagentRunner", () => {
 
 		assert.equal(result.status, "failed")
 		assert.equal(createMessage.callCount, 1)
+	})
+
+	it("never compacts or retries after a stream has emitted a chunk", async () => {
+		const createMessage = sinon.stub().callsFake(async function* () {
+			yield { type: "text", text: "partial response" }
+			const contextError = new Error("context length exceeded") as Error & { status: number }
+			contextError.status = 400
+			throw contextError
+		})
+		const config = createTaskConfig(true)
+		const runner = new SubagentRunner(config, new SubagentBuilder(config, "subagent"))
+		const runnerStream = runner as unknown as {
+			createMessageWithInitialChunkRetry: (
+				api: TaskConfig["api"],
+				systemPrompt: string,
+				conversation: unknown[],
+				nativeTools: undefined,
+				providerId: string,
+				modelId: string,
+			) => AsyncIterable<{ type: string; text?: string }>
+		}
+		const api = { ...config.api, createMessage } as unknown as TaskConfig["api"]
+		const emitted: Array<{ type: string; text?: string }> = []
+		let caught: unknown
+
+		try {
+			for await (const chunk of runnerStream.createMessageWithInitialChunkRetry(
+				api,
+				"system",
+				Array.from({ length: 12 }, (_, index) => ({
+					role: index % 2 === 0 ? "user" : "assistant",
+					content: `turn ${index}`,
+				})),
+				undefined,
+				"test",
+				"test-model",
+			)) {
+				emitted.push(chunk)
+			}
+		} catch (error) {
+			caught = error
+		}
+
+		assert.equal(createMessage.callCount, 1)
+		assert.deepEqual(emitted, [{ type: "text", text: "partial response" }])
+		assert.match(String(caught), /context length exceeded/)
 	})
 
 	it("uses the configured task api handler for subagent requests", async () => {

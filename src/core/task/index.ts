@@ -2468,6 +2468,71 @@ export class Task {
 		this.taskState.didAutomaticallyRetryFailedApiRequest = true
 	}
 
+	/**
+	 * Advances the prompt projection at a completed turn boundary without
+	 * consuming a model/tool turn. The source transcript remains immutable and
+	 * recoverable; only complete historical pairs are excluded from projection.
+	 */
+	private async applySilentTurnBoundaryContextRollover(totalTokens: number): Promise<boolean> {
+		const apiConversationHistory = this.messageStateHandler.getApiConversationHistory()
+		const { contextWindow, maxAllowedSize } = getContextWindowInfo(this.api)
+		const keep = totalTokens / 2 > maxAllowedSize ? "quarter" : "half"
+		const newDeletedRange = this.contextManager.getNextTruncationRange(
+			apiConversationHistory,
+			this.taskState.conversationHistoryDeletedRange,
+			keep,
+		)
+		const currentEnd = this.taskState.conversationHistoryDeletedRange?.[1] ?? 1
+		if (newDeletedRange[1] < newDeletedRange[0] || newDeletedRange[1] <= currentEnd) {
+			return false
+		}
+
+		const hooksEnabled = getHooksEnabledSafe()
+		if (hooksEnabled) {
+			try {
+				await executePreCompactHookWithCleanup({
+					taskId: this.taskId,
+					ulid: this.ulid,
+					apiConversationHistory,
+					conversationHistoryDeletedRange: this.taskState.conversationHistoryDeletedRange,
+					contextManager: this.contextManager,
+					dietcodeMessages: this.messageStateHandler.getDietCodeMessages(),
+					messageStateHandler: this.messageStateHandler,
+					compactionStrategy: `transparent-recoverable-${keep}`,
+					deletedRange: newDeletedRange,
+					say: this.say.bind(this),
+					setActiveHookExecution: async (hookExecution: HookExecution | undefined) => {
+						if (hookExecution) {
+							await this.setActiveHookExecution(hookExecution)
+						}
+					},
+					clearActiveHookExecution: this.clearActiveHookExecution.bind(this),
+					postStateToWebview: this.postStateToWebview.bind(this),
+					cancelTask: this.cancelTask.bind(this),
+					hooksEnabled: true,
+				})
+			} catch (error) {
+				if (error instanceof HookCancellationError) throw error
+				Logger.error("[PreCompact] Transparent rollover hook failed:", error)
+			}
+		}
+
+		this.taskState.conversationHistoryDeletedRange = newDeletedRange
+		await this.messageStateHandler.saveDietCodeMessagesAndUpdateHistory()
+		await this.contextManager.triggerApplyStandardContextTruncationNoticeChange(
+			Date.now(),
+			await ensureTaskDirectoryExists(this.taskId),
+			apiConversationHistory,
+			true,
+		)
+		Logger.info(
+			`[Task ${this.taskId}] Applied transparent recoverable context rollover through message ${newDeletedRange[1]}`,
+		)
+		const { model, providerId } = this.getCurrentProviderInfo()
+		telemetryService.captureSummarizeTask(this.ulid, model.id, providerId, totalTokens, contextWindow)
+		return true
+	}
+
 	async *attemptApiRequest(previousApiReqIndex: number): ApiStream {
 		// Wait for MCP servers to be connected before generating system prompt
 		await pWaitFor(() => this.mcpHub.isConnecting !== true, {
@@ -3432,7 +3497,24 @@ export class Task {
 						this.messageStateHandler.getDietCodeMessages(),
 						previousApiReqIndex,
 						await ensureTaskDirectoryExists(this.taskId),
+						this.api,
 					)
+				}
+
+				// If bounded reversible projections were not sufficient,
+				// roll complete historical pairs out of the prompt at this
+				// safe boundary. Only fall back to a semantic model turn
+				// when the history is too small to roll forward safely.
+				if (shouldCompact) {
+					const telemetry = this.contextManager.getContextTelemetryData(
+						this.messageStateHandler.getDietCodeMessages(),
+						this.api,
+						previousApiReqIndex,
+					)
+					if (telemetry && (await this.applySilentTurnBoundaryContextRollover(telemetry.tokensUsed))) {
+						shouldCompact = false
+						this.taskState.lastAutoCompactTriggerIndex = previousApiReqIndex
+					}
 				}
 			}
 		}

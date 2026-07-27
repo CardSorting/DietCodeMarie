@@ -1,5 +1,25 @@
 # Troubleshooting
 
+## Context Compaction Interrupts a Turn or Cannot Recover Source Evidence
+
+Symptom: a compaction notice appears as a model-visible turn, an active tool/API stream is cut off, the first user objective disappears, or a compacted block names the wrong recovery file.
+
+Response:
+
+1. Confirm compaction is invoked only at the completed-turn boundary immediately before the next provider request. Do not call it from delta, partial-message, or tool-progress handlers.
+2. Inspect the original durable history/transcript and the request projection separately. The source must remain unchanged.
+3. Require each projection marker to contain the actual source artifact, message/block coordinates, original line count, and SHA-256 digest. Subagents must point to their governed transcript artifact, not the parent API-history filename.
+4. For silent rollover, verify the original first user objective is retained and only the continuity assistant projection changes.
+5. Check `ProgressiveCompactionLimits`: a single pass must not exceed its message, inspected-block, transformed-block, candidate-line, or projected-line budget. Confirm the two-level cursor advances within a block-heavy message on the next pass.
+6. For a multi-megabyte block, verify line analysis uses the bounded full-span source sample while the recovery digest and line count still cover the complete original.
+7. Run the focused context suites, then the complete `SubagentRunner.test.ts` under `--timeout 10000`.
+
+Focused proof:
+
+```sh
+TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha --no-config -r ts-node/register -r tsconfig-paths/register -r source-map-support/register -r ./src/test/requires.cjs src/core/context/__tests__/ContextPruner.test.ts src/core/context/context-management/__tests__/ContextManager.test.ts
+```
+
 ## MoD Run Enters 'blocked' Terminal State with [TARGET_RESOLUTION_FAILURE]
 
 Symptom: MoD run state transitions to `blocked` with limitations containing `[TARGET_RESOLUTION_FAILURE]` or `[DESIGN_INVESTIGATION_FAILED]`.

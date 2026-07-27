@@ -36,6 +36,9 @@ Decisions governing the caching, coalescing, and validation of file/search resul
 
 ## 4. Deterministic Projection
 Decisions governing presentation isolation and output ordering.
+* **[MEOW-013: Recoverable Turn-Boundary Context Projection](MEOW-013-recoverable-context-projection.md)**
+  Keeps durable transcripts authoritative while applying bounded, hash-addressed compaction only to completed-turn request projections.
+  * *Implementing Surfaces:* `src/core/context/context-management/ContextManager.ts`, `src/core/context/ContextPruner.ts`, and `src/core/task/index.ts`
 * **[MEOW-005: Invocation-Local Presentation Context](MEOW-005-invocation-local-presentation.md)**
   Isolates in-flight presentation state and output buffers for concurrent siblings.
   * *Implementing Surface:* [ToolInvocationContext.ts](file:///Users/bozoegg/Downloads/codemarie-new/src/core/task/tools/siblings/ToolInvocationContext.ts)

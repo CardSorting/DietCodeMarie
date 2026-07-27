@@ -25,6 +25,11 @@
 - Swarm resumes must check and validate that a candidate governed authority receipt is sealed and has valid integrity with a matching checksum before reusing historical agent work; unsealed or missing receipt evidence requires the lane to restart.
 - Subagents apply repetition detection (`MAX_CONSECUTIVE_IDENTICAL_CALLS = 3`) to self-correct with a nudge to re-evaluate or ask a follow-up, and signal a toxic hotspot to the parent swarm.
 - Subagent completion or failure envelopes must only be published after durably flushing the transcript. Flushes must be atomic (writing to a temporary file and renaming) to prevent JSONL corruption/duplication under deferred write-behind scheduling.
+- Context compaction is a request projection, not source mutation. The durable main API history or governed subagent transcript remains byte-recoverable; a compact projection intentionally does not claim semantic completeness.
+- Passive compaction occurs only after a turn is complete and before the next provider request. Never compact within an active API stream, tool stream, or unsettled child process.
+- `getCompactionTierFromTokens()` is the one tier authority. Each progressive pass must retain hard message, block, candidate-line, and projected-line budgets; a circular cursor supplies bounded forward progress through very large histories.
+- Never split an unbounded tool payload into lines. `ContextPruner` caps analysis materialization at 2,000,000 JavaScript characters with deterministic full-span windows while hashing and line-counting the complete source for recovery integrity.
+- Compact only old, supported, read-like tool evidence. Keep recent turns, unknown tool outputs, completion evidence, mutations, and short outputs raw. Recovery pointers must identify the actual source artifact and include a digest of the original block.
 - Production coordination authority is immutable `sqlite`. A database failure raises `DATABASE_AUTHORITY_UNAVAILABLE`; never adopt memory or filesystem state as fallback authority.
 - Lease identity is `resource + ownerId + leaseEpoch + fencingToken + authorityMode`. Epochs and tokens are decimal strings/`bigint`, never JavaScript `number`.
 - Memory, governed lock files, and Broccoli fences are projections. Reconciliation requires a database-available snapshot; malformed or clock-skewed records fail closed and remain on disk.
@@ -41,6 +46,7 @@
 - When touching roadmap lifecycle or progress, run `RoadmapCompletionGate.test.ts` and `RoadmapToolJournal.test.ts`.
 - When touching sibling scheduling, run the dependency, scheduler, performance, invocation-context, task-batch, tool-call processor, and parent-I/O suites under `--no-config`.
 - When touching subagent concurrency, resume logic, repetition checks, or transcript recording, run `SubagentRunner.test.ts` and `executionHarnessGaps.test.ts` under `--timeout 10000`.
+- When touching context thresholds, pruning, history projection, rollover, or subagent compaction, run `ContextPruner.test.ts`, `ContextManager.test.ts`, the complete `SubagentRunner.test.ts`, TypeScript, handler-import, and task-lifecycle boundary checks.
 - When touching coordination authority or projections, run `LockAuthorityReconciliation.test.ts` and the governed execution hardening/reliability suites.
 - When touching scheduler wait state or lane transitions, run `TarjanDeadlockDetector.test.ts` and `SubagentToolHandler.test.ts`.
 - When touching completion identity, lease binding, or terminal persistence, run `TaskCompletionTerminalization.test.ts` plus completion lifecycle/gate tests.

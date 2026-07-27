@@ -1,5 +1,17 @@
 # Execution Patterns
 
+## Recoverable Turn-Boundary Context Projection
+
+1. Read the last completed request usage and classify it with `getCompactionTierFromTokens()`.
+2. At the next request boundary, preserve a configurable number of recent turns and scan at most the tier’s message/block budgets.
+3. Transform only supported old tool evidence. Use declaration-aware code outlines or evidence-ranked command/log projections with strict output-line budgets. For pathological blocks, analyze deterministic windows spanning the full source rather than materializing an unbounded line array.
+4. Add a recovery reference containing the real source artifact, message/block index, original size, and SHA-256 digest; never interpolate untrusted task text into ledger markup.
+5. Keep the durable source history/transcript immutable. Apply the compact form only to the outbound request projection.
+6. Advance message and block cursors so repeated bounded passes traverse large histories and resume inside block-heavy messages without rescanning one hot prefix.
+7. If a later tier is stricter, refine an existing projection only when it yields a meaningful size reduction.
+8. If projections remain above the emergency fence, advance the complete historical-pair deletion range at the same safe boundary. Preserve the initial objective and persist continuity atomically without a model-visible alert.
+9. Emit existing auto-compaction telemetry and keep semantic model summarization only as the fallback for histories too small to roll safely.
+
 ## Master of Design (MoD) Steering & Execution Patterns
 
 1. **System Prompt Steering Toggle**: Set `modEnabled: true` in global settings. `PromptBuilder` injects `MOD_DESIGNER_STEERING` right after `AGENT_ROLE_SECTION`.

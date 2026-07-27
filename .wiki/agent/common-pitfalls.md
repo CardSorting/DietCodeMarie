@@ -1,5 +1,13 @@
 # Common Pitfalls
 
+- Do not describe a compact prompt projection as “zero loss.” Exact source bytes are recoverable from the durable transcript; the projection intentionally omits detail.
+- Do not compact or roll history while an API/tool stream is active. Context work belongs at the completed-turn/request boundary.
+- Do not mutate the durable source transcript to save prompt tokens. Build a bounded request projection and retain a source-qualified digest pointer.
+- Do not duplicate token-threshold logic in task, manager, and subagent code. Use `getCompactionTierFromTokens()`.
+- Do not compact every tool-shaped payload. Recent, short, unknown, mutating, and completion outputs are safety exclusions.
+- Do not scan an entire large history or retain every “important” error line. Enforce per-pass scan/block/candidate/output caps even for error-dense logs, then continue from the circular cursor next turn.
+- Do not call `split("\n")` on an unbounded tool payload. Use the bounded full-span source sampler and preserve the full-source digest.
+- Do not point subagent projections at `api_conversation_history.json`; use the governed subagent transcript artifact.
 - Do not guess or auto-assign downstream file boundaries (e.g. `src/App.tsx`) when MoD target resolution encounters ungrounded targets like `"General"`. Force upstream design investigation (`ProblemClassifier.ts`, `DesignerInResidence.ts`) to ground target decisions in physical inspected workspace files.
 - Do not switch production coordination to memory when SQLite fails. `local_test` is a startup mode, not a recovery mode.
 - Do not infer lock ownership from PID, mtime, owner ID alone, or the existence/absence of a projection file. Compare the complete owner/epoch/token/mode identity against SQLite.

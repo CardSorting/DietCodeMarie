@@ -29,9 +29,10 @@ import type { LaneExecutionMode } from "@shared/subagent/governedExecution"
 import type { CompactionEventRecord } from "@shared/subagent/transcript"
 import { DietCodeDefaultTool, DietCodeTool } from "@shared/tools"
 import { v4 as uuidv4 } from "uuid"
+import type { CompactionTier } from "@/core/context/context-management/ContextCompactionTypes"
 import { ContextManager } from "@/core/context/context-management/ContextManager"
 import { checkContextWindowExceededError } from "@/core/context/context-management/context-error-handling"
-import { getContextWindowInfo } from "@/core/context/context-management/context-window-utils"
+import { getCompactionTierFromTokens, getContextWindowInfo } from "@/core/context/context-management/context-window-utils"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { HostRegistryInfo } from "@/registry"
 import { DietCodeError, DietCodeErrorType } from "@/services/error"
@@ -783,19 +784,32 @@ export class SubagentRunner {
 			while (iterationCount < MAX_TASK_ITERATIONS) {
 				iterationCount++
 				const systemPrompt = this.agent.buildSystemPrompt(generatedSystemPrompt)
-				if (
-					usageState.lastRequest &&
-					this.shouldCompactBeforeNextRequest(usageState.lastRequest.totalTokens, api, providerInfo.model.id)
-				) {
-					const didCompact = await this.compactConversationForContextWindow(
-						conversation,
+				if (usageState.lastRequest) {
+					const compactionTier = this.getCompactionTierBeforeNextRequest(
 						usageState.lastRequest.totalTokens,
-						"proactive_threshold",
+						api,
+						providerInfo.model.id,
 					)
-					if (didCompact) {
-						Logger.warn("[SubagentRunner] Proactively compacted context before next subagent request.")
+					if (compactionTier !== "normal") {
+						const contextManager = new ContextManager()
+						const optimization = this.optimizeConversationForContextWindow(
+							contextManager,
+							conversation,
+							compactionTier,
+						)
+						let didCompact = optimization.didOptimize
+						if (compactionTier === "emergency" && (!didCompact || optimization.needToTruncate)) {
+							didCompact = await this.compactConversationForContextWindow(
+								conversation,
+								usageState.lastRequest.totalTokens,
+								"proactive_threshold",
+							)
+						}
+						if (didCompact) {
+							Logger.info(`[SubagentRunner] Applied ${compactionTier} context projection before the next request.`)
+						}
+						usageState.lastRequest = undefined
 					}
-					usageState.lastRequest = undefined
 				}
 
 				await this.recordTranscript("llm_request", {
@@ -1502,12 +1516,19 @@ export class SubagentRunner {
 	private optimizeConversationForContextWindow(
 		contextManager: ContextManager,
 		conversation: DietCodeStorageMessage[],
+		tier: CompactionTier = "emergency",
 	): {
 		didOptimize: boolean
 		needToTruncate: boolean
 	} {
 		const timestamp = Date.now()
-		const optimizationResult = contextManager.attemptFileReadOptimizationInMemory(conversation, undefined, timestamp)
+		const optimizationResult = contextManager.attemptFileReadOptimizationInMemory(
+			conversation,
+			undefined,
+			timestamp,
+			tier,
+			this.transcriptArtifactPath || "subagent_transcript",
+		)
 		if (!optimizationResult.anyContextUpdates) {
 			return { didOptimize: false, needToTruncate: true }
 		}
@@ -1519,21 +1540,18 @@ export class SubagentRunner {
 		return { didOptimize: true, needToTruncate: optimizationResult.needToTruncate }
 	}
 
-	private shouldCompactBeforeNextRequest(
+	private getCompactionTierBeforeNextRequest(
 		requestTotalTokens: number,
 		api: ReturnType<typeof buildApiHandler>,
 		_modelId: string,
-	): boolean {
-		const { contextWindow, maxAllowedSize } = getContextWindowInfo(api)
+	): CompactionTier {
+		const { maxAllowedSize } = getContextWindowInfo(api)
 		const useAutoCondense = this.baseConfig.services.stateManager.getGlobalSettingsKey("useAutoCondense")
 		if (useAutoCondense) {
-			const autoCondenseThreshold = 0.75
-			const roundedThreshold = autoCondenseThreshold ? Math.floor(contextWindow * autoCondenseThreshold) : maxAllowedSize
-			const thresholdTokens = Math.min(roundedThreshold, maxAllowedSize)
-			return requestTotalTokens >= thresholdTokens
+			return getCompactionTierFromTokens(requestTotalTokens, api)
 		}
 
-		return requestTotalTokens >= maxAllowedSize
+		return requestTotalTokens >= maxAllowedSize ? "emergency" : "normal"
 	}
 
 	private async *createMessageWithInitialChunkRetry(
@@ -1547,17 +1565,18 @@ export class SubagentRunner {
 		for (let attempt = 1; attempt <= MAX_INITIAL_STREAM_ATTEMPTS; attempt += 1) {
 			const stream = api.createMessage(systemPrompt, conversation, nativeTools)
 			const iterator = stream[Symbol.asyncIterator]()
+			let emittedChunk = false
 
 			try {
-				const firstChunk = await iterator.next()
-				if (!firstChunk.done) {
-					yield firstChunk.value
+				while (true) {
+					const chunk = await iterator.next()
+					if (chunk.done) break
+					emittedChunk = true
+					yield chunk.value
 				}
-
-				yield* iterator
 				return
 			} catch (error) {
-				if (checkContextWindowExceededError(error)) {
+				if (checkContextWindowExceededError(error) && !emittedChunk) {
 					const didCompact = await this.compactConversationForContextWindow(
 						conversation,
 						this.stats.contextTokens,
@@ -1573,6 +1592,7 @@ export class SubagentRunner {
 				}
 
 				const shouldRetry =
+					!emittedChunk &&
 					!this.shouldAbort() &&
 					attempt < MAX_INITIAL_STREAM_ATTEMPTS &&
 					this.shouldRetryInitialStreamError(error, providerId, modelId)

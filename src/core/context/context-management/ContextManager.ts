@@ -3,12 +3,20 @@ import { ApiHandler } from "@core/api"
 import { formatResponse } from "@core/prompts/responses"
 import { GlobalFileNames } from "@core/storage/disk"
 import { DietCodeApiReqInfo, DietCodeMessage } from "@shared/ExtensionMessage"
-import { fileExistsAtPath } from "@utils/fs"
+import { fileExistsAtPath, writeAtomic } from "@utils/fs"
 import cloneDeep from "clone-deep"
 import fs from "fs/promises"
+import Mutex from "p-mutex"
 import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
-import { getContextWindowInfo } from "./context-window-utils"
+import { ContextPruner } from "../ContextPruner"
+import type {
+	CompactionTier,
+	ProgressiveCompactionLimits,
+	ProgressiveCompactionResult,
+	RecoverableContextReference,
+} from "./ContextCompactionTypes"
+import { getCompactionTierFromTokens, getContextWindowInfo } from "./context-window-utils"
 
 enum EditType {
 	UNDEFINED = 0,
@@ -16,6 +24,7 @@ enum EditType {
 	READ_FILE_TOOL = 2,
 	ALTER_FILE_TOOL = 3,
 	FILE_MENTION = 4,
+	TOOL_RESULT_COMPACTION = 5,
 }
 
 // array of string values allows us to cover all changes for message types currently supported
@@ -41,6 +50,22 @@ type SerializedContextHistory = Array<
 	]
 >
 
+const BOUNDED_OUTPUT_TOOLS = new Set([
+	"execute_command",
+	"search_files",
+	"list_files",
+	"list_code_definition_names",
+	"project_map",
+	"web_fetch",
+	"web_search",
+	"use_mcp_tool",
+	"access_mcp_resource",
+	"query_cognitive_memory",
+	"mem_context",
+	"mem_subgraph",
+	"use_subagents",
+])
+
 export class ContextManager {
 	// mapping from the apiMessages outer index to the inner message index to a list of actual changes, ordered by timestamp
 	// timestamp is required in order to support full checkpointing, where the changes we apply need to be able to be undone when
@@ -51,6 +76,11 @@ export class ContextManager {
 	// example: { 1 => { [0, 0 => [[<timestamp>, "text", "[NOTE] Some previous conversation history with the user has been removed ..."], ...] }] }
 	// the above example would be how we update the first assistant message to indicate we truncated text
 	private contextHistoryUpdates: Map<number, [number, Map<number, ContextUpdate[]>]>
+	private readonly saveMutex = new Mutex()
+	private readonly contextPruner = new ContextPruner()
+	private progressiveScanCursor = 0
+	private progressiveBlockCursor = 0
+	private progressiveCursorActiveStart = 2
 
 	constructor() {
 		this.contextHistoryUpdates = new Map()
@@ -65,10 +95,15 @@ export class ContextManager {
 		if (block.type === "text") {
 			return block.text
 		}
-		if (block.type === "tool_result" && Array.isArray(block.content)) {
-			const inner = block.content[0]
-			if (inner && "type" in inner && inner.type === "text") {
-				return inner.text
+		if (block.type === "tool_result") {
+			if (typeof block.content === "string") {
+				return block.content
+			}
+			if (Array.isArray(block.content)) {
+				const inner = block.content.find((candidate) => candidate.type === "text")
+				if (inner?.type === "text") {
+					return inner.text
+				}
 			}
 		}
 		return null
@@ -84,11 +119,17 @@ export class ContextManager {
 			block.text = text
 			return true
 		}
-		if (block.type === "tool_result" && Array.isArray(block.content)) {
-			const inner = block.content[0]
-			if (inner && "type" in inner && inner.type === "text") {
-				inner.text = text
+		if (block.type === "tool_result") {
+			if (typeof block.content === "string") {
+				block.content = text
 				return true
+			}
+			if (Array.isArray(block.content)) {
+				const inner = block.content.find((candidate) => candidate.type === "text")
+				if (inner?.type === "text") {
+					inner.text = text
+					return true
+				}
 			}
 		}
 		return false
@@ -130,15 +171,12 @@ export class ContextManager {
 	 */
 	private async saveContextHistory(taskDirectory: string) {
 		try {
-			const serializedUpdates: SerializedContextHistory = Array.from(this.contextHistoryUpdates.entries()).map(
-				([messageIndex, [numberValue, innerMap]]) => [messageIndex, [numberValue, Array.from(innerMap.entries())]],
-			)
-
-			await fs.writeFile(
-				path.join(taskDirectory, GlobalFileNames.contextHistory),
-				JSON.stringify(serializedUpdates),
-				"utf8",
-			)
+			await this.saveMutex.withLock(async () => {
+				const serializedUpdates: SerializedContextHistory = Array.from(this.contextHistoryUpdates.entries()).map(
+					([messageIndex, [numberValue, innerMap]]) => [messageIndex, [numberValue, Array.from(innerMap.entries())]],
+				)
+				await writeAtomic(path.join(taskDirectory, GlobalFileNames.contextHistory), JSON.stringify(serializedUpdates))
+			})
 		} catch (error) {
 			Logger.error("Failed to save context history:", error)
 		}
@@ -154,24 +192,39 @@ export class ContextManager {
 		thresholdPercentage?: number,
 	): boolean {
 		if (previousApiReqIndex >= 0) {
-			const previousRequestText = dietcodeMessages[previousApiReqIndex]?.text
-			if (previousRequestText) {
-				try {
-					const { tokensIn, tokensOut, cacheWrites, cacheReads }: DietCodeApiReqInfo = JSON.parse(previousRequestText)
-					const totalTokens = (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
+			const totalTokens = this.getTotalTokens(dietcodeMessages[previousApiReqIndex])
+			if (totalTokens === null) return false
 
-					const { contextWindow, maxAllowedSize } = getContextWindowInfo(api)
-					const roundedThreshold = thresholdPercentage
-						? Math.floor(contextWindow * thresholdPercentage)
-						: maxAllowedSize
-					const thresholdTokens = Math.min(roundedThreshold, maxAllowedSize)
-					return totalTokens >= thresholdTokens
-				} catch {
-					return false
-				}
-			}
+			const { contextWindow, microCompactThreshold, emergencyCompactThreshold } = getContextWindowInfo(api)
+			const hasExplicitThreshold =
+				typeof thresholdPercentage === "number" && Number.isFinite(thresholdPercentage) && thresholdPercentage > 0
+			const requestedThreshold = hasExplicitThreshold
+				? Math.floor(contextWindow * thresholdPercentage)
+				: emergencyCompactThreshold
+			const thresholdTokens = Math.max(microCompactThreshold, Math.min(requestedThreshold, emergencyCompactThreshold))
+			return totalTokens >= thresholdTokens
 		}
 		return false
+	}
+
+	private getTotalTokens(message: DietCodeMessage | undefined): number | null {
+		if (!message?.text) return null
+		try {
+			const { tokensIn, tokensOut, cacheWrites, cacheReads }: DietCodeApiReqInfo = JSON.parse(message.text)
+			const values = [tokensIn, tokensOut, cacheWrites, cacheReads].map((value) =>
+				Number.isFinite(value) ? Math.max(0, Number(value)) : 0,
+			)
+			return values.reduce((total, value) => total + value, 0)
+		} catch {
+			return null
+		}
+	}
+
+	/**
+	 * Evaluates current token usage against multi-tier progressive safety thresholds
+	 */
+	public evaluateCompactionTier(totalTokens: number, api: ApiHandler): CompactionTier {
+		return getCompactionTierFromTokens(totalTokens, api)
 	}
 
 	/**
@@ -201,20 +254,12 @@ export class ContextManager {
 		}
 
 		if (targetIndex >= 0) {
-			const targetRequestText = dietcodeMessages[targetIndex]?.text
-			if (targetRequestText) {
-				try {
-					const { tokensIn, tokensOut, cacheWrites, cacheReads }: DietCodeApiReqInfo = JSON.parse(targetRequestText)
-					const tokensUsed = (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
-
-					const { contextWindow } = getContextWindowInfo(api)
-
-					return {
-						tokensUsed,
-						maxContextWindow: contextWindow,
-					}
-				} catch (error) {
-					Logger.error("Error parsing API request info for context telemetry:", error)
+			const tokensUsed = this.getTotalTokens(dietcodeMessages[targetIndex])
+			if (tokensUsed !== null) {
+				const { contextWindow } = getContextWindowInfo(api)
+				return {
+					tokensUsed,
+					maxContextWindow: contextWindow,
 				}
 			}
 		}
@@ -234,6 +279,27 @@ export class ContextManager {
 		useAutoCondense: boolean, // option to use new auto-condense or old programmatic context management
 	) {
 		let updatedConversationHistoryDeletedRange = false
+		const previousRequest = previousApiReqIndex >= 0 ? dietcodeMessages[previousApiReqIndex] : undefined
+		const totalTokens = this.getTotalTokens(previousRequest)
+
+		// Passive projection work is performed only at this request boundary.
+		// It never mutates the source API history and never runs against an
+		// active provider or tool stream.
+		if (useAutoCondense && totalTokens !== null) {
+			const tier = getCompactionTierFromTokens(totalTokens, api)
+			if (tier !== "normal") {
+				const startIndex = conversationHistoryDeletedRange ? conversationHistoryDeletedRange[1] + 1 : 2
+				const result = this.applyProgressiveContextCompaction(
+					apiConversationHistory,
+					startIndex,
+					previousRequest?.ts ?? Date.now(),
+					tier,
+				)
+				if (result.updatedMessageIndices.size > 0) {
+					await this.saveContextHistory(taskDirectory)
+				}
+			}
+		}
 
 		if (!useAutoCondense) {
 			// If the previous API request's total token usage is close to the context window, truncate the conversation history to free up space for the new request
@@ -241,21 +307,21 @@ export class ContextManager {
 				const previousRequestText = dietcodeMessages[previousApiReqIndex]?.text
 				if (previousRequestText) {
 					const timestamp = dietcodeMessages[previousApiReqIndex].ts
-					const { tokensIn, tokensOut, cacheWrites, cacheReads }: DietCodeApiReqInfo = JSON.parse(previousRequestText)
-					const totalTokens = (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
+					const parsedTotalTokens = this.getTotalTokens(dietcodeMessages[previousApiReqIndex])
 					const { maxAllowedSize } = getContextWindowInfo(api)
 
 					// This is the most reliable way to know when we're close to hitting the context window.
-					if (totalTokens >= maxAllowedSize) {
+					if (parsedTotalTokens !== null && parsedTotalTokens >= maxAllowedSize) {
 						// Since the user may switch between models with different context windows, truncating half may not be enough (ie if switching from claude 200k to deepseek 64k, half truncation will only remove 100k tokens, but we need to remove much more)
 						// So if totalTokens/2 is greater than maxAllowedSize, we truncate 3/4 instead of 1/2
-						const keep = totalTokens / 2 > maxAllowedSize ? "quarter" : "half"
+						const keep = parsedTotalTokens / 2 > maxAllowedSize ? "quarter" : "half"
 
 						// Attempt file read optimization and check if we need to truncate
 						let { anyContextUpdates, needToTruncate } = this.attemptFileReadOptimizationCore(
 							apiConversationHistory,
 							conversationHistoryDeletedRange,
 							timestamp,
+							"emergency",
 						)
 
 						if (needToTruncate) {
@@ -627,20 +693,39 @@ export class ContextManager {
 		apiConversationHistory: Anthropic.Messages.MessageParam[],
 		conversationHistoryDeletedRange: [number, number] | undefined,
 		timestamp: number,
+		tier: CompactionTier = "emergency",
+		recoverySource = GlobalFileNames.apiConversationHistory,
 	): {
 		anyContextUpdates: boolean
 		needToTruncate: boolean
+		percentSaved: number
 	} {
 		const startIndex = conversationHistoryDeletedRange ? conversationHistoryDeletedRange[1] + 1 : 2
+		const limits = this.getProgressiveCompactionLimits(tier)
+		// The legacy duplicate-read optimizer predates bounded progressive
+		// compaction. Restrict its emergency work to the same message budget so
+		// a single request boundary never performs an unbounded history scan.
+		const duplicateScanStart = Math.max(startIndex, apiConversationHistory.length - limits.maxMessagesPerPass)
 
-		const [anyContextUpdates, uniqueFileReadIndices] = this.applyContextOptimizations(
+		const [fileReadUpdates, uniqueFileReadIndices] = this.applyContextOptimizations(
+			apiConversationHistory,
+			duplicateScanStart,
+			timestamp,
+		)
+		const progressiveResult = this.applyProgressiveContextCompaction(
 			apiConversationHistory,
 			startIndex,
 			timestamp,
+			tier,
+			recoverySource,
 		)
+		for (const messageIndex of progressiveResult.updatedMessageIndices) {
+			uniqueFileReadIndices.add(messageIndex)
+		}
+		const anyContextUpdates = fileReadUpdates || progressiveResult.compactedBlocks > 0
 
 		if (!anyContextUpdates) {
-			return { anyContextUpdates: false, needToTruncate: true }
+			return { anyContextUpdates: false, needToTruncate: true, percentSaved: 0 }
 		}
 
 		const percentSaved = this.calculateContextOptimizationMetrics(
@@ -652,6 +737,7 @@ export class ContextManager {
 		return {
 			anyContextUpdates: true,
 			needToTruncate: percentSaved < 0.3,
+			percentSaved,
 		}
 	}
 
@@ -664,6 +750,7 @@ export class ContextManager {
 		dietcodeMessages: DietCodeMessage[],
 		previousApiReqIndex: number,
 		taskDirectory: string,
+		api?: ApiHandler,
 	): Promise<boolean> {
 		// Extract timestamp using same logic as getNewContextMessagesAndMetadata
 		if (previousApiReqIndex < 0) {
@@ -677,14 +764,23 @@ export class ContextManager {
 
 		const timestamp = previousRequest.ts
 
-		const { anyContextUpdates, needToTruncate } = this.attemptFileReadOptimizationCore(
+		const { anyContextUpdates, needToTruncate, percentSaved } = this.attemptFileReadOptimizationCore(
 			apiConversationHistory,
 			conversationHistoryDeletedRange,
 			timestamp,
+			"emergency",
 		)
 
 		if (anyContextUpdates) {
 			await this.saveContextHistory(taskDirectory)
+		}
+
+		if (api) {
+			const totalTokens = this.getTotalTokens(previousRequest)
+			if (totalTokens !== null) {
+				const estimatedTokensAfterProjection = Math.ceil(totalTokens * Math.max(0, 1 - percentSaved))
+				return estimatedTokensAfterProjection >= getContextWindowInfo(api).ledgerCompactThreshold
+			}
 		}
 
 		return needToTruncate
@@ -697,6 +793,8 @@ export class ContextManager {
 		apiConversationHistory: Anthropic.Messages.MessageParam[],
 		conversationHistoryDeletedRange: [number, number] | undefined,
 		timestamp: number,
+		tier: CompactionTier = "emergency",
+		recoverySource = "subagent_transcript",
 	): {
 		anyContextUpdates: boolean
 		needToTruncate: boolean
@@ -706,6 +804,8 @@ export class ContextManager {
 			apiConversationHistory,
 			conversationHistoryDeletedRange,
 			timestamp,
+			tier,
+			recoverySource,
 		)
 
 		if (!anyContextUpdates) {
@@ -724,23 +824,276 @@ export class ContextManager {
 	}
 
 	/**
-	 * Public function for triggering potentially setting the truncation message
-	 * If the truncation message already exists, does nothing, otherwise adds the message
+	 * Performs one bounded pass over old, high-volume tool results. Replacements
+	 * are prompt projections only: the original blocks remain in
+	 * api_conversation_history.json
+	 * and every projection carries an exact message/block reference and digest.
+	 */
+	public applyProgressiveContextCompaction(
+		apiMessages: Anthropic.Messages.MessageParam[],
+		startFromIndex: number,
+		timestamp: number,
+		tier: CompactionTier,
+		recoverySource = GlobalFileNames.apiConversationHistory,
+	): ProgressiveCompactionResult {
+		const limits = this.getProgressiveCompactionLimits(tier)
+		const updatedMessageIndices = new Set<number>()
+		const references: RecoverableContextReference[] = []
+		const activeStart = Math.max(2, startFromIndex)
+		if (activeStart !== this.progressiveCursorActiveStart) {
+			this.progressiveScanCursor = 0
+			this.progressiveBlockCursor = 0
+			this.progressiveCursorActiveStart = activeStart
+		}
+		const endExclusive = Math.max(activeStart, apiMessages.length - limits.preserveRecentMessages)
+		const eligibleMessages = endExclusive - activeStart
+
+		if (tier === "normal" || eligibleMessages <= 0) {
+			return {
+				tier,
+				scannedMessages: 0,
+				scannedBlocks: 0,
+				compactedBlocks: 0,
+				originalCharacters: 0,
+				projectedCharacters: 0,
+				updatedMessageIndices,
+				references,
+			}
+		}
+
+		const scanCount = Math.min(eligibleMessages, limits.maxMessagesPerPass)
+		const initialOffset = this.progressiveScanCursor % eligibleMessages
+		let scannedMessages = 0
+		let scannedBlocks = 0
+		let compactedBlocks = 0
+		let originalCharacters = 0
+		let projectedCharacters = 0
+		let stoppedWithinMessage = false
+
+		messageScan: for (let offset = 0; offset < scanCount; offset++) {
+			const messageIndex = activeStart + ((initialOffset + offset) % eligibleMessages)
+			const message = apiMessages[messageIndex]
+			scannedMessages++
+			if (message.role !== "user" || !Array.isArray(message.content)) continue
+
+			const firstBlockIndex = offset === 0 ? Math.min(this.progressiveBlockCursor, message.content.length) : 0
+			for (let blockIndex = firstBlockIndex; blockIndex < message.content.length; blockIndex++) {
+				if (scannedBlocks >= limits.maxBlocksInspectedPerPass || compactedBlocks >= limits.maxBlocksPerPass) {
+					this.progressiveScanCursor = (initialOffset + offset) % eligibleMessages
+					this.progressiveBlockCursor = blockIndex
+					stoppedWithinMessage = true
+					break messageScan
+				}
+				scannedBlocks++
+				const block = message.content[blockIndex]
+				const text = this.getTextFromBlock(block)
+				if (!text || !this.hasMinimumLineCount(text, limits.minLinesToCompact)) continue
+				const existingUpdates = this.contextHistoryUpdates.get(messageIndex)?.[1].get(blockIndex)
+				const latestUpdate = existingUpdates?.at(-1)
+				const isPreviousRecoverableProjection = latestUpdate?.[3]?.[0]?.[0] === "recoverable-projection-v1"
+				if (latestUpdate && !isPreviousRecoverableProjection) continue
+
+				const toolName = this.resolveToolResultName(apiMessages, messageIndex, block, text)
+				const projection = this.projectToolResult(toolName, text, limits.maxProjectedLines)
+				if (!projection || projection.foldedLines <= 0) continue
+
+				const reference: RecoverableContextReference = {
+					source: recoverySource,
+					messageIndex,
+					blockIndex,
+					sha256: projection.sha256,
+					originalCharacters: text.length,
+					originalLines: projection.originalLines,
+				}
+				const recoveryReference = `${recoverySource}#${messageIndex}:${blockIndex}`
+				const pointer = `[recoverable_projection ref=${JSON.stringify(recoveryReference)} sha256="${reference.sha256}" original_lines="${reference.originalLines}"]`
+				const replacement = `${pointer}\n${projection.text}`
+				const currentProjectionLength = latestUpdate?.[2]?.[0]?.length ?? text.length
+
+				// Avoid churn when a small or pathologically dense result would
+				// become larger, or when a later pass cannot improve an
+				// already compacted projection by a meaningful amount.
+				if (replacement.length >= text.length * 0.9 || replacement.length >= currentProjectionLength * 0.95) continue
+
+				const innerTuple = this.contextHistoryUpdates.get(messageIndex)
+				const innerMap = innerTuple?.[1] ?? new Map<number, ContextUpdate[]>()
+				const updates = innerMap.get(blockIndex) ?? []
+				updates.push([
+					timestamp,
+					"text",
+					[replacement],
+					[["recoverable-projection-v1", recoveryReference, reference.sha256]],
+				])
+				innerMap.set(blockIndex, updates)
+				if (!innerTuple) {
+					this.contextHistoryUpdates.set(messageIndex, [EditType.TOOL_RESULT_COMPACTION, innerMap])
+				}
+
+				updatedMessageIndices.add(messageIndex)
+				references.push(reference)
+				compactedBlocks++
+				originalCharacters += text.length
+				projectedCharacters += replacement.length
+			}
+		}
+
+		if (!stoppedWithinMessage) {
+			this.progressiveScanCursor = eligibleMessages > 0 ? (initialOffset + scannedMessages) % eligibleMessages : 0
+			this.progressiveBlockCursor = 0
+		}
+		return {
+			tier,
+			scannedMessages,
+			scannedBlocks,
+			compactedBlocks,
+			originalCharacters,
+			projectedCharacters,
+			updatedMessageIndices,
+			references,
+		}
+	}
+
+	private getProgressiveCompactionLimits(tier: CompactionTier): ProgressiveCompactionLimits {
+		switch (tier) {
+			case "micro":
+				return {
+					maxMessagesPerPass: 160,
+					maxBlocksPerPass: 8,
+					maxBlocksInspectedPerPass: 64,
+					preserveRecentMessages: 8,
+					minLinesToCompact: 600,
+					maxProjectedLines: 180,
+				}
+			case "ast_prune":
+			case "semantic_compact":
+				return {
+					maxMessagesPerPass: 320,
+					maxBlocksPerPass: 16,
+					maxBlocksInspectedPerPass: 128,
+					preserveRecentMessages: 6,
+					minLinesToCompact: 320,
+					maxProjectedLines: 140,
+				}
+			case "zero_loss_ledger":
+				return {
+					maxMessagesPerPass: 640,
+					maxBlocksPerPass: 32,
+					maxBlocksInspectedPerPass: 256,
+					preserveRecentMessages: 4,
+					minLinesToCompact: 160,
+					maxProjectedLines: 100,
+				}
+			case "hyper_compressed":
+			case "emergency":
+				return {
+					maxMessagesPerPass: 1_200,
+					maxBlocksPerPass: 64,
+					maxBlocksInspectedPerPass: 512,
+					preserveRecentMessages: 2,
+					minLinesToCompact: 80,
+					maxProjectedLines: 72,
+				}
+			default:
+				return {
+					maxMessagesPerPass: 0,
+					maxBlocksPerPass: 0,
+					maxBlocksInspectedPerPass: 0,
+					preserveRecentMessages: 8,
+					minLinesToCompact: Number.MAX_SAFE_INTEGER,
+					maxProjectedLines: 180,
+				}
+		}
+	}
+
+	private resolveToolResultName(
+		apiMessages: Anthropic.Messages.MessageParam[],
+		messageIndex: number,
+		block: Anthropic.Messages.ContentBlockParam,
+		text: string,
+	): string | undefined {
+		const headerMatch = text.match(/^\[([^\s\]]+)(?:\s+for\b[^\]]*)?\]\s+Result:/)
+		if (headerMatch?.[1]) return headerMatch[1]
+
+		if (block.type !== "tool_result" || !block.tool_use_id) return undefined
+		const assistantMessage = apiMessages[messageIndex - 1]
+		if (assistantMessage?.role !== "assistant" || !Array.isArray(assistantMessage.content)) return undefined
+		const toolUse = assistantMessage.content.find(
+			(candidate) => candidate.type === "tool_use" && candidate.id === block.tool_use_id,
+		)
+		return toolUse?.type === "tool_use" ? toolUse.name : undefined
+	}
+
+	private projectToolResult(
+		toolName: string | undefined,
+		text: string,
+		maxProjectedLines: number,
+	):
+		| {
+				text: string
+				foldedLines: number
+				originalLines: number
+				sha256: string
+		  }
+		| undefined {
+		if (!toolName) return undefined
+
+		if (toolName === "read_file") {
+			const result = this.contextPruner.skeletonizeCode(text, Math.max(4, maxProjectedLines - 1))
+			return {
+				text: result.skeletonText,
+				foldedLines: result.foldedLines,
+				originalLines: result.originalLines,
+				sha256: result.sha256,
+			}
+		}
+
+		if (!BOUNDED_OUTPUT_TOOLS.has(toolName)) return undefined
+
+		const result = this.contextPruner.compressCommandOutput(text, Math.max(4, maxProjectedLines - 1))
+		return {
+			text: result.compressedText,
+			foldedLines: result.foldedLines,
+			originalLines: result.originalLines,
+			sha256: result.sha256,
+		}
+	}
+
+	private hasMinimumLineCount(text: string, minimumLines: number): boolean {
+		if (minimumLines <= 1) return true
+		let lines = 1
+		for (let index = 0; index < text.length; index++) {
+			if (text.charCodeAt(index) !== 10) continue
+			lines++
+			if (lines >= minimumLines) return true
+		}
+		return false
+	}
+
+	/**
+	 * Public function for triggering potentially setting the truncation message.
+	 * Silent mode still records the truncation transaction, but re-projects the
+	 * retained assistant text byte-for-byte. Only internal metadata changes, so
+	 * the agent receives no compaction notice or synthetic continuity marker.
 	 */
 	async triggerApplyStandardContextTruncationNoticeChange(
 		timestamp: number,
 		taskDirectory: string,
 		apiConversationHistory: Anthropic.Messages.MessageParam[],
+		silent = true,
 	) {
-		const assistantUpdated = this.applyStandardContextTruncationNoticeChange(timestamp)
-		const userUpdated = this.applyFirstUserMessageReplacement(timestamp, apiConversationHistory)
+		const assistantUpdated = silent
+			? this.applySilentContextContinuityChange(timestamp, apiConversationHistory)
+			: this.applyStandardContextTruncationNoticeChange(timestamp)
+		// Transparent compaction retains the original objective. Semantic
+		// condense/truncation can still opt into the legacy replacement.
+		const userUpdated = silent ? false : this.applyFirstUserMessageReplacement(timestamp, apiConversationHistory)
 		if (assistantUpdated || userUpdated) {
 			await this.saveContextHistory(taskDirectory)
 		}
 	}
 
 	/**
-	 * if there is any truncation and there is no other alteration already set, alter the assistant message to indicate this occurred
+	 * Alters the retained assistant message with the legacy explanatory notice.
 	 */
 	private applyStandardContextTruncationNoticeChange(timestamp: number): boolean {
 		if (!this.contextHistoryUpdates.has(1)) {
@@ -751,6 +1104,29 @@ export class ContextManager {
 			return true
 		}
 		return false
+	}
+
+	private applySilentContextContinuityChange(
+		timestamp: number,
+		apiConversationHistory: Anthropic.Messages.MessageParam[],
+	): boolean {
+		if (this.contextHistoryUpdates.has(1)) return false
+		const assistant = apiConversationHistory[1]
+		let originalText = ""
+		let textBlockIndex = 0
+		if (assistant && Array.isArray(assistant.content)) {
+			textBlockIndex = assistant.content.findIndex((block) => block.type === "text")
+			const firstTextBlock = textBlockIndex >= 0 ? assistant.content[textBlockIndex] : undefined
+			if (firstTextBlock?.type === "text") originalText = firstTextBlock.text
+		} else if (assistant && typeof assistant.content === "string") {
+			originalText = assistant.content
+		}
+		if (!originalText) return false
+
+		const innerMap = new Map<number, ContextUpdate[]>()
+		innerMap.set(textBlockIndex, [[timestamp, "text", [originalText], [["silent-compaction-v2"]]]])
+		this.contextHistoryUpdates.set(1, [EditType.TOOL_RESULT_COMPACTION, innerMap])
+		return true
 	}
 
 	/**
@@ -855,7 +1231,7 @@ export class ContextManager {
 
 							thisExistingFileReads = blockUpdates[blockUpdates.length - 1][3][0]
 						}
-					} else {
+					} else if (editType !== EditType.TOOL_RESULT_COMPACTION) {
 						// for all other cases we can assume that we dont need to check this again
 						continue
 					}

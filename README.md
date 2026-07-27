@@ -26,7 +26,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/CardSorting/LUMI" alt="License" /></a>
   <a href="https://github.com/CardSorting/LUMI/actions/workflows/codeql.yml"><img src="https://github.com/CardSorting/LUMI/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" /></a>
   <a href="https://securityscorecards.dev/viewer/?uri=github.com/CardSorting/LUMI"><img src="https://api.securityscorecards.dev/projects/github.com/CardSorting/LUMI/badge" alt="OpenSSF Scorecard" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/version-10.8.0-green" alt="Version" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-11.0.0-green" alt="Version" /></a>
   <img src="https://img.shields.io/badge/VS%20Code-%5E1.84.0-007ACC?logo=visualstudiocode&logoColor=white" alt="VS Code" />
   <img src="https://img.shields.io/badge/extension-CardSorting.lumi--vscode-purple" alt="VS Marketplace ID" />
   <img src="https://img.shields.io/badge/Open%20VSX-CardSorting.lumi-blue" alt="Open VSX ID" />
@@ -59,6 +59,7 @@ code --install-extension CardSorting.lumi
 - [Quick start](#quick-start)
 - [Documentation](#documentation)
 - [Governed subagent execution](#governed-subagent-execution)
+- [Recoverable context compaction](#recoverable-context-compaction)
 - [Workspace Knowledge System](#workspace-knowledge-system)
 - [LUMI Designer-in-Residence & MoD v3.0](#lumi-designer-in-residence--mod-v30)
 - [Plan & Act modes](#plan--act-modes)
@@ -100,7 +101,7 @@ Design philosophy: [docs/papers/philosophy.md](docs/papers/philosophy.md) (agent
 |--------|-------|
 | Typed tools | **64** (`src/shared/tools.ts`) |
 | Read-only tools | **12** (`READ_ONLY_TOOLS`) |
-| Wired providers | **6** (`providers.json`) |
+| Wired providers | **9** (`providers.json`) |
 | Slash commands | **10** |
 | Hook kinds | **8** |
 | Agent modes | **plan** · **act** |
@@ -195,9 +196,10 @@ Thank you to the Cline maintainers and contributors for the foundation this proj
 - **Roadmap steering** — `ROADMAP.md` integration with validation gates
 - **MCP** — connect external tools and prompts
 - **Governed subagents** — parallel lanes with execution modes, merge gate, and durable receipts
+- **Recoverable context compaction** — progressively reduces old tool evidence between completed turns while retaining exact source history and never rewriting an emitted provider stream
 - **Restart-safe completion & storage hardening** — terminal outcomes commit through an ownership- and state-checked SQLite transaction; multi-table retention sweeps, auto-vacuum page reclaiming, native statement handle disposal, and backoff WAL truncation prevent disk erosion and memory leaks
 - **Local-first** — settings and secrets under `~/.dietcode/data/`; workspace DB at `./dietcode.db`
-- **Six providers** — OpenRouter, ChatGPT Subscription, NousResearch, Cloudflare Workers AI, ClinePass, Grok/X Subscription
+- **Nine providers** — OpenRouter, ChatGPT Subscription, NousResearch, Cloudflare Workers AI, Cerebras, ClinePass, Grok/X Subscription, Qwen Token Plan, and Z AI (GLM)
 
 **@ mentions** — attach files, folders, problems, terminal output, git diffs, and URLs in chat. Guide: [working-with-files](docs/core-workflows/working-with-files.mdx)
 
@@ -213,7 +215,7 @@ Thank you to the Cline maintainers and contributors for the foundation this proj
 
 - VS Code **1.84+** (or Cursor with extension support)
 - **Git** on `PATH` (for checkpoints)
-- API credentials for one provider (OpenRouter, ChatGPT Subscription, NousResearch, Cloudflare, or ClinePass)
+- API credentials for one provider (OpenRouter, ChatGPT Subscription, NousResearch, Cloudflare, Cerebras, ClinePass, Grok/X Subscription, Qwen Token Plan, or Z AI)
 
 ### Install
 
@@ -268,6 +270,8 @@ Tutorial: [your-first-project](docs/getting-started/your-first-project.mdx) · P
 | [MoD philosophy](.wiki/mod-philosophy.md) | Embedded senior design judgment, 5-Whys reasoning, and Familiarity Heuristic |
 | [MoD whitepaper](.wiki/mod-whitepaper.md) | Mathematical formulation, 8-state UI contracts, token codemods, and speculative task waves |
 | [Governed subagent execution](docs/governed-subagent-execution.md) | Swarm architecture and lifecycle |
+| [Recoverable context compaction](.wiki/recoverable-context-compaction.md) | Why and how bounded prompt projection, source recovery, silent rollover, and stream safety work |
+| [MEOW-013 context projection ADR](.wiki/adr/MEOW-013-recoverable-context-projection.md) | Decision record, invariants, alternatives, and tradeoffs |
 | [Governed execution authority](docs/governed-execution-authority.md) | SQLite lease authority, projection reconciliation, and deadlock safety |
 | [SQLite storage & memory architecture](docs/architecture/sqlite-storage-and-memory-lifecycle.md) | Multi-table retention, auto-vacuum PRAGMA sequence, statement handle disposal, and WAL checkpoint guardrails |
 | [Storage & cache management](docs/features/storage-and-cache-management.md) | Multi-tiered storage engine, shadow Git vacuuming (`git gc --prune=now`), dynamic exclusions, and clearCache command |
@@ -353,6 +357,35 @@ Declare in lane prompts: `[execution_mode:read_only] [read_set:src/api.ts]`
 | [Architecture](docs/governed-subagent-execution.md) | Full lifecycle |
 | [Runbook](docs/governed-execution-runbook.md) | Violations, retry flow |
 | [Convergence and receipt guide](docs/governed-execution-schema.md) | Behavioral model, decision flow, invariants, and receipt v3 fields |
+
+---
+
+## Recoverable context compaction
+
+Long coding sessions accumulate file reads, searches, test logs, web/MCP output, and subagent evidence much faster than ordinary chat. LUMI manages that pressure by compacting the **next request projection**, not by overwriting the durable conversation or interrupting work already in flight.
+
+```text
+completed turn
+  → classify token pressure
+  → compact a bounded amount of old tool evidence
+  → attach source coordinates + SHA-256
+  → persist the projection ledger atomically
+  → send the next request
+```
+
+| Strategy | Applied behavior |
+|----------|------------------|
+| **Turn-boundary execution** | Passive compaction runs only after the previous provider/tool turn settles and before the next request. |
+| **Progressive pressure tiers** | `normal → micro → structural outline → recovery ledger → emergency`; one shared threshold authority is used by parent tasks and subagents. |
+| **Evidence-aware projection** | File reads retain structural declarations; command and test output prioritizes failures, stack frames, summaries, and head/tail evidence. |
+| **Hard work budgets** | Every pass limits scanned messages, inspected blocks, transformed blocks, candidate evidence, and projected lines. Pathological payload analysis materializes at most 2,000,000 JavaScript characters. |
+| **Recoverable source** | Compact blocks point to the durable source artifact, message/block coordinates, original size, and full-source SHA-256. |
+| **Invisible rollover** | If deterministic projection is insufficient, complete old message pairs leave the prompt view without a model-visible compaction alert; durable history remains intact. |
+| **Stream safety** | After any provider chunk is emitted, that stream is never compacted or retried in place. |
+
+“Recoverable” means the exact source remains available and digest-verifiable. The smaller prompt projection intentionally omits detail and is not described as semantically lossless.
+
+Implementation details, limits, failure behavior, and validation commands: **[Recoverable Context Compaction](.wiki/recoverable-context-compaction.md)** · Decision rationale: **[MEOW-013](.wiki/adr/MEOW-013-recoverable-context-projection.md)**
 
 ---
 
@@ -467,7 +500,9 @@ flowchart TB
   subgraph session ["Session and control plane"]
     UI <--> CTRL[Session controller]
     CTRL --> TASK[Agent task loop]
-    TASK <--> MODEL[Provider adapters and language models]
+    TASK --> CONTEXT[Recoverable turn-boundary context projection]
+    CONTEXT --> MODEL[Provider adapters and language models]
+    MODEL --> TASK
     TASK --> TOOLS[Typed tool execution coordinator]
     TOOLS -. approval request and result .-> UI
     TASK --> COMPLETE[Completion and roadmap gates]
@@ -492,6 +527,7 @@ flowchart TB
 
   subgraph durability ["Durability boundaries"]
     TASK <--> BDB[BroccoliDB: cognitive memory, graph, snapshots, runtime state]
+    CONTEXT <--> HISTORY[Durable conversation history and projection ledger]
     SWARM <--> LEASES[SQLite lease generations and authoritative ownership]
     EVIDENCE --> RECEIPTS[Task-local transcripts and governed receipts]
     GOVERNANCE --> RECEIPTS
@@ -506,6 +542,7 @@ flowchart TB
 |-------|------|----------|
 | **Webview** | Conversation UI, approval decisions, diff and swarm status presentation | Presents decisions; it does not execute workspace mutations directly |
 | **Session control** | Conversation state, model turns, task lifecycle, completion routing | Coordinates work; physical I/O stays behind typed tools and the host bridge |
+| **Context projection** | Progressive tool-evidence compaction, recovery references, complete-pair rollover | Runs only between turns; durable history remains authoritative and partial streams are never rewritten |
 | **Tool execution** | Typed dispatch, lifecycle hooks, MCP calls, approval enforcement | Direct tools and subagent swarms enter through the same governed tool boundary |
 | **Governed lanes** | Lane scheduling, declared execution intent, mutation claims, evidence collection | Produces execution records; it does not decide merge eligibility or manufacture consensus |
 | **Execution governance** | Receipt integrity, authority, locks, mutation legality, replay legality, and merge eligibility | Fail-closed execution firewall; confidence cannot override a governance failure |
@@ -582,7 +619,7 @@ Full guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 | **Bug reports** | [GitHub Issues](https://github.com/CardSorting/LUMI/issues/new?template=bug_report.yml) |
 | **Security (private)** | [SECURITY.md](SECURITY.md) |
 
-Include VS Code version, LUMI **6.0.0**, provider used, and steps to reproduce.
+Include VS Code version, LUMI **11.0.0**, provider used, and steps to reproduce.
 
 ---
 
@@ -608,6 +645,8 @@ Details: [docs/SECURITY_BEST_PRACTICES.md](docs/SECURITY_BEST_PRACTICES.md) · R
 **Which extension ID do I use?** `CardSorting.lumi-vscode` on VS Marketplace; `CardSorting.lumi` on Open VSX / Cursor.
 
 **Where is my data stored?** Settings and secrets in `~/.dietcode/data/`; workspace cognitive memory in `./dietcode.db`.
+
+**How does LUMI keep long tasks inside model context limits?** It applies [recoverable context compaction](#recoverable-context-compaction) between completed turns, preserving durable source history while reducing the next request projection.
 
 **Can read-only subagent lanes share files?** Yes — lock collisions are write-scoped only.
 
