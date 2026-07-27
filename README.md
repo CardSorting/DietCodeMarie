@@ -649,6 +649,7 @@ Full guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 | Provider auth errors | Re-open LUMI Settings → re-enter API key |
 | Completion blocked | Run `/roadmap validate`; check `lumi.roadmap.*` settings |
 | Subagent merge blocked | See [governed runbook](docs/governed-execution-runbook.md) |
+| Compaction transaction rollback | Check disk space / `./dietcode.db` permissions; raw uncompressed blocks are preserved automatically |
 | `DATABASE_AUTHORITY_UNAVAILABLE` | Restore the persistent SQLite database, then retry; do not delete projection files or switch to local authority |
 | Reset extension state | Close VS Code; remove `~/.dietcode/data/`; reload window |
 
@@ -689,9 +690,11 @@ Details: [docs/SECURITY_BEST_PRACTICES.md](docs/SECURITY_BEST_PRACTICES.md) · R
 
 **Which extension ID do I use?** `CardSorting.lumi-vscode` on VS Marketplace; `CardSorting.lumi` on Open VSX / Cursor.
 
-**Where is my data stored?** Settings and secrets in `~/.dietcode/data/`; workspace cognitive memory in `./dietcode.db`.
+**Where is my data stored?** Settings and secrets in `~/.dietcode/data/`; workspace cognitive memory and compaction ledger in `./dietcode.db`.
 
-**How does LUMI keep long tasks inside model context limits?** It applies [recoverable context compaction](#recoverable-context-compaction) between completed turns, preserving durable source history while reducing the next request projection.
+**How does LUMI handle large context windows and long sessions?** LUMI applies [recoverable context compaction](#recoverable-context-compaction) between completed turns. Old file reads and tool logs are compact-projected into sharded CAS blobs while exact source bytes remain 100% recoverable.
+
+**Does context compaction lose my original prompt history?** No. Historical conversation history remains unchanged. Only the *outgoing prompt projection* sent to the LLM is progressively compacted under strict SQLite transaction authority.
 
 **Can read-only subagent lanes share files?** Yes — lock collisions are write-scoped only.
 
