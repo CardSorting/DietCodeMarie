@@ -117,4 +117,10 @@ export class ReasoningCapability extends CapabilityBase {
       this.reasoningService.performSkepticalAudit(input.nodeIds)
     );
   }
+
+  async calculateEpistemicPageRank(iterations = 10, dampingFactor = 0.85): Promise<Record<string, number>> {
+    return this.execute('calculateEpistemicPageRank', async () =>
+      this.reasoningService.calculateEpistemicPageRank(iterations, dampingFactor)
+    );
+  }
 }

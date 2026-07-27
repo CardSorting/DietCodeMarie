@@ -26,6 +26,7 @@ npx tsx examples/basic-context.ts
 | [`runtime-replay.ts`](../examples/runtime-replay.ts) | Snapshot, process restart, replay, story |
 | [`health-check.ts`](../examples/health-check.ts) | Deep health + `getMemoryHealth()` |
 | [`ci-gate.ts`](../examples/ci-gate.ts) | `spider.check` + `formatCheckDigest` for pipelines |
+| [`resilience-zenith.ts`](../examples/resilience-zenith.ts) | 4-pillar forensic probes, Epistemic PageRank, and rate governance |
 
 ## Shared bootstrap
 
