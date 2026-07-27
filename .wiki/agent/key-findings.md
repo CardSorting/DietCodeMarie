@@ -3,13 +3,33 @@
 ## 2026-07-26 Recoverable Turn-Boundary Context Compaction
 
 - **No stream interruption**: passive pruning and complete-pair rollover execute only after the preceding request/tool turn has settled and before a new provider request. The mechanism does not inject a compaction alert or consume an extra model/tool turn.
-- **Honest recovery model**: the durable API history and governed subagent JSONL transcript remain unchanged. Prompt projections carry source/message/block coordinates, original line count, and SHA-256 digest. “Recoverable” means exact source bytes remain available; the reduced prompt is intentionally lossy.
+- **Immutable recovery identity**: main histories persist `ctx_msg_<uuid>` and `ctx_blk_<uuid>` metadata; v2 projections resolve by those IDs after deletion/reordering. Legacy positional updates are digest-checked and fail closed. IDs are stripped before provider serialization.
+- **Centralized exact recovery**: parent and subagent scopes share BroccoliDB.
+  Exact UTF-8 source is Brotli-compressed when beneficial, deduplicated by
+  SHA-256 in sharded CAS, and described by stable-ID projection rows.
+- **Real publication barrier**: `BufferedDbPool.writeDurableBatch()` executes
+  source → projection → cursor → run rows in one strict caller-ordered SQLite
+  transaction and propagates every failure. Markers are applied only after it
+  resolves and CAS presence is rechecked.
+- **Honest subagent recovery**: subagents use isolated central scopes. The
+  immutable `<transcript>.context/` record remains the fallback for isolated
+  runners without a central store.
 - **One threshold authority**: `context-window-utils.ts` computes monotonic `normal → micro → ast_prune → zero_loss_ledger → emergency` thresholds while preserving the existing provider hard allowance. Custom auto-condense settings are clamped between passive and emergency fences.
-- **Bounded high-throughput passes**: every tier caps scanned messages, inspected/transformed blocks, sampled candidate lines, and output lines. A two-level cursor resumes inside block-heavy messages. Pathological individual payloads materialize at most 2,000,000 JavaScript characters of deterministic full-span windows for line analysis while retaining the full-source digest and exact line count.
-- **Evidence-aware compression**: deterministic code outlines retain declarations/exports and head/tail context; command projections rank failures, assertions, stack frames, and summaries. Dense-error output still obeys the output budget.
+- **Bounded high-throughput passes**: every tier caps scanned messages, inspected/transformed blocks, sampled candidates, and output. Pathological inputs are additionally bounded to 2,000,000 source-analysis characters, 20,000 materialized lines, and 4,096 characters per pattern match while full-source digest/line count remain exact.
+- **Evidence-aware, non-authoritative compression**: deterministic code outlines retain declarations/exports and head/tail context but explicitly may not parse; command projections rank failures, assertions, stack frames, and summaries.
+- **Marker trust boundary**: source text that mimics `<system_context_projection>` is escaped for every request; trusted non-callable markers are reapplied only from internal identity state. A conditional system policy is added only after a trusted marker survives that boundary, and tells the model that projection syntax may be invalid and no rehydration tool exists.
+- **Amortized and restart-aware traversal**: one `ContextManager` spans the
+  governed run, while scan-only and transforming passes persist their two-level
+  cursor in BroccoliDB for scope restoration.
 - **Safety exclusions**: recent turns, short blocks, unknown tools, completion evidence, and mutation outputs remain raw. Higher tiers may refine an earlier projection only when the new form produces a meaningful reduction.
-- **Atomic invisible continuity**: silent rollover preserves the original user objective and retained assistant text byte-for-byte, records internal continuity metadata atomically under a mutex, and emits existing auto-compaction telemetry without a model-visible alert.
-- **Verification evidence**: context suites passed 43/43; the complete subagent suite passed 17/17; TypeScript, handler-import, task-lifecycle boundary, targeted Biome, and `git diff --check` validation passed. The subagent suite’s real file-listing case requires its explicit 10-second I/O test budget and completes in roughly 2.3–2.6 seconds in this workspace.
+- **Serialized invisible continuity**: silent rollover preserves retained text byte-for-byte. Same-process ledger writers use a path-keyed mutex plus locked read-merge-write; if identities collide in one legacy positional bucket, lookup filters the mixed update array by UUID. Cross-process ledger writing is explicitly unsupported until an external lock is added.
+- **Verification evidence**: the focused context/pruner/identity-state run passed
+  67 tests, the real LUMI-to-BroccoliDB bridge passed, the complete subagent
+  suite passed 20 tests, and BroccoliDB compaction plus capability contracts
+  passed. Native coverage includes compression, deduplication, scan cursor
+  restore, GC live roots, corruption quarantine, rollback on central failure,
+  shifted-ID recovery, forged markers, pathological inputs, and partial-stream
+  isolation.
 
 ## 2026-07-24 MoD Upstream Grounded Investigation & Strict Downstream Resolution
 

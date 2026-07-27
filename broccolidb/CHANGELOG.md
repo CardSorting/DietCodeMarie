@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `ctx.compaction` capability for bounded, intent-traced context projection commits, persistent scan cursors, exact CAS hydration, and run telemetry.
+- Brotli-or-identity exact-source storage with SHA-256 verification and deduplication.
+- Strict `BufferedDbPool.writeDurableBatch()` publication barrier for small caller-ordered transactions.
+
+### Changed
+
+- CAS garbage collection now preserves blobs referenced by context compaction metadata.
+- Buffered flush ordering accounts for foreign-key dependencies before layer priority.
+
 ## v31.0.0 — Zenith High-Throughput & Mechanical Sympathy
 
 **Theme:** Zero-GC memory slabs, lock-free Atomics IPC, work-stealing I/O, V8 monomorphic shape stability, and DCE-free verified benchmarks.

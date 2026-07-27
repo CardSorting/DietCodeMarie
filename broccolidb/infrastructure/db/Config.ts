@@ -270,6 +270,56 @@ export interface Schema {
     value: string;
     updatedAt: number;
   };
+  context_compaction_sources: {
+    sourceSha256: string;
+    blobHash: string;
+    codec: 'identity' | 'brotli';
+    originalCharacters: number;
+    originalBytes: number;
+    originalLines: number;
+    storedBytes: number;
+    createdAt: number;
+    lastAccessedAt: number;
+  };
+  context_compaction_projections: {
+    projectionId: string;
+    scopeId: string;
+    scopeKind: 'task' | 'subagent';
+    workspaceId: string;
+    messageId: string;
+    blockId: string;
+    ref: string;
+    sourceLocator: string;
+    sourceSha256: string;
+    projectionText: string;
+    projectionSha256: string;
+    tier: string;
+    tierRank: number;
+    originalCharacters: number;
+    originalLines: number;
+    createdAt: number;
+  };
+  context_compaction_cursors: {
+    cursorId: string;
+    scopeId: string;
+    messageOffset: number;
+    blockOffset: number;
+    activeStart: number;
+    createdAt: number;
+  };
+  context_compaction_runs: {
+    runId: string;
+    scopeId: string;
+    trigger: string;
+    tier: string;
+    scannedMessages: number;
+    scannedBlocks: number;
+    compactedBlocks: number;
+    originalCharacters: number;
+    projectedCharacters: number;
+    startedAt: number;
+    completedAt: number;
+  };
   system_metadata: {
     key: string;
     value: string;
@@ -726,6 +776,67 @@ export async function getDb(): Promise<Kysely<Schema>> {
         )`
       );
 
+      await execute(
+        `CREATE TABLE IF NOT EXISTS context_compaction_sources (
+          sourceSha256 TEXT PRIMARY KEY,
+          blobHash TEXT NOT NULL,
+          codec TEXT NOT NULL CHECK(codec IN ('identity', 'brotli')),
+          originalCharacters INTEGER NOT NULL,
+          originalBytes INTEGER NOT NULL,
+          originalLines INTEGER NOT NULL,
+          storedBytes INTEGER NOT NULL,
+          createdAt BIGINT NOT NULL,
+          lastAccessedAt BIGINT NOT NULL
+        )`
+      );
+      await execute(
+        `CREATE TABLE IF NOT EXISTS context_compaction_projections (
+          projectionId TEXT PRIMARY KEY,
+          scopeId TEXT NOT NULL,
+          scopeKind TEXT NOT NULL CHECK(scopeKind IN ('task', 'subagent')),
+          workspaceId TEXT NOT NULL,
+          messageId TEXT NOT NULL,
+          blockId TEXT NOT NULL,
+          ref TEXT NOT NULL,
+          sourceLocator TEXT NOT NULL,
+          sourceSha256 TEXT NOT NULL,
+          projectionText TEXT NOT NULL,
+          projectionSha256 TEXT NOT NULL,
+          tier TEXT NOT NULL,
+          tierRank INTEGER NOT NULL,
+          originalCharacters INTEGER NOT NULL,
+          originalLines INTEGER NOT NULL,
+          createdAt BIGINT NOT NULL,
+          UNIQUE(scopeId, messageId, blockId, projectionSha256),
+          FOREIGN KEY(sourceSha256) REFERENCES context_compaction_sources(sourceSha256)
+        )`
+      );
+      await execute(
+        `CREATE TABLE IF NOT EXISTS context_compaction_cursors (
+          cursorId TEXT PRIMARY KEY,
+          scopeId TEXT NOT NULL,
+          messageOffset INTEGER NOT NULL,
+          blockOffset INTEGER NOT NULL,
+          activeStart INTEGER NOT NULL,
+          createdAt BIGINT NOT NULL
+        )`
+      );
+      await execute(
+        `CREATE TABLE IF NOT EXISTS context_compaction_runs (
+          runId TEXT PRIMARY KEY,
+          scopeId TEXT NOT NULL,
+          trigger TEXT NOT NULL,
+          tier TEXT NOT NULL,
+          scannedMessages INTEGER NOT NULL,
+          scannedBlocks INTEGER NOT NULL,
+          compactedBlocks INTEGER NOT NULL,
+          originalCharacters INTEGER NOT NULL,
+          projectedCharacters INTEGER NOT NULL,
+          startedAt BIGINT NOT NULL,
+          completedAt BIGINT NOT NULL
+        )`
+      );
+
       // Additional Indices
       await execute(`CREATE INDEX IF NOT EXISTS idx_swarm_locks_owner ON swarm_locks(ownerId)`);
       await execute(`CREATE INDEX IF NOT EXISTS idx_swarm_locks_expires ON swarm_locks(expiresAt)`);
@@ -741,6 +852,22 @@ export async function getDb(): Promise<Kysely<Schema>> {
       await execute(`CREATE INDEX IF NOT EXISTS idx_agent_knowledge_type ON agent_knowledge(type)`);
       await execute(`CREATE INDEX IF NOT EXISTS idx_agent_edges_source ON agent_knowledge_edges(sourceId)`);
       await execute(`CREATE INDEX IF NOT EXISTS idx_agent_edges_target ON agent_knowledge_edges(targetId)`);
+      await execute(
+        `CREATE INDEX IF NOT EXISTS idx_context_compaction_projection_scope
+         ON context_compaction_projections(scopeId, tierRank DESC, createdAt DESC)`
+      );
+      await execute(
+        `CREATE INDEX IF NOT EXISTS idx_context_compaction_projection_identity
+         ON context_compaction_projections(scopeId, messageId, blockId)`
+      );
+      await execute(
+        `CREATE INDEX IF NOT EXISTS idx_context_compaction_cursor_scope
+         ON context_compaction_cursors(scopeId, createdAt DESC)`
+      );
+      await execute(
+        `CREATE INDEX IF NOT EXISTS idx_context_compaction_runs_scope
+         ON context_compaction_runs(scopeId, completedAt DESC)`
+      );
 
       return newDb;
     } catch (e) {

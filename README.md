@@ -196,7 +196,9 @@ Thank you to the Cline maintainers and contributors for the foundation this proj
 - **Roadmap steering** — `ROADMAP.md` integration with validation gates
 - **MCP** — connect external tools and prompts
 - **Governed subagents** — parallel lanes with execution modes, merge gate, and durable receipts
-- **Recoverable context compaction** — progressively reduces old tool evidence between completed turns while retaining exact source history and never rewriting an emitted provider stream
+- **Recoverable context compaction** — progressively reduces old tool evidence
+  between completed turns; BroccoliDB durably stores exact source, stable
+  projections, and cursors before the next request can use them
 - **Restart-safe completion & storage hardening** — terminal outcomes commit through an ownership- and state-checked SQLite transaction; multi-table retention sweeps, auto-vacuum page reclaiming, native statement handle disposal, and backoff WAL truncation prevent disk erosion and memory leaks
 - **Local-first** — settings and secrets under `~/.dietcode/data/`; workspace DB at `./dietcode.db`
 - **Nine providers** — OpenRouter, ChatGPT Subscription, NousResearch, Cloudflare Workers AI, Cerebras, ClinePass, Grok/X Subscription, Qwen Token Plan, and Z AI (GLM)
@@ -368,8 +370,9 @@ Long coding sessions accumulate file reads, searches, test logs, web/MCP output,
 completed turn
   → classify token pressure
   → compact a bounded amount of old tool evidence
-  → attach source coordinates + SHA-256
-  → persist the projection ledger atomically
+  → attach immutable message/block IDs + SHA-256
+  → write exact source to BroccoliDB CAS
+  → atomically commit projection + cursor + run metadata to SQLite
   → send the next request
 ```
 
@@ -377,9 +380,16 @@ completed turn
 |----------|------------------|
 | **Turn-boundary execution** | Passive compaction runs only after the previous provider/tool turn settles and before the next request. |
 | **Progressive pressure tiers** | `normal → micro → structural outline → recovery ledger → emergency`; one shared threshold authority is used by parent tasks and subagents. |
-| **Evidence-aware projection** | File reads retain structural declarations; command and test output prioritizes failures, stack frames, summaries, and head/tail evidence. |
-| **Hard work budgets** | Every pass limits scanned messages, inspected blocks, transformed blocks, candidate evidence, and projected lines. Pathological payload analysis materializes at most 2,000,000 JavaScript characters. |
-| **Recoverable source** | Compact blocks point to the durable source artifact, message/block coordinates, original size, and full-source SHA-256. |
+| **Evidence-aware projection** | File reads retain structural declarations in explicitly non-authoritative, potentially non-parsing outlines; command and test output prioritizes failures, stack frames, summaries, and head/tail evidence. |
+| **Hard work budgets** | Every pass limits scanned messages, inspected blocks, transformed blocks, candidate evidence, projected lines, materialized lines, source characters, and per-pattern input. |
+| **Stable recovery identity** | Persisted message/block UUIDs survive pair rollover and reordering; legacy index pointers are applied only when their source digest still matches. |
+| **Trusted marker boundary** | Raw tool/user text cannot impersonate internal projection metadata: forged reserved XML markers are escaped, then trusted markers are reapplied from internal state. Only a trusted marker conditionally adds a system policy telling the model that projected text may be incomplete or syntactically invalid and is never a callable rehydration tool. |
+| **Central exact recovery** | Full source is Brotli-compressed when beneficial, deduplicated by SHA-256 in BroccoliDB CAS, and byte/character/line verified during hydration. |
+| **Publication barrier** | A marker enters the next request only after a strict caller-ordered SQLite transaction commits source metadata, the stable-ID projection, the two-level cursor, and bounded run telemetry. Any failure keeps the raw block. |
+| **Persistent traversal cursor** | Scan-only and transforming passes persist message/block offsets, avoiding repeated O(N) reinspection after restoration. |
+| **Scoped parent/subagent state** | Parent and child managers share one central store but use non-colliding task/subagent scopes. Isolated subagent harnesses retain the immutable transcript-artifact fallback. |
+| **Sidecar compatibility** | Same-process managers merge `context_history.json` under a path-keyed mutex, but it is only a parent-owned compatibility/cache projection; SQLite/WAL and CAS own central durability. |
+| **GC and lifecycle safety** | Compaction CAS blobs are live garbage-collection roots, new blobs are rechecked after metadata commit, and the shared BroccoliDB `AgentContext` shuts down with the extension. |
 | **Invisible rollover** | If deterministic projection is insufficient, complete old message pairs leave the prompt view without a model-visible compaction alert; durable history remains intact. |
 | **Stream safety** | After any provider chunk is emitted, that stream is never compacted or retried in place. |
 

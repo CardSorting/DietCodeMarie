@@ -25,7 +25,22 @@
 		"docs/architecture/current.md": "25f10328c9228439683a9444d4fe313285f51c815a33f74598452a9404f2d305",
 		"docs/papers/philosophy.md": "9c4e9a8e93894c21e1c3d4025b53df336f4369a134085f6f1c9335471cfa7905",
 		"docs/papers/companion-brief.md": "7aa27a425a3865e799f170e8dfe38194c8f52c55c0677b11b6600d5d0f606edd",
-		"docs/parent-thread-execution-authority.md": "7e682332cc827ecac30d179e88e3c3ffa0e0a302d855ac6b8ca99e8f9de31fac"
+		"docs/parent-thread-execution-authority.md": "7e682332cc827ecac30d179e88e3c3ffa0e0a302d855ac6b8ca99e8f9de31fac",
+		"src/integrations/claude-code-oauth/credentials.ts": "bc82ad822c0bbde83eaaf617198da33647494efa1b14990d4a819bbbc22c5528",
+		"src/core/api/index.ts": "508bd204db18e86b3e7a3d874363d77ef903f5677d0902eb471a1e48ec0c2075",
+		"src/core/api/providers/claude-code.ts": "419a5bf432b8bb0bb77ed8aa3306e3e6172f5204d4dc50c72459a6ac02a840ee",
+		"src/core/api/types.ts": "bd0311fc6abd54beb6a263445010c42504669c6fe6fbb2737c5b45194b5ae17e",
+		"src/core/api/providers/anthropic.ts": "e062a9986caadd18c020cbade4eebd3cc3db142af4da4b22acebda83f21a1033",
+		"src/shared/api.ts": "93ae15c095fcfee1995a090254cc93ab2ae303f3b00abe0b1736b64d533696cf",
+		"src/shared/proto-conversions/models/api-configuration-conversion.ts": "e38a628876e0f13ef2adb0205477b05e0a7a9b21846b6fcdc8974f664ade11c3",
+		"proto/dietcode/models.proto": "65e0a754e95297ec1389ae3ff367c42c6d697a17c446ebb5c3a540592040c90d",
+		"src/shared/providers/providers.json": "49369b9e698a0f12bf5d2974a8d54013a2d50b6a720e3c65268b919d8fc2d207",
+		"src/shared/net.ts": "19a8a4cd191351c4c38d43a63fadf8e90052c77fa9fbcabb07f1f81ec0b40f56",
+		"webview-ui/src/components/settings/utils/providerUtils.ts": "431195588ec0a2680bf5f6ac2acbe1760a6df9fc86420d08cfb9449becf5819d",
+		"webview-ui/src/utils/validate.ts": "0a9259e4d77ed31464dcd6119371a242e47d943fd810e7c57f62bb95f6233c81",
+		"webview-ui/src/components/settings/ApiOptions.tsx": "9473b4a5d8c073de0ced717dcdf4cbf40409aea93e5bcf2c5f562ed6611d9662",
+		"src/core/api/providers/xai-oauth.ts": "12399fe34530b36d2378e6b652f7db20ed0d6b8446f61548f3606d3cc22717bc",
+		"src/core/api/transform/claude-oauth-bypass.ts": "050b80514cc22c41da587629e5b70249fc14ef61baf1af71ef22eacd1747f49f"
 	},
 	"coherenceTokens": {}
 }

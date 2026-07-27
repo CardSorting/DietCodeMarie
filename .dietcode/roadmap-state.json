@@ -4,7 +4,7 @@
 	"last_mutated_at": "2026-07-01T00:37:56.225Z",
 	"last_mutation_tool": "replace_in_file",
 	"last_mutation_path": "ROADMAP.md",
-	"updated_at": "2026-07-01T00:37:56.229Z",
+	"updated_at": "2026-07-26T23:03:58.510Z",
 	"last_validated_at": "2026-07-01T00:29:07.571Z",
 	"health_status": "Coherent",
 	"recent_checkpoint_date": "2026-06-19",
@@ -124,7 +124,15 @@
 			"summary": "Threading the completion spine thesis through 6 existing docs so it's legible at every reading level. Updated philosophy, whitepaper, companion-brief, architecture/current, decision-engine, and migration docs with the four-stage spine (snapshot → decision → action contract → action guard), the before/after failure chain, and the thesis: \"The agent receives a command, not a prose explanation to interpret.\"",
 			"raw_body": "\n**Date:** 2026-06-30\n\n**Checkpoint Summary:**  \nThreading the completion spine thesis through 6 existing docs so it's legible at every reading level. Updated philosophy, whitepaper, companion-brief, architecture/current, decision-engine, and migration docs with the four-stage spine (snapshot → decision → action contract → action guard), the before/after failure chain, and the thesis: \"The agent receives a command, not a prose explanation to interpret.\"\n\n**Moved:**  \n- None\n\n**Added:**  \n- \"The spine\" section to `docs/completion-lifecycle-decision-engine.md`\n- Spine thesis to `docs/papers/philosophy.md` § VI\n- Four-stage table + before/after chain to `docs/papers/whitepaper.md` § 7.3\n- Completion spine callout to `docs/papers/companion-brief.md`\n- Updated safety pipeline diagram in `docs/architecture/current.md`\n- Spine summary at top of `docs/completion-gate-lifecycle-migration.md`\n\n**Updated:**  \n- ROADMAP.md checkpoint date 2026-06-19 → 2026-06-30\n\n**Archived:**  \n- None\n\n**Code Soup Risk:** Medium  \nCode soup risk Low from pre-audit.\n\n**Recommended Next Move:**  \nContinue refining documentation for clarity. Consider updating `docs/parent-thread-execution-authority.md` to reference the completion spine in the cold-path gate description.\n"
 		},
-		"archive": ""
+		"archive": "",
+		"scheduler_state": {
+			"pressure_score": 0.15000000000000002,
+			"queue_size": 3
+		},
+		"locks": {},
+		"version_vectors": {
+			"governed-swarm-a5cb325d-02d0-4580-994a-8d6afa3c7553": 1
+		}
 	},
 	"roadmap_md_hash": "565d77abf3746629",
 	"dependency_manifests_hash": "0127ff0548db9e7a"

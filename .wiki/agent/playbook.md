@@ -29,9 +29,18 @@ Last validated: 2026-07-26
 - Read/list/search/definition backends: `src/integrations/misc/`, `src/services/glob/`, `src/services/ripgrep/`, and `src/services/tree-sitter/`.
 - Reproducible I/O fixture: `scripts/meow-io-benchmark.ts` (`npm run benchmark:meow-io`).
 - Native sibling delta identity: `src/core/api/transform/tool-call-processor.ts`.
-- Recoverable context compaction: `src/core/context/context-management/ContextManager.ts`, `ContextCompactionTypes.ts`, `context-window-utils.ts`, and `src/core/context/ContextPruner.ts`. Compaction runs only between completed turns, keeps the durable source transcript unchanged, emits hash-addressed prompt projections, and uses hard per-pass work/output budgets. Pathological blocks use deterministic full-span sampling capped at 2,000,000 JavaScript characters for line analysis while retaining an exact full-source digest and line count.
+- Recoverable context compaction: `src/core/context/context-management/ContextManager.ts`,
+  `BroccoliContextCompactionStore.ts`, `ContextCompactionTypes.ts`,
+  `src/core/context/ContextPruner.ts`, and
+  `broccolidb/core/agent-context/ContextCompactionService.ts`. Compaction runs
+  only between completed turns, commits exact source to BroccoliDB CAS plus a
+  stable-ID SQLite projection/cursor/run transaction before publication, and
+  enforces source, regex, scan, transform, and output budgets.
 - Main-task rollover authority: `src/core/task/index.ts`. When bounded projections cannot recover enough space, it advances the complete-pair deletion range at the request boundary without consuming a model/tool turn. Active streams and child work settle before this path is reachable.
-- Subagent compaction: `src/core/task/tools/subagent/SubagentRunner.ts`. It uses the same tier authority and points recovery references at the governed subagent transcript artifact.
+- Subagent compaction: `src/core/task/tools/subagent/SubagentRunner.ts` and
+  `SubagentTranscriptRecorder.ts`. One child manager spans the governed run and
+  shares the central store under an isolated subagent scope. Immutable
+  `<transcript>.context/` records remain the no-central-store fallback.
 - Master of Design (MoD) System Prompt Steering Toggle Architecture: `src/core/prompts/system-prompt/components/mod_designer_steering.ts` & `src/core/task/index.ts`. MoD Mode mirrors the unified coding agent task loop with 100% tool parity (`read_file`, `replace_in_file`, `execute_command`, `browser_action`, subagents, MCP tools), automatically steered by senior design engineering instincts (tokens, 7-state UI matrix, WCAG 2.1 AA, responsive grid ergonomics, 5-Whys).
 
 ## Orientation Loop
@@ -68,7 +77,16 @@ For execution work, start with `ExecutionFunnel.test.ts` and the parent/sibling/
 
 For task lifecycle work, start with `TaskLifecycleFunnel.test.ts`, then run execution, completion, and subagent integration suites. Every transition must name the exact generation and causal source. A committed cancellation request fences execution; a terminal generation is monotonic; persistence must commit record and event before publication. Run `npm run check:task-lifecycle-boundary` to prevent direct writers from returning.
 
-For context compaction work, preserve the durable transcript as the recovery authority and mutate only request projections. Use `getCompactionTierFromTokens()` as the single threshold authority. Keep compaction at a completed-turn/request boundary; never run it from a partial stream callback. Every compacted block must carry its source, message/block index, original line count, and SHA-256 digest. Run both context suites plus the complete `SubagentRunner.test.ts`; follow the Node/Electron `better-sqlite3` rebuild sequence in troubleshooting.
+For context compaction work, preserve exact source bytes and mutate only request
+projections. Use `getCompactionTierFromTokens()` as the single threshold
+authority. Keep compaction at a completed-turn/request boundary; never run it
+from a partial stream callback. Require `writeDurableBatch()` and the
+post-commit CAS check before exposing a marker. Persist scan-only cursors. Treat
+structural projections as potentially invalid syntax, and add the interpretation
+policy only after sanitized request construction confirms a trusted marker.
+Keep `context_history.json` parent-process-owned; SQLite/WAL owns central
+coordination. Run context, real bridge, BroccoliDB compaction/capability, and
+complete subagent suites; follow the Node/Electron native rebuild sequence.
 
 For Task-level focused tests, also require `./src/test/requires.cjs` so the VS Code shim is installed.
 

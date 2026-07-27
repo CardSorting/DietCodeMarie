@@ -30,6 +30,7 @@ const health = await ctx.health({ deep?: boolean });
 | `ctx.runtime` | Sessions, plans, execution, verification, state views |
 | `ctx.audit` | Invariant checks |
 | `ctx.storage` | Blob storage (CAS) |
+| `ctx.compaction` | Durable context projections, cursors, and exact-source hydration |
 | `ctx.snapshots` | Context snapshots |
 | `ctx.recovery` | Recovery operations |
 | `ctx.telemetry` | Telemetry events |
@@ -38,6 +39,52 @@ const health = await ctx.health({ deep?: boolean });
 | `ctx.tasks` | Task board |
 | `ctx.scratchpad` | Agent scratchpad |
 | `ctx.mailbox` | Inter-agent mailbox |
+
+### Context compaction
+
+`ctx.compaction` separates exact source bytes from the smaller projection sent
+to a model. The exact source is compressed when beneficial, stored in CAS, and
+referenced by stable message/block IDs in SQLite.
+
+```typescript
+const committed = await ctx.compaction.commit({
+  scopeId: 'task:01...',
+  scopeKind: 'task',
+  workspaceId: 'workspace-id',
+  recoverySource: 'broccolidb://context/task%3A01...',
+  records: [{
+    messageId,
+    blockId,
+    ref: `${messageId}:${blockId}`,
+    sourceLocator: 'broccolidb://context/task%3A01...',
+    sourceText,
+    sourceSha256,
+    projectionText,
+    projectionSha256,
+    tier: 'emergency',
+    tierRank: 6,
+    originalCharacters: sourceText.length,
+    originalLines,
+  }],
+  cursor: { messageOffset, blockOffset, activeStart },
+  run: {
+    trigger: 'turn_boundary',
+    tier: 'emergency',
+    scannedMessages,
+    scannedBlocks,
+    compactedBlocks: 1,
+    originalCharacters: sourceText.length,
+    projectedCharacters: projectionText.length,
+    startedAt,
+    completedAt,
+  },
+});
+```
+
+`commit()` resolves only after the CAS source and all metadata cross a strict
+SQLite transaction barrier. Use `load({ scopeId })` to restore current
+projections and the scan cursor. Use `hydrate(...)` to recover exact source;
+hydration verifies the CAS digest, byte length, character length, and line count.
 
 ## Runtime (`ctx.runtime`)
 

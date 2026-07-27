@@ -12,6 +12,8 @@ flowchart TB
   SG[RuntimeStateGraph]
   Store[Durable graph store]
   Spider[Spider via graph.spider]
+  Compact[Context compaction ledger]
+  CAS[Sharded exact-source CAS]
 
   Agent --> Cap
   Cap --> RT
@@ -19,6 +21,8 @@ flowchart TB
   SG --> Store
   Cap --> Spider
   Spider --> RT
+  Cap --> Compact
+  Compact --> CAS
 ```
 
 ## Request flow
@@ -29,6 +33,9 @@ flowchart TB
 4. **Spider** proves structure (audit / gate / check). It does not mutate files during audit.
 5. **RuntimeStateGraph** is the canonical operational truth for a session.
 6. **Snapshots** persist graph state to CAS + audit metadata; **replay** reconstructs causality after restart.
+7. **Context compaction** commits exact source, stable-ID projection metadata,
+   scan cursors, and run telemetry before a smaller projection may enter a
+   model request.
 
 ## Core components
 
@@ -39,6 +46,7 @@ flowchart TB
 | `OrchestrationRuntime` | `core/orchestration/` | `ctx.runtime` |
 | `RuntimeStateGraph` | `core/orchestration/state/` | via `ctx.runtime.state()` etc. |
 | Durable store | `core/orchestration/state/store/` | `snapshot`, `replay`, `story` |
+| Context compaction | `core/agent-context/ContextCompactionService.ts` | `ctx.compaction` |
 | Spider engine | `core/policy/spider/` | `ctx.graph.spider` only |
 | CLI | `cli/` | `npx broccolidb` |
 
@@ -93,6 +101,23 @@ See [runtime integrity](../../../docs/api/runtime-integrity.md).
 5. `ctx.runtime.replay(sessionId)` and `ctx.runtime.story(sessionId)` work on restored state.
 
 Smoke test: `tests/runtime-recovery-smoke.test.ts`
+
+## Context projection durability
+
+The compaction capability uses a publish-after-durability protocol:
+
+1. Validate bounded records and verify source/projection SHA-256 digests.
+2. Compress exact source with Brotli quality 4 only when it saves at least 10%;
+   otherwise retain identity bytes.
+3. Write exact bytes to sharded CAS.
+4. Commit source metadata, one current projection per immutable message/block
+   identity, the scope cursor, and run telemetry in one strict SQLite transaction.
+5. Recheck CAS presence after the metadata commit to close the concurrent-GC gap.
+6. Only then return success to the request compactor.
+
+CAS garbage collection treats `context_compaction_sources.blobHash` as a live
+root. A failed metadata commit may leave an unreferenced blob, which is safe and
+reclaimable; it can never publish an unrecoverable projection.
 
 ## Extended reference
 

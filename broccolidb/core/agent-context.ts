@@ -17,6 +17,7 @@ import { InvariantEngine } from './agent-context/InvariantEngine.js';
 import { LifecycleRegistry } from './agent-context/LifecycleRegistry.js';
 import { COMPATIBILITY_EXCEPTIONS } from './agent-context/compatibility-purge.js';
 import { StorageCapability } from './agent-context/capabilities/StorageCapability.js';
+import { CompactionCapability } from './agent-context/capabilities/CompactionCapability.js';
 import { TelemetryCapability } from './agent-context/capabilities/TelemetryCapability.js';
 import { RecoveryCapability } from './agent-context/capabilities/RecoveryCapability.js';
 import { AuditCapability } from './agent-context/capabilities/AuditCapability.js';
@@ -29,6 +30,7 @@ import { TaskCapability } from './agent-context/capabilities/TaskCapability.js';
 import { ScratchpadCapability } from './agent-context/capabilities/ScratchpadCapability.js';
 import { MailboxCapability } from './agent-context/capabilities/MailboxCapability.js';
 import { IntentTracer } from './agent-context/IntentTracer.js';
+import { ContextCompactionService } from './agent-context/ContextCompactionService.js';
 import { OrchestrationRuntime } from './orchestration/OrchestrationRuntime.js';
 import { StorageService } from '../infrastructure/storage/StorageService.js';
 import { BufferedDbPool, type WriteOp } from '../infrastructure/db/BufferedDbPool.js';
@@ -96,10 +98,12 @@ export class AgentContext {
   private readonly _coordinatorService: CoordinatorService;
   private readonly _scratchpadService: ScratchpadService;
   private readonly _storageService: StorageService;
+  private readonly _contextCompactionService: ContextCompactionService;
   private readonly _lifecycleRegistry: LifecycleRegistry;
   private readonly _invariantEngine: InvariantEngine;
 
   private readonly _storageCapability: StorageCapability;
+  private readonly _compactionCapability: CompactionCapability;
   private readonly _telemetryCapability: TelemetryCapability;
   private readonly _recoveryCapability: RecoveryCapability;
   private readonly _auditCapability: AuditCapability;
@@ -169,6 +173,10 @@ export class AgentContext {
     this._coordinatorService = new CoordinatorService(this._serviceContext);
     this._scratchpadService = new ScratchpadService(this._serviceContext);
     this._storageService = new StorageService(this._serviceContext);
+    this._contextCompactionService = new ContextCompactionService(
+      this._db,
+      this._storageService
+    );
     this._cleanupService = new CleanupService(this._serviceContext, this._taskService, this._reasoningService);
     this._lspService = new LspService(this._serviceContext);
     this._lifecycleRegistry = new LifecycleRegistry();
@@ -193,6 +201,12 @@ export class AgentContext {
 
     this._storageCapability = new StorageCapability(
       this._storageService,
+      assertOperational,
+      isStarted,
+      this._intentTracer
+    );
+    this._compactionCapability = new CompactionCapability(
+      this._contextCompactionService,
       assertOperational,
       isStarted,
       this._intentTracer
@@ -399,6 +413,9 @@ export class AgentContext {
   public get storage() {
     return this._storageCapability;
   }
+  public get compaction() {
+    return this._compactionCapability;
+  }
   public get telemetry() {
     return this._telemetryCapability;
   }
@@ -471,6 +488,7 @@ export class AgentContext {
   private async collectCapabilityHealth(): Promise<Record<string, CapabilityHealth>> {
     const entries = await Promise.all([
       ['storage', await this._storageCapability.health()],
+      ['compaction', await this._compactionCapability.health()],
       ['telemetry', await this._telemetryCapability.health()],
       ['recovery', await this._recoveryCapability.health()],
       ['audit', await this._auditCapability.health()],

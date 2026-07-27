@@ -5,7 +5,9 @@ This ledger now routes to the current LUMI workspace operating docs and preserve
 ## 🗺️ Navigation
 
 - [**Agent Playbook**](../AGENT_PLAYBOOK.md) — Current-state operating brief for future agents.
-- [**Recoverable Context Compaction**](recoverable-context-compaction.md) — Why context is projected, how tiers/recovery/rollover work, limits, failure semantics, and validation.
+- [**Recoverable Context Compaction**](recoverable-context-compaction.md) —
+  Why context is projected, how BroccoliDB CAS/SQLite central recovery works,
+  tier/cursor limits, silent rollover, failure semantics, and validation.
 - [**Agent Fast Orientation**](agent/playbook.md) — Current execution hot paths and validation loop.
 - [**Agent Memory**](agent/agent-memory.md) — Durable constraints and safety boundaries.
 - [**Key Findings**](agent/key-findings.md) — Evidence-backed execution and throughput findings.
@@ -39,7 +41,7 @@ This ledger now routes to the current LUMI workspace operating docs and preserve
 | Current handoff exists | [x] `HANDOFF.md` |
 | Sibling concurrency and latency evidence recorded | [x] [Agent key findings](agent/key-findings.md) |
 | I/O authority, backend, and fixture evidence recorded | [x] [Agent key findings](agent/key-findings.md) |
-| Recoverable turn-boundary context compaction documented | [x] [Architecture guide](recoverable-context-compaction.md) |
+| Recoverable turn-boundary compaction and BroccoliDB publication barrier documented | [x] [Architecture guide](recoverable-context-compaction.md) |
 | Lease reconciliation, deadlock, and completion CAS evidence recorded | [x] [Agent key findings](agent/key-findings.md) |
 | One central completion funnel and modern terminal event documented | [x] [Agent key findings](agent/key-findings.md) |
 | One central execution funnel and modern terminal tool event documented | [x] [Agent key findings](agent/key-findings.md) |

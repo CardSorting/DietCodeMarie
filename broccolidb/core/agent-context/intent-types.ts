@@ -3,6 +3,7 @@
 
 export type CapabilityName =
   | 'storage'
+  | 'compaction'
   | 'telemetry'
   | 'recovery'
   | 'audit'
@@ -47,6 +48,7 @@ export interface CapabilityIntent {
 }
 
 export type StorageIntent = CapabilityIntent & { kind: 'storage' };
+export type CompactionIntent = CapabilityIntent & { kind: 'compaction' };
 export type TelemetryIntent = CapabilityIntent & { kind: 'telemetry' };
 export type RecoveryIntent = CapabilityIntent & { kind: 'recovery' };
 export type AuditIntent = CapabilityIntent & { kind: 'audit' };
@@ -61,6 +63,7 @@ export type MailboxIntent = CapabilityIntent & { kind: 'mailbox' };
 
 export type CapabilityIntentUnion =
   | StorageIntent
+  | CompactionIntent
   | TelemetryIntent
   | RecoveryIntent
   | AuditIntent

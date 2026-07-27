@@ -82,11 +82,18 @@ export interface SilentCompactionConfig {
 
 export interface RecoverableContextReference {
 	source: string
-	messageIndex: number
-	blockIndex: number
+	ref: string
+	messageId: string
+	blockId: string
 	sha256: string
 	originalCharacters: number
 	originalLines: number
+}
+
+export interface ProgressiveCompactionCursor {
+	messageOffset: number
+	blockOffset: number
+	activeStart: number
 }
 
 export interface ProgressiveCompactionLimits {

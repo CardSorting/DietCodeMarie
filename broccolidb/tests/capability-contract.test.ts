@@ -1,4 +1,5 @@
 import assert from 'node:assert';
+import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -11,6 +12,7 @@ import { setDbPath } from '../infrastructure/db/Config.js';
 
 const CAPABILITY_NAMES = [
   'storage',
+  'compaction',
   'telemetry',
   'recovery',
   'audit',
@@ -65,6 +67,59 @@ async function runContractTests(): Promise<void> {
     assert.strictEqual(result.namespace, 'default');
     const hydrated = await ctx.storage.hydrate({ hash: result.hash });
     assert.strictEqual(hydrated.content, 'contract payload');
+  });
+
+  await assertLifecycleGuards('compaction', async (ctx) => {
+    const sourceText = 'contract source '.repeat(300);
+    const projectionText = 'contract projection';
+    const sourceSha256 = createHash('sha256').update(sourceText).digest('hex');
+    const projectionSha256 = createHash('sha256').update(projectionText).digest('hex');
+    const now = Date.now();
+    const result = await ctx.compaction.commit({
+      scopeId: 'task:contract',
+      scopeKind: 'task',
+      workspaceId: 'cap-workspace',
+      recoverySource: 'broccolidb://context/task%3Acontract',
+      records: [
+        {
+          messageId: 'ctx_msg_contract',
+          blockId: 'ctx_blk_contract',
+          ref: 'ctx_msg_contract:ctx_blk_contract',
+          sourceLocator:
+            'broccolidb://context/task%3Acontract/ctx_msg_contract/ctx_blk_contract',
+          sourceText,
+          sourceSha256,
+          projectionText,
+          projectionSha256,
+          tier: 'truncate',
+          tierRank: 1,
+          originalCharacters: sourceText.length,
+          originalLines: 1,
+        },
+      ],
+      cursor: { messageOffset: 1, blockOffset: 0, activeStart: 1 },
+      run: {
+        trigger: 'contract',
+        tier: 'truncate',
+        scannedMessages: 1,
+        scannedBlocks: 1,
+        compactedBlocks: 1,
+        originalCharacters: sourceText.length,
+        projectedCharacters: projectionText.length,
+        startedAt: now,
+        completedAt: now,
+      },
+    });
+    assert.strictEqual(result.committed, true);
+    const loaded = await ctx.compaction.load({ scopeId: 'task:contract' });
+    assert.strictEqual(loaded.projections.length, 1);
+    const hydrated = await ctx.compaction.hydrate({
+      scopeId: 'task:contract',
+      messageId: 'ctx_msg_contract',
+      blockId: 'ctx_blk_contract',
+      sourceSha256,
+    });
+    assert.strictEqual(hydrated.text, sourceText);
   });
 
   const { context, root } = await createContext();

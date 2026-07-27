@@ -467,6 +467,8 @@
 		"compile-tests": "node ./scripts/build-tests.js",
 		"build:blog": "node scripts/build-blog.js",
 		"watch-tests": "tsc -p . -w --outDir out",
+		"build:broccolidb": "npm --prefix broccolidb run build",
+		"precheck-types": "npm run build:broccolidb",
 		"check-types": "npm run protos && tsc --noEmit --incremental && cd webview-ui && tsc --project tsconfig.app.json --noEmit",
 		"lint": "biome lint --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error && npm run lint:proto && npm run check:handler-imports && npm run check:task-lifecycle-boundary",
 		"lint:proto": "bash ./scripts/proto-lint.sh",

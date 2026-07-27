@@ -36,7 +36,8 @@ describe("ContextPruner", () => {
 			expect(result.skeletonText).to.include("export interface UserData")
 			expect(result.skeletonText).to.include("export class MainService")
 			expect(result.skeletonText).to.include("export const finalExport")
-			expect(result.skeletonText).to.include("AST SKELETON")
+			expect(result.skeletonText).to.include("NON-AUTHORITATIVE STRUCTURAL PROJECTION")
+			expect(result.skeletonText).to.include("syntax may be invalid")
 			expect(result.projectedLines).to.be.at.most(15)
 		})
 
@@ -67,6 +68,24 @@ describe("ContextPruner", () => {
 			expect(result.sha256).to.equal(createHash("sha256").update(code).digest("hex"))
 			expect(result.projectedLines).to.be.at.most(30)
 			expect(result.skeletonText).to.include("SOURCE SAMPLE OMITTED")
+		})
+
+		it("bounds regex input and materialized lines for minified and newline-dense payloads", () => {
+			const boundedPruner = new ContextPruner({
+				maxLines: 30,
+				maxSourceCharacters: 64_000,
+				maxMaterializedLines: 2_000,
+				maxPatternCharactersPerLine: 256,
+			})
+			const minified = `${"public ".repeat(100_000)}method(${")".repeat(100_000)}`
+			const minifiedResult = boundedPruner.skeletonizeCode(minified, 30)
+			expect(minifiedResult.sha256).to.equal(createHash("sha256").update(minified).digest("hex"))
+
+			const newlineDense = `${"\n".repeat(250_000)}export interface Retained { value: string }`
+			const denseResult = boundedPruner.skeletonizeCode(newlineDense, 30)
+			expect(denseResult.sourceWasSampled).to.equal(true)
+			expect(denseResult.originalLines).to.equal(250_001)
+			expect(denseResult.projectedLines).to.be.at.most(30)
 		})
 	})
 

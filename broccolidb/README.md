@@ -2,7 +2,10 @@
 
 **A stable operational substrate for agent-driven code work.**
 
-BroccoliDB gives agents a typed, lifecycle-governed environment: capabilities validate intent, the runtime governs execution, Spider proves structure, and durable snapshots preserve continuity across restarts.
+BroccoliDB gives agents a typed, lifecycle-governed environment: capabilities
+validate intent, the runtime governs execution, Spider proves structure, durable
+snapshots preserve continuity, and context compaction commits exact source to
+CAS before publishing smaller model-request projections.
 
 > v30 freeze: no new architecture layers. The public API is frozen, documented, and tested. A complete system is boring to operate.
 
@@ -51,6 +54,18 @@ npx broccolidb runtime story <sessionId>
 ```
 
 Full reference: [docs/cli.md](docs/cli.md).
+
+## Durable context projections
+
+`ctx.compaction` provides a strict publication barrier for long-running agent
+context. It deduplicates exact source in sharded CAS, stores one current
+projection per immutable message/block identity, persists scan cursors and run
+telemetry in SQLite, and verifies exact bytes during hydration.
+
+The high-level invariant is simple: await `ctx.compaction.commit(...)` before a
+projection marker enters a model request. If the strict transaction fails, keep
+the raw source. See [the public API](docs/public-api.md#context-compaction) and
+[current architecture](docs/architecture/current.md#context-projection-durability).
 
 ## Documentation
 
@@ -101,6 +116,7 @@ npm test
 |------|------|
 | `core/public-api.ts` | Frozen npm exports |
 | `core/agent-context.ts` | `AgentContext` and capabilities |
+| `core/agent-context/ContextCompactionService.ts` | Exact-source CAS and strict projection ledger |
 | `core/orchestration/` | Runtime, state graph, durable store |
 | `core/policy/spider/` | Spider engine (internal; access via `ctx.graph.spider`) |
 | `cli/` | `broccolidb` command-line tool |

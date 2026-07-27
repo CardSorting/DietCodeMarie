@@ -16,6 +16,11 @@ export interface DietCodeReasoningDetailParam {
 interface DietCodeSharedMessageParam {
 	// The id of the response that the block belongs to
 	call_id?: string
+	/**
+	 * Stable internal identity used by recoverable context projections.
+	 * This field is persisted locally and stripped before provider serialization.
+	 */
+	contextId?: string
 }
 
 export const REASONING_DETAILS_PROVIDERS = ["dietcode", "openrouter"]
@@ -87,6 +92,11 @@ export interface DietCodeStorageMessage extends Anthropic.MessageParam {
 	 * Response ID associated with this message
 	 */
 	id?: string
+	/**
+	 * Stable internal identity used by recoverable context projections.
+	 * This field is persisted locally and stripped before provider serialization.
+	 */
+	contextId?: string
 	role: DietCodeMessageRole
 	content: DietCodePromptInputContent | DietCodeContent[]
 	/**
@@ -126,9 +136,13 @@ export function convertDietCodeStorageToAnthropicMessage(
 
 	// Handle array content - strip DietCode-specific fields for non-reasoning_details providers
 	const shouldCleanContent = !REASONING_DETAILS_PROVIDERS.includes(provider)
+	const contentWithoutContextIds = filteredContent.map((block) => {
+		const { contextId: _contextId, ...providerBlock } = block
+		return providerBlock
+	})
 	const cleanedContent = shouldCleanContent
-		? filteredContent.map(cleanContentBlock)
-		: (filteredContent as Anthropic.MessageParam["content"])
+		? contentWithoutContextIds.map((block) => cleanContentBlock(block as DietCodeContent))
+		: (contentWithoutContextIds as Anthropic.MessageParam["content"])
 
 	return { role, content: cleanedContent }
 }
@@ -142,6 +156,7 @@ export function cleanContentBlock(block: DietCodeContent): Anthropic.ContentBloc
 		"reasoning_details" in block ||
 		"call_id" in block ||
 		"summary" in block ||
+		"contextId" in block ||
 		(block.type !== "thinking" && "signature" in block)
 
 	if (!hasDietCodeFields) {
@@ -149,7 +164,7 @@ export function cleanContentBlock(block: DietCodeContent): Anthropic.ContentBloc
 	}
 
 	// Removes DietCode-specific fields & the signature field that's added for Gemini.
-	const { reasoning_details, call_id, summary, ...rest } = block as any
+	const { reasoning_details, call_id, summary, contextId, ...rest } = block as any
 
 	// Remove signature from non-thinking blocks that were added for Gemini
 	if (block.type !== "thinking" && rest.signature) {

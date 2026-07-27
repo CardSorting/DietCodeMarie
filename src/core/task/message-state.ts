@@ -9,6 +9,7 @@ import { DietCodeMessage } from "@/shared/ExtensionMessage"
 import { getApiMetrics } from "@/shared/getApiMetrics"
 import { HistoryItem } from "@/shared/HistoryItem"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
+import { ensureContextIdentifiers } from "@/shared/messages/context-identifiers"
 import { Logger } from "@/shared/services/Logger"
 import { getCwd, getDesktopDir } from "@/utils/path"
 import { ensureTaskDirectoryExists, saveApiConversationHistory, saveDietCodeMessages } from "../storage/disk"
@@ -97,6 +98,7 @@ export class MessageStateHandler extends EventEmitter<MessageStateHandlerEvents>
 	}
 
 	setApiConversationHistory(newHistory: DietCodeStorageMessage[]): void {
+		ensureContextIdentifiers(newHistory)
 		this.apiConversationHistory = newHistory
 	}
 
@@ -183,6 +185,9 @@ export class MessageStateHandler extends EventEmitter<MessageStateHandlerEvents>
 		// Protect with mutex to prevent concurrent modifications from corrupting data (RC-4)
 		return await this.withStateLock(async () => {
 			this.apiConversationHistory.push(message)
+			// Normalize the complete history so an externally cloned message
+			// cannot introduce an already-used otherwise-valid identity.
+			ensureContextIdentifiers(this.apiConversationHistory)
 			await saveApiConversationHistory(this.taskId, this.apiConversationHistory)
 		})
 	}
@@ -190,6 +195,7 @@ export class MessageStateHandler extends EventEmitter<MessageStateHandlerEvents>
 	async overwriteApiConversationHistory(newHistory: DietCodeStorageMessage[]): Promise<void> {
 		// Protect with mutex to prevent concurrent modifications from corrupting data (RC-4)
 		return await this.withStateLock(async () => {
+			ensureContextIdentifiers(newHistory)
 			this.apiConversationHistory = newHistory
 			await saveApiConversationHistory(this.taskId, this.apiConversationHistory)
 		})

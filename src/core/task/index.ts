@@ -4,6 +4,7 @@ import { GeminiHandler } from "@core/api/providers/gemini"
 import { OpenAiHandler } from "@core/api/providers/openai"
 import { ApiStream } from "@core/api/transform/stream"
 import { AssistantMessageContent, parseAssistantMessageV2, ToolUse } from "@core/assistant-message"
+import { BroccoliContextCompactionStore } from "@core/context/context-management/BroccoliContextCompactionStore"
 import { ContextManager } from "@core/context/context-management/ContextManager"
 import { checkContextWindowExceededError } from "@core/context/context-management/context-error-handling"
 import { getContextWindowInfo } from "@core/context/context-management/context-window-utils"
@@ -428,7 +429,15 @@ export class Task {
 
 		this.urlContentFetcher = new UrlContentFetcher()
 		this.browserSession = new BrowserSession(stateManager)
-		this.contextManager = new ContextManager()
+		const contextCompactionStore = new BroccoliContextCompactionStore(cwd)
+		this.contextManager = new ContextManager({
+			centralStore: contextCompactionStore,
+			scope: {
+				id: `task:${taskId}`,
+				kind: "task",
+				workspaceId: contextCompactionStore.workspaceId,
+			},
+		})
 		this.streamHandler = new StreamResponseHandler()
 		this.cwd = cwd
 		this.stateManager = stateManager
@@ -2676,7 +2685,6 @@ export class Task {
 
 		const { systemPrompt, tools } = await getSystemPrompt(promptContext)
 		this.useNativeToolCalls = !!tools?.length
-		await this.writePromptMetadataArtifacts({ systemPrompt, providerInfo })
 
 		const contextManagementMetadata = await this.contextManager.getNewContextMessagesAndMetadata(
 			this.messageStateHandler.getApiConversationHistory(),
@@ -2725,8 +2733,13 @@ export class Task {
 		}
 
 		// Response API requires native tool calls to be enabled
+		const requestSystemPrompt = this.contextManager.getSystemPromptForProjection(
+			systemPrompt,
+			contextManagementMetadata.truncatedConversationHistory,
+		)
+		await this.writePromptMetadataArtifacts({ systemPrompt: requestSystemPrompt, providerInfo })
 		this.latencyTracker.markOnce("model_request_started")
-		const stream = this.api.createMessage(systemPrompt, contextManagementMetadata.truncatedConversationHistory, tools)
+		const stream = this.api.createMessage(requestSystemPrompt, contextManagementMetadata.truncatedConversationHistory, tools)
 
 		const iterator = stream[Symbol.asyncIterator]()
 

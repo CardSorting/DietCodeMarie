@@ -7,6 +7,7 @@ Exported from `broccolidb/core/public-api.ts` and documented in `docs/public-api
 Includes:
 
 - `AgentContext` lifecycle and capability getters
+- Durable context projection commits and exact hydration through `ctx.compaction`
 - `OrchestrationRuntime` operator methods
 - Public error types and `GuidedError`
 - Capability and intent **types**
@@ -38,6 +39,7 @@ Documented only in `MIGRATION.md`. No new usage.
 | Pattern | Why |
 |---------|-----|
 | Capabilities before `start()` | Lifecycle violation |
+| Publishing a context projection before `ctx.compaction.commit()` resolves | Recovery-integrity violation |
 | `SpiderService` on AgentContext | Bypasses capability tracing |
 | Spider mutating during audit | Forensic integrity |
 | Undocumented public `any` | Type safety |

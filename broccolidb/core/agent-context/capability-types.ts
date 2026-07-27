@@ -73,6 +73,99 @@ export interface StorageHydrateResult {
   content: string | null;
 }
 
+// ─── Context compaction ───
+export type ContextCompactionScopeKind = 'task' | 'subagent';
+
+export interface ContextCompactionCursor {
+  messageOffset: number;
+  blockOffset: number;
+  activeStart: number;
+}
+
+export interface ContextCompactionProjectionInput {
+  messageId: string;
+  blockId: string;
+  ref: string;
+  sourceLocator: string;
+  sourceText: string;
+  sourceSha256: string;
+  projectionText: string;
+  projectionSha256: string;
+  tier: string;
+  tierRank: number;
+  originalCharacters: number;
+  originalLines: number;
+}
+
+export interface ContextCompactionRunInput {
+  trigger: string;
+  tier: string;
+  scannedMessages: number;
+  scannedBlocks: number;
+  compactedBlocks: number;
+  originalCharacters: number;
+  projectedCharacters: number;
+  startedAt: number;
+  completedAt: number;
+}
+
+export interface ContextCompactionCommitInput extends CapabilityIntentFields {
+  scopeId: string;
+  scopeKind: ContextCompactionScopeKind;
+  workspaceId: string;
+  recoverySource: string;
+  records: ContextCompactionProjectionInput[];
+  cursor: ContextCompactionCursor;
+  run: ContextCompactionRunInput;
+}
+
+export interface ContextCompactionCommitResult {
+  committed: true;
+  recoverySource: string;
+  projectionIds: string[];
+  deduplicatedSources: number;
+  storedBytes: number;
+}
+
+export interface ContextCompactionLoadInput extends CapabilityIntentFields {
+  scopeId: string;
+  limit?: number;
+}
+
+export interface ContextCompactionProjectionRecord {
+  projectionId: string;
+  scopeId: string;
+  messageId: string;
+  blockId: string;
+  ref: string;
+  sourceLocator: string;
+  sourceSha256: string;
+  projectionText: string;
+  projectionSha256: string;
+  tier: string;
+  tierRank: number;
+  originalCharacters: number;
+  originalLines: number;
+  createdAt: number;
+}
+
+export interface ContextCompactionLoadResult {
+  projections: ContextCompactionProjectionRecord[];
+  cursor: ContextCompactionCursor | null;
+}
+
+export interface ContextCompactionHydrateInput extends CapabilityIntentFields {
+  scopeId: string;
+  messageId: string;
+  blockId: string;
+  sourceSha256: string;
+}
+
+export interface ContextCompactionHydrateResult {
+  sourceSha256: string;
+  text: string;
+}
+
 // ─── Telemetry ───
 export interface TelemetryRecordInput {
   usage: { promptTokens: number; completionTokens: number; modelId?: string };

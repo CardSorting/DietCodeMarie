@@ -15,6 +15,8 @@ import {
 export interface PrunerConfig {
 	maxLines: number
 	maxSourceCharacters: number
+	maxMaterializedLines: number
+	maxPatternCharactersPerLine: number
 	headRatio: number
 	tailRatio: number
 	enabled: boolean
@@ -42,6 +44,8 @@ export class ContextPruner {
 		this.config = {
 			maxLines: this.normalizeLineBudget(config.maxLines ?? 200),
 			maxSourceCharacters: this.normalizeSourceCharacterBudget(config.maxSourceCharacters ?? 2_000_000),
+			maxMaterializedLines: this.normalizeMaterializedLineBudget(config.maxMaterializedLines ?? 20_000),
+			maxPatternCharactersPerLine: this.normalizePatternCharacterBudget(config.maxPatternCharactersPerLine ?? 4_096),
 			headRatio: requestedHeadRatio * ratioScale,
 			tailRatio: requestedTailRatio * ratioScale,
 			enabled: config.enabled ?? true,
@@ -60,9 +64,10 @@ export class ContextPruner {
 	}
 
 	/**
-	 * Produces a language-aware structural outline. This is deliberately not
-	 * described as a real AST: it remains dependency-free and uses conservative
-	 * declaration patterns for common repository languages.
+	 * Produces a language-aware structural outline. This is not a parser AST and
+	 * the result is explicitly non-authoritative: folded markers may make the
+	 * projected snippet syntactically invalid. Pattern input is capped per line,
+	 * and patterns avoid unbounded wildcards and nested quantifiers.
 	 */
 	public skeletonizeCode(code: string, maxLinesOverride?: number): CodeSkeletonResult {
 		const maxLines = this.normalizeLineBudget(maxLinesOverride ?? this.config.maxLines)
@@ -92,8 +97,8 @@ export class ContextPruner {
 			rankedAnchors,
 			(start, end) =>
 				source.wasSampled
-					? `/* ... [AST SKELETON: sampled projection lines ${start + 1}-${end + 1} folded; full-sha256:${sha256.slice(0, 12)}] ... */`
-					: `/* ... [AST SKELETON: original lines ${start + 1}-${end + 1} folded; sha256:${sha256.slice(0, 12)}] ... */`,
+					? `/* ... [NON-AUTHORITATIVE STRUCTURAL PROJECTION: sampled lines ${start + 1}-${end + 1} folded; syntax may be invalid; full-sha256:${sha256.slice(0, 12)}] ... */`
+					: `/* ... [NON-AUTHORITATIVE STRUCTURAL PROJECTION: original lines ${start + 1}-${end + 1} folded; syntax may be invalid; sha256:${sha256.slice(0, 12)}] ... */`,
 		)
 
 		return {
@@ -122,7 +127,7 @@ export class ContextPruner {
 		const rankedEvidence = this.collectCommandEvidence(lines, maxLines)
 		const hasError =
 			/\b(ERROR|FAIL(?:ED|URE)?|FATAL|PANIC|Exception|TypeError|ReferenceError|SyntaxError|AssertionError|ERR_[A-Z_]+)\b/i.test(
-				output,
+				source.text,
 			)
 
 		if (!source.wasSampled && lines.length <= maxLines) {
@@ -224,8 +229,12 @@ ${renderList(ledger.pendingActions, "Proceeding with current phase")}`
 					/^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|const|let|var)\s+\w+|^\s*(?:pub\s+)?(?:async\s+)?fn\s+\w+/,
 				priority: 1,
 			},
-			{ pattern: /^\s*func\s+(?:\(.*?\)\s*)?\w+\s*\(/, priority: 1 },
-			{ pattern: /^\s*(?:public|private|protected|static|async|readonly|\s)+\s*[\w$]+\s*\(.*?\)/, priority: 1 },
+			{ pattern: /^\s*func\s+(?:\([^)\r\n]{0,1024}\)\s*)?[\w$]{1,256}\s*\(/, priority: 1 },
+			{
+				pattern:
+					/^[ \t]{0,256}(?:(?:public|private|protected|static|async|readonly)[ \t]+){0,8}[\w$]{1,256}[ \t]*\([^)\r\n]{0,2048}\)/,
+				priority: 1,
+			},
 			{ pattern: /^\s*(?:import|from|use|package)\b/, priority: 2 },
 			{ pattern: /SOURCE SAMPLE OMITTED/, priority: 2 },
 			{ pattern: /^\s*(?:#\[|@\w+|\/\*\*|\/\/\/)/, priority: 3 },
@@ -235,7 +244,8 @@ ${renderList(ledger.pendingActions, "Proceeding with current phase")}`
 		const candidatePositions = new Map<number, number>()
 		const candidateLimit = maxLines * 16
 		for (let index = 0; index < lines.length; index++) {
-			const match = patterns.find(({ pattern }) => pattern.test(lines[index]))
+			const patternInput = this.getPatternInput(lines[index])
+			const match = patterns.find(({ pattern }) => pattern.test(patternInput))
 			if (!match) continue
 			this.pushBoundedCandidate(candidates, candidatePositions, { index, priority: match.priority }, candidateLimit)
 		}
@@ -253,7 +263,8 @@ ${renderList(ledger.pendingActions, "Proceeding with current phase")}`
 		const candidateLimit = maxLines * 20
 
 		for (let index = 0; index < lines.length; index++) {
-			if (errorPattern.test(lines[index])) {
+			const patternInput = this.getPatternInput(lines[index])
+			if (errorPattern.test(patternInput)) {
 				for (
 					let surrounding = Math.max(0, index - 2);
 					surrounding <= Math.min(lines.length - 1, index + 3);
@@ -266,9 +277,9 @@ ${renderList(ledger.pendingActions, "Proceeding with current phase")}`
 						candidateLimit,
 					)
 				}
-			} else if (stackPattern.test(lines[index])) {
+			} else if (stackPattern.test(patternInput)) {
 				this.pushBoundedCandidate(candidates, candidatePositions, { index, priority: 1 }, candidateLimit)
-			} else if (summaryPattern.test(lines[index])) {
+			} else if (summaryPattern.test(patternInput)) {
 				this.pushBoundedCandidate(candidates, candidatePositions, { index, priority: 2 }, candidateLimit)
 			} else if (lines[index].includes("SOURCE SAMPLE OMITTED")) {
 				this.pushBoundedCandidate(candidates, candidatePositions, { index, priority: 3 }, candidateLimit)
@@ -372,11 +383,25 @@ ${renderList(ledger.pendingActions, "Proceeding with current phase")}`
 	}
 
 	private normalizeLineBudget(value: number): number {
-		return Math.max(4, Math.floor(Number.isFinite(value) ? value : 200))
+		return Math.min(2_000, Math.max(4, Math.floor(Number.isFinite(value) ? value : 200)))
 	}
 
 	private normalizeSourceCharacterBudget(value: number): number {
-		return Math.max(4_096, Math.floor(Number.isFinite(value) ? value : 2_000_000))
+		return Math.min(8_000_000, Math.max(4_096, Math.floor(Number.isFinite(value) ? value : 2_000_000)))
+	}
+
+	private normalizeMaterializedLineBudget(value: number): number {
+		return Math.min(100_000, Math.max(1_000, Math.floor(Number.isFinite(value) ? value : 20_000)))
+	}
+
+	private normalizePatternCharacterBudget(value: number): number {
+		return Math.min(16_384, Math.max(256, Math.floor(Number.isFinite(value) ? value : 4_096)))
+	}
+
+	private getPatternInput(line: string): string {
+		return line.length <= this.config.maxPatternCharactersPerLine
+			? line
+			: line.slice(0, this.config.maxPatternCharactersPerLine)
 	}
 
 	private normalizeRatio(value: number | undefined, fallback: number): number {
@@ -394,13 +419,17 @@ ${renderList(ledger.pendingActions, "Proceeding with current phase")}`
 	 */
 	private createBoundedSource(value: string): BoundedSource {
 		const originalLines = this.countLines(value)
-		if (value.length <= this.config.maxSourceCharacters) {
+		if (value.length <= this.config.maxSourceCharacters && originalLines <= this.config.maxMaterializedLines) {
 			return { text: value, originalLines, wasSampled: false }
 		}
 
 		const windowCount = 8
 		const markerAllowance = (windowCount - 1) * 96
-		const payloadBudget = Math.max(1_024, this.config.maxSourceCharacters - markerAllowance)
+		const densitySafeCharacterBudget =
+			originalLines > this.config.maxMaterializedLines
+				? Math.min(this.config.maxSourceCharacters, this.config.maxMaterializedLines)
+				: this.config.maxSourceCharacters
+		const payloadBudget = Math.max(1_024, densitySafeCharacterBudget - markerAllowance)
 		const windowSize = Math.max(128, Math.floor(payloadBudget / windowCount))
 		const lastStart = Math.max(0, value.length - windowSize)
 		const chunks: string[] = []

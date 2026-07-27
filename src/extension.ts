@@ -842,6 +842,14 @@ export async function deactivate() {
 	} catch (error) {
 		Logger.warn("[Shutdown] Extension shutdown flush error:", error)
 	}
+	try {
+		const { shutdownBroccoliContextCompactionStores } = await import(
+			"./core/context/context-management/BroccoliContextCompactionStore"
+		)
+		await shutdownBroccoliContextCompactionStores()
+	} catch (error) {
+		Logger.warn("[Shutdown] BroccoliDB context shutdown error:", error)
+	}
 	// Dispose Non-VSCode-specific services
 	tearDown()
 

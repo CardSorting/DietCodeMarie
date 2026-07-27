@@ -24,6 +24,7 @@ const ALLOWED_PUBLIC_MEMBERS = new Set([
   'health',
   'enableDurableIntentTraces',
   'storage',
+  'compaction',
   'telemetry',
   'recovery',
   'audit',

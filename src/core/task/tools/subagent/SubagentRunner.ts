@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import * as path from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
 import type { ApiHandler, buildApiHandler } from "@core/api"
@@ -18,6 +19,7 @@ import { buildSubagentAuditContext, buildSubagentGateSignals } from "@shared/aud
 import type { ExecutionFunnelEvent } from "@shared/execution/executionFunnelEvent"
 import {
 	DietCodeAssistantToolUseBlock,
+	DietCodeContent,
 	DietCodeStorageMessage,
 	DietCodeTextContentBlock,
 	DietCodeUserContent,
@@ -29,13 +31,14 @@ import type { LaneExecutionMode } from "@shared/subagent/governedExecution"
 import type { CompactionEventRecord } from "@shared/subagent/transcript"
 import { DietCodeDefaultTool, DietCodeTool } from "@shared/tools"
 import { v4 as uuidv4 } from "uuid"
-import type { CompactionTier } from "@/core/context/context-management/ContextCompactionTypes"
+import type { CompactionTier, RecoverableContextReference } from "@/core/context/context-management/ContextCompactionTypes"
 import { ContextManager } from "@/core/context/context-management/ContextManager"
 import { checkContextWindowExceededError } from "@/core/context/context-management/context-error-handling"
 import { getCompactionTierFromTokens, getContextWindowInfo } from "@/core/context/context-management/context-window-utils"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { HostRegistryInfo } from "@/registry"
 import { DietCodeError, DietCodeErrorType } from "@/services/error"
+import { getBlockContextId, getMessageContextId } from "@/shared/messages/context-identifiers"
 import { ApiFormat } from "@/shared/proto/dietcode/models"
 import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "@/utils/cost"
 import {
@@ -61,7 +64,7 @@ import { resolveContinuationFromParentSignals } from "./CoordinatorExecutionAuth
 import { shouldEnableParallelToolCallingForLane } from "./LockNecessity"
 import { SubagentBuilder } from "./SubagentBuilder"
 import { SubagentEnvelopeBuilder } from "./SubagentEnvelopeBuilder"
-import { SubagentTranscriptRecorder } from "./SubagentTranscriptRecorder"
+import { type SubagentContextRecoveryRecord, SubagentTranscriptRecorder } from "./SubagentTranscriptRecorder"
 import { SwarmConsensusHandler } from "./SwarmConsensusHandler"
 
 const MAX_EMPTY_ASSISTANT_RETRIES = 3
@@ -338,6 +341,9 @@ export class SubagentRunner {
 	private lifecycleTaskId?: string
 
 	private readonly baseConfig: TaskConfig
+	// One manager spans the complete governed run, so bounded scan cursors and
+	// identity projections are amortized across turns and pre-stream retries.
+	private readonly contextManager: ContextManager
 	private totalConsecutiveIdenticalCalls = 0
 	private readonly MAX_CONSECUTIVE_IDENTICAL_CALLS = 3
 	private signaledFindings = new Set<string>()
@@ -367,6 +373,14 @@ export class SubagentRunner {
 		this.agent = agent
 		this.apiHandler = this.agent.getApiHandler()
 		this.allowedTools = this.agent.getAllowedTools()
+		const parentContextManager = baseConfig.services?.contextManager
+		this.contextManager =
+			parentContextManager instanceof ContextManager
+				? parentContextManager.createChildManager(
+						`subagent:${baseConfig.taskId}:${baseConfig.ulid}:${this.commandOwnerId}`,
+						"subagent",
+					)
+				: new ContextManager()
 	}
 
 	setRecursionDepth(depth: number): void {
@@ -791,12 +805,7 @@ export class SubagentRunner {
 						providerInfo.model.id,
 					)
 					if (compactionTier !== "normal") {
-						const contextManager = new ContextManager()
-						const optimization = this.optimizeConversationForContextWindow(
-							contextManager,
-							conversation,
-							compactionTier,
-						)
+						const optimization = await this.optimizeConversationForContextWindow(conversation, compactionTier)
 						let didCompact = optimization.didOptimize
 						if (compactionTier === "emergency" && (!didCompact || optimization.needToTruncate)) {
 							didCompact = await this.compactConversationForContextWindow(
@@ -1470,13 +1479,12 @@ export class SubagentRunner {
 		preTokenEstimate: number,
 		reason: string,
 	): Promise<boolean> {
-		const contextManager = new ContextManager()
-		const optimizationResult = this.optimizeConversationForContextWindow(contextManager, conversation)
+		const optimizationResult = await this.optimizeConversationForContextWindow(conversation)
 		if (optimizationResult.didOptimize && !optimizationResult.needToTruncate) {
 			return true
 		}
 
-		const deletedRange = contextManager.getNextTruncationRange(conversation, undefined, "quarter")
+		const deletedRange = this.contextManager.getNextTruncationRange(conversation, undefined, "quarter")
 		if (deletedRange[1] < deletedRange[0]) {
 			return optimizationResult.didOptimize
 		}
@@ -1502,7 +1510,7 @@ export class SubagentRunner {
 		await this.recordTranscript("compaction", compactionEvent as unknown as Record<string, unknown>, "summary")
 		this.envelopeBuilder?.recordCompaction(compactionEvent)
 
-		const truncated = contextManager
+		const truncated = this.contextManager
 			.getTruncatedMessages(conversation, deletedRange)
 			.map((message: DietCodeStorageMessage) => message as DietCodeStorageMessage)
 		if (truncated.length >= conversation.length) {
@@ -1513,24 +1521,32 @@ export class SubagentRunner {
 		return true
 	}
 
-	private optimizeConversationForContextWindow(
-		contextManager: ContextManager,
+	private async optimizeConversationForContextWindow(
 		conversation: DietCodeStorageMessage[],
 		tier: CompactionTier = "emergency",
-	): {
+	): Promise<{
 		didOptimize: boolean
 		needToTruncate: boolean
-	} {
+	}> {
 		const timestamp = Date.now()
-		const optimizationResult = contextManager.attemptFileReadOptimizationInMemory(
+		const recoverySource =
+			this.transcriptRecorder?.getContextRecoveryArtifactPath() ||
+			`${this.transcriptArtifactPath || "subagent_transcript"}.context`
+		const optimizationResult = await this.contextManager.attemptFileReadOptimizationInMemory(
 			conversation,
 			undefined,
 			timestamp,
 			tier,
-			this.transcriptArtifactPath || "subagent_transcript",
+			recoverySource,
 		)
 		if (!optimizationResult.anyContextUpdates) {
 			return { didOptimize: false, needToTruncate: true }
+		}
+		const artifactReferences = optimizationResult.references.filter(
+			(reference) => !reference.source.startsWith("broccolidb://"),
+		)
+		if (artifactReferences.length > 0) {
+			await this.persistSubagentContextRecoverySources(conversation, artifactReferences)
 		}
 
 		const optimizedConversation = optimizationResult.optimizedConversationHistory.map(
@@ -1538,6 +1554,58 @@ export class SubagentRunner {
 		)
 		conversation.splice(0, conversation.length, ...optimizedConversation)
 		return { didOptimize: true, needToTruncate: optimizationResult.needToTruncate }
+	}
+
+	private async persistSubagentContextRecoverySources(
+		conversation: DietCodeStorageMessage[],
+		references: RecoverableContextReference[],
+	): Promise<void> {
+		if (!this.transcriptRecorder) {
+			throw new Error("Recoverable subagent projection requires a governed transcript recovery store")
+		}
+
+		const messagesById = new Map(
+			conversation
+				.map((message) => [getMessageContextId(message), message] as const)
+				.filter((entry): entry is readonly [string, DietCodeStorageMessage] => !!entry[0]),
+		)
+		const records: SubagentContextRecoveryRecord[] = []
+
+		for (const reference of references) {
+			const message = messagesById.get(reference.messageId)
+			if (!message || !Array.isArray(message.content)) {
+				throw new Error(`Missing subagent recovery message ${reference.messageId}`)
+			}
+			const block = message.content.find((candidate) => getBlockContextId(candidate) === reference.blockId)
+			const text = block ? this.getContextRecoveryBlockText(block) : undefined
+			if (text === undefined) {
+				throw new Error(`Missing subagent recovery block ${reference.ref}`)
+			}
+			const sha256 = createHash("sha256").update(text).digest("hex")
+			if (sha256 !== reference.sha256) {
+				throw new Error(`Subagent recovery digest mismatch for ${reference.ref}`)
+			}
+			records.push({
+				ref: reference.ref,
+				messageId: reference.messageId,
+				blockId: reference.blockId,
+				sha256,
+				originalCharacters: text.length,
+				originalLines: reference.originalLines,
+				text,
+			})
+		}
+
+		await this.transcriptRecorder.persistContextRecoveryRecords(records)
+	}
+
+	private getContextRecoveryBlockText(block: DietCodeContent): string | undefined {
+		if (block.type === "text") return block.text
+		if (block.type !== "tool_result") return undefined
+		if (typeof block.content === "string") return block.content
+		if (!Array.isArray(block.content)) return undefined
+		const textBlock = block.content.find((candidate) => candidate.type === "text")
+		return textBlock?.type === "text" ? textBlock.text : undefined
 	}
 
 	private getCompactionTierBeforeNextRequest(
@@ -1563,7 +1631,14 @@ export class SubagentRunner {
 		modelId: string,
 	) {
 		for (let attempt = 1; attempt <= MAX_INITIAL_STREAM_ATTEMPTS; attempt += 1) {
-			const stream = api.createMessage(systemPrompt, conversation, nativeTools)
+			// Always build a sanitized request projection. Raw tool/user text can
+			// mimic reserved control markers; trusted projections are reapplied
+			// from this runner's identity-indexed manager after source escaping.
+			const requestConversation = this.contextManager
+				.getTruncatedMessages(conversation, undefined)
+				.map((message) => message as DietCodeStorageMessage)
+			const requestSystemPrompt = this.contextManager.getSystemPromptForProjection(systemPrompt, requestConversation)
+			const stream = api.createMessage(requestSystemPrompt, requestConversation, nativeTools)
 			const iterator = stream[Symbol.asyncIterator]()
 			let emittedChunk = false
 

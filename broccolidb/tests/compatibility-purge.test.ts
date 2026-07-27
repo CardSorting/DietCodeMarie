@@ -56,6 +56,7 @@ async function runTest() {
     'health',
     'enableDurableIntentTraces',
     'storage',
+    'compaction',
     'telemetry',
     'recovery',
     'audit',

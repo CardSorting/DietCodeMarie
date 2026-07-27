@@ -171,11 +171,17 @@ export class CleanupService {
   }
 
   private async _reapUnreferencedCASBlobs(): Promise<number> {
-    const knowledgeRows = await this.ctx.db.selectWhere('knowledge', [
-      { column: 'content', value: 'CAS:%', operator: 'LIKE' },
+    const [knowledgeRows, compactionSources] = await Promise.all([
+      this.ctx.db.selectWhere('knowledge', [
+        { column: 'content', value: 'CAS:%', operator: 'LIKE' },
+      ]),
+      this.ctx.db.selectWhere('context_compaction_sources', []),
     ]);
 
     const referencedHashes = new Set(knowledgeRows.map((r) => (r.content as string).substring(4)));
+    for (const source of compactionSources) {
+      referencedHashes.add(source.blobHash);
+    }
     return this.ctx.storage.pruneUnreferencedBlobs(referencedHashes);
   }
 

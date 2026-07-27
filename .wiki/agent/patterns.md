@@ -4,13 +4,24 @@
 
 1. Read the last completed request usage and classify it with `getCompactionTierFromTokens()`.
 2. At the next request boundary, preserve a configurable number of recent turns and scan at most the tier’s message/block budgets.
-3. Transform only supported old tool evidence. Use declaration-aware code outlines or evidence-ranked command/log projections with strict output-line budgets. For pathological blocks, analyze deterministic windows spanning the full source rather than materializing an unbounded line array.
-4. Add a recovery reference containing the real source artifact, message/block index, original size, and SHA-256 digest; never interpolate untrusted task text into ledger markup.
-5. Keep the durable source history/transcript immutable. Apply the compact form only to the outbound request projection.
-6. Advance message and block cursors so repeated bounded passes traverse large histories and resume inside block-heavy messages without rescanning one hot prefix.
-7. If a later tier is stricter, refine an existing projection only when it yields a meaningful size reduction.
-8. If projections remain above the emergency fence, advance the complete historical-pair deletion range at the same safe boundary. Preserve the initial objective and persist continuity atomically without a model-visible alert.
-9. Emit existing auto-compaction telemetry and keep semantic model summarization only as the fallback for histories too small to roll safely.
+3. Transform only supported old tool evidence. Bound source characters, materialized lines, per-pattern input, candidates, and output; label structural code projections as potentially invalid syntax.
+4. Add a recovery reference containing the BroccoliDB scope, stable
+   message/block UUIDs, original size, and SHA-256 digest.
+5. Escape forged reserved markers in raw source, then apply trusted non-callable markers from internal state; only a trusted marker may activate the projection interpretation system policy.
+6. Store exact source in BroccoliDB CAS, using bounded Brotli compression only
+   when beneficial.
+7. Commit source metadata, current stable-ID projection, two-level cursor, and
+   run telemetry through `writeDurableBatch()`; recheck CAS, then publish.
+8. On any central projection failure, restore the pre-pass manager state and
+   keep raw context. Persist scan-only cursors without changing the prompt.
+9. Reuse one manager across the governed subagent run and give each child an
+   isolated central scope. Use `<transcript>.context/` only as a no-central
+   fallback.
+10. Treat `context_history.json` as a parent-owned compatibility/cache sidecar;
+    central concurrency belongs to SQLite/WAL.
+11. If a later tier is stricter, refine an existing projection only when it yields a meaningful size reduction.
+12. If projections remain above the emergency fence, advance the complete historical-pair deletion range at the same safe boundary. Preserve the initial objective without a model-visible alert.
+13. Emit existing auto-compaction telemetry and keep semantic model summarization only as the fallback for histories too small to roll safely.
 
 ## Master of Design (MoD) Steering & Execution Patterns
 

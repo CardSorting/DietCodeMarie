@@ -34,7 +34,8 @@ for (const rel of docFiles) {
   while ((m = linkPattern.exec(content))) {
     const target = m[1]!;
     if (target.startsWith('http') || target.startsWith('#')) continue;
-    const resolved = path.resolve(path.dirname(full), target);
+    const [pathOnly] = target.split('#');
+    const resolved = path.resolve(path.dirname(full), pathOnly);
     if (!fs.existsSync(resolved)) {
       broken.push(`broccolidb/${rel} → ${target}`);
     }

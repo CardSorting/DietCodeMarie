@@ -14,6 +14,8 @@ import { HostProvider } from "@/hosts/host-provider"
 import { ExtensionRegistryInfo } from "@/registry"
 import { telemetryService } from "@/services/telemetry"
 import { McpMarketplaceCatalog } from "@/shared/mcp"
+import type { DietCodeStorageMessage } from "@/shared/messages/content"
+import { ensureContextIdentifiers } from "@/shared/messages/context-identifiers"
 import { Logger } from "@/shared/services/Logger"
 import { syncWorker } from "@/shared/services/worker/sync"
 import { writeCoalescer } from "./WriteCoalescer"
@@ -354,11 +356,18 @@ export async function getMcpSettingsFilePath(settingsDirectoryPath: string): Pro
 	return mcpSettingsFilePath
 }
 
-export async function getSavedApiConversationHistory(taskId: string): Promise<Anthropic.MessageParam[]> {
+export async function getSavedApiConversationHistory(taskId: string): Promise<DietCodeStorageMessage[]> {
 	const filePath = path.join(await ensureTaskDirectoryExists(taskId), GlobalFileNames.apiConversationHistory)
 	const fileExists = await fileExistsAtPath(filePath)
 	if (fileExists) {
-		return JSON.parse(await fs.readFile(filePath, "utf8"))
+		const history = JSON.parse(await fs.readFile(filePath, "utf8")) as DietCodeStorageMessage[]
+		if (ensureContextIdentifiers(history)) {
+			// One-time migration for histories created before stable context IDs.
+			// Persist immediately so recovery references never depend on a later
+			// coalesced conversation write happening to flush the identifiers.
+			await atomicWriteFile(filePath, JSON.stringify(history))
+		}
+		return history
 	}
 	return []
 }
@@ -370,6 +379,7 @@ export async function saveApiConversationHistory(
 ) {
 	try {
 		if (apiConversationHistory.length > 0) {
+			ensureContextIdentifiers(apiConversationHistory)
 			const fileName = GlobalFileNames.apiConversationHistory
 			const filePath = path.join(await ensureTaskDirectoryExists(taskId), fileName)
 			const getPayload = () => JSON.stringify(apiConversationHistory)

@@ -22,17 +22,30 @@ export interface TranscriptRecorderContext {
 	executionId: string
 }
 
+export interface SubagentContextRecoveryRecord {
+	ref: string
+	messageId: string
+	blockId: string
+	sha256: string
+	originalCharacters: number
+	originalLines: number
+	text: string
+}
+
 export class SubagentTranscriptRecorder {
 	private sequence = 0
 	private byteSize = 0
 	private eventCount = 0
 	private readonly events: SubagentTranscriptEvent[] = []
 	private filePath?: string
+	private contextRecoveryDirectoryPath?: string
+	private contextRecoveryArtifactPath?: string
 	private persistedLines = 0
 	private queuedThrough = 0
 	private flushTimer?: ReturnType<typeof setTimeout>
 	private writeTail: Promise<void> = Promise.resolve()
 	private recoveredWriteTail: Promise<void> = Promise.resolve()
+	private contextRecoveryWriteTail: Promise<void> = Promise.resolve()
 
 	constructor(private readonly context: TranscriptRecorderContext) {}
 
@@ -40,8 +53,59 @@ export class SubagentTranscriptRecorder {
 		const taskDir = await ensureTaskDirectoryExists(this.context.taskId)
 		const relativePath = buildTranscriptArtifactPath(this.context.swarmId, this.context.agentId)
 		this.filePath = path.join(taskDir, relativePath)
+		this.contextRecoveryArtifactPath = `${relativePath}.context`
+		this.contextRecoveryDirectoryPath = path.join(taskDir, this.contextRecoveryArtifactPath)
 		await fs.mkdir(path.dirname(this.filePath), { recursive: true })
+		await fs.mkdir(this.contextRecoveryDirectoryPath, { recursive: true })
 		return relativePath
+	}
+
+	getContextRecoveryArtifactPath(): string | undefined {
+		return this.contextRecoveryArtifactPath
+	}
+
+	/**
+	 * Stores exact compactable source blocks outside the bounded transcript.
+	 * One immutable file per message/block identity avoids whole-ledger rewrites
+	 * and makes a crash before rename a safe missing record, never partial truth.
+	 */
+	async persistContextRecoveryRecords(records: SubagentContextRecoveryRecord[]): Promise<void> {
+		const recoveryDirectory = this.contextRecoveryDirectoryPath
+		if (!recoveryDirectory) {
+			throw new Error("Transcript recorder not initialized")
+		}
+
+		const write = this.contextRecoveryWriteTail.then(() =>
+			this.persistContextRecoveryRecordsSerially(recoveryDirectory, records),
+		)
+		this.contextRecoveryWriteTail = write.then(
+			() => undefined,
+			() => undefined,
+		)
+		await write
+	}
+
+	private async persistContextRecoveryRecordsSerially(
+		recoveryDirectory: string,
+		records: SubagentContextRecoveryRecord[],
+	): Promise<void> {
+		for (const record of records) {
+			const fileName = `${record.messageId}_${record.blockId}.json`
+			const finalPath = path.join(recoveryDirectory, fileName)
+			try {
+				const existing = JSON.parse(await fs.readFile(finalPath, "utf8")) as SubagentContextRecoveryRecord
+				if (existing.ref !== record.ref || existing.sha256 !== record.sha256 || existing.text !== record.text) {
+					throw new Error(`Context recovery identity collision for ${record.ref}`)
+				}
+				continue
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+			}
+
+			const temporaryPath = `${finalPath}.${this.context.executionId}.tmp`
+			await fs.writeFile(temporaryPath, JSON.stringify(record), "utf8")
+			await fs.rename(temporaryPath, finalPath)
+		}
 	}
 
 	getMeta(relativePath: string): SubagentTranscriptMeta {

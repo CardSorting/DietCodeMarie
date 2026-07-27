@@ -50,6 +50,28 @@ describe("MessageStateHandler Mutex Protection", () => {
 		handler.getApiConversationHistory().should.deepEqual(testHistory)
 	})
 
+	it("should regenerate duplicate message and block context identities", async () => {
+		const handler = createTestHandler()
+		const original = {
+			role: "user" as const,
+			content: [{ type: "text" as const, text: "test message" }],
+		}
+		handler.setApiConversationHistory([original])
+		const duplicate = JSON.parse(JSON.stringify(original)) as typeof original
+
+		await handler.addToApiConversationHistory(duplicate)
+		const history = handler.getApiConversationHistory()
+		const firstBlock = Array.isArray(history[0].content) ? history[0].content[0] : undefined
+		const secondBlock = Array.isArray(history[1].content) ? history[1].content[0] : undefined
+
+		should.exist(history[0].contextId)
+		should.exist(history[1].contextId)
+		history[0].contextId?.should.not.equal(history[1].contextId)
+		should.exist(firstBlock?.contextId)
+		should.exist(secondBlock?.contextId)
+		firstBlock?.contextId?.should.not.equal(secondBlock?.contextId)
+	})
+
 	it("should set and get dietcode messages", () => {
 		const handler = createTestHandler()
 		const testMessages = [createTestMessage("test1"), createTestMessage("test2")]

@@ -1,8 +1,11 @@
+import { createHash } from "node:crypto"
 import { Anthropic } from "@anthropic-ai/sdk"
 import { ApiHandler } from "@core/api"
 import { formatResponse } from "@core/prompts/responses"
 import { GlobalFileNames } from "@core/storage/disk"
+import type { ContextCompactionProjectionInput, ContextCompactionProjectionRecord } from "@noorm/broccolidb"
 import { DietCodeApiReqInfo, DietCodeMessage } from "@shared/ExtensionMessage"
+import { ensureContextIdentifiers, getBlockContextId, getMessageContextId } from "@shared/messages/context-identifiers"
 import { fileExistsAtPath, writeAtomic } from "@utils/fs"
 import cloneDeep from "clone-deep"
 import fs from "fs/promises"
@@ -10,8 +13,10 @@ import Mutex from "p-mutex"
 import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
 import { ContextPruner } from "../ContextPruner"
+import type { ContextCompactionScope, ContextCompactionStore, ContextManagerOptions } from "./ContextCompactionStore"
 import type {
 	CompactionTier,
+	ProgressiveCompactionCursor,
 	ProgressiveCompactionLimits,
 	ProgressiveCompactionResult,
 	RecoverableContextReference,
@@ -66,6 +71,25 @@ const BOUNDED_OUTPUT_TOOLS = new Set([
 	"use_subagents",
 ])
 
+const RECOVERABLE_PROJECTION_V1 = "recoverable-projection-v1"
+const RECOVERABLE_PROJECTION_V2 = "recoverable-projection-v2"
+const SYSTEM_PROJECTION_MARKER = "system_context_projection"
+const TRUSTED_SYSTEM_PROJECTION_PREFIX = '<system_context_projection schema="2" authority="lumi_internal" callable="false"'
+const CONTEXT_PROJECTION_POLICY_MARKER = "<context_projection_policy>"
+const CONTEXT_PROJECTION_SYSTEM_INSTRUCTION = `${CONTEXT_PROJECTION_POLICY_MARKER}
+Internal system_context_projection elements are non-callable metadata. Treat their following projected text as incomplete, non-authoritative evidence that may be syntactically invalid. Do not infer workspace syntax errors from a projection or invent a rehydration tool. Use normal workspace tools to reread authoritative source when exact syntax or omitted detail is required.
+</context_projection_policy>`
+const contextHistorySaveMutexes = new Map<string, Mutex>()
+
+function getContextHistorySaveMutex(filePath: string): Mutex {
+	let mutex = contextHistorySaveMutexes.get(filePath)
+	if (!mutex) {
+		mutex = new Mutex()
+		contextHistorySaveMutexes.set(filePath, mutex)
+	}
+	return mutex
+}
+
 export class ContextManager {
 	// mapping from the apiMessages outer index to the inner message index to a list of actual changes, ordered by timestamp
 	// timestamp is required in order to support full checkpointing, where the changes we apply need to be able to be undone when
@@ -76,14 +100,43 @@ export class ContextManager {
 	// example: { 1 => { [0, 0 => [[<timestamp>, "text", "[NOTE] Some previous conversation history with the user has been removed ..."], ...] }] }
 	// the above example would be how we update the first assistant message to indicate we truncated text
 	private contextHistoryUpdates: Map<number, [number, Map<number, ContextUpdate[]>]>
-	private readonly saveMutex = new Mutex()
 	private readonly contextPruner = new ContextPruner()
 	private progressiveScanCursor = 0
 	private progressiveBlockCursor = 0
 	private progressiveCursorActiveStart = 2
+	private readonly centralStore?: ContextCompactionStore
+	private readonly scope?: ContextCompactionScope
+	private readonly centralProjectionUpdates = new Map<string, ContextUpdate[]>()
 
-	constructor() {
+	constructor(options: ContextManagerOptions = {}) {
 		this.contextHistoryUpdates = new Map()
+		this.centralStore = options.centralStore
+		this.scope = options.scope
+	}
+
+	public createScopedManager(scope: ContextCompactionScope): ContextManager {
+		return new ContextManager({ centralStore: this.centralStore, scope })
+	}
+
+	public createChildManager(id: string, kind: ContextCompactionScope["kind"]): ContextManager {
+		if (!this.scope) return new ContextManager()
+		return this.createScopedManager({ id, kind, workspaceId: this.scope.workspaceId })
+	}
+
+	public async hydrateRecoverableReference(reference: RecoverableContextReference): Promise<string> {
+		if (!this.centralStore || !this.scope || !reference.source.startsWith("broccolidb://")) {
+			throw new Error(`No central recovery provider is available for ${reference.ref}`)
+		}
+		const hydrated = await this.centralStore.hydrate({
+			scopeId: this.scope.id,
+			messageId: reference.messageId,
+			blockId: reference.blockId,
+			sourceSha256: reference.sha256,
+		})
+		if (createHash("sha256").update(hydrated.text).digest("hex") !== reference.sha256) {
+			throw new Error(`Central recovery digest mismatch for ${reference.ref}`)
+		}
+		return hydrated.text
 	}
 
 	/**
@@ -140,6 +193,48 @@ export class ContextManager {
 	 */
 	async initializeContextHistory(taskDirectory: string) {
 		this.contextHistoryUpdates = await this.getSavedContextHistory(taskDirectory)
+		await this.loadCentralContextHistory()
+	}
+
+	private async loadCentralContextHistory(): Promise<void> {
+		if (!this.centralStore || !this.scope) return
+		try {
+			const loaded = await this.centralStore.load({ scopeId: this.scope.id })
+			this.centralProjectionUpdates.clear()
+			for (const projection of loaded.projections) {
+				this.addCentralProjectionUpdate(projection)
+			}
+			if (loaded.cursor) {
+				this.progressiveScanCursor = loaded.cursor.messageOffset
+				this.progressiveBlockCursor = loaded.cursor.blockOffset
+				this.progressiveCursorActiveStart = loaded.cursor.activeStart
+			}
+		} catch (error) {
+			// Central recovery is an optimization at startup. The durable raw
+			// transcript and the sidecar remain authoritative fallback inputs.
+			Logger.debug("[ContextManager] Central compaction state unavailable during initialization:", error)
+		}
+	}
+
+	private addCentralProjectionUpdate(projection: ContextCompactionProjectionRecord): void {
+		const identityKey = this.getProjectionIdentityKey(projection.messageId, projection.blockId)
+		this.centralProjectionUpdates.set(identityKey, [
+			[
+				projection.createdAt,
+				"text",
+				[projection.projectionText],
+				[
+					[
+						RECOVERABLE_PROJECTION_V2,
+						projection.ref,
+						projection.sourceSha256,
+						projection.messageId,
+						projection.blockId,
+						projection.sourceLocator,
+					],
+				],
+			],
+		])
 	}
 
 	/**
@@ -169,17 +264,56 @@ export class ContextManager {
 	/**
 	 * save the context history updates to disk
 	 */
-	private async saveContextHistory(taskDirectory: string) {
+	private async saveContextHistory(taskDirectory: string, mode: "merge" | "replace" = "merge") {
 		try {
-			await this.saveMutex.withLock(async () => {
+			const contextHistoryPath = path.join(taskDirectory, GlobalFileNames.contextHistory)
+			await getContextHistorySaveMutex(contextHistoryPath).withLock(async () => {
+				// Atomic replacement prevents torn JSON. Re-reading and merging
+				// under a process-wide, path-keyed mutex also prevents two manager
+				// instances in the extension host from losing one another's updates.
+				// Cross-process writers are deliberately unsupported; only the
+				// parent extension-host manager persists this sidecar.
+				if (mode === "merge") {
+					const persisted = await this.getSavedContextHistory(taskDirectory)
+					this.contextHistoryUpdates = this.mergeContextHistories(persisted, this.contextHistoryUpdates)
+				}
 				const serializedUpdates: SerializedContextHistory = Array.from(this.contextHistoryUpdates.entries()).map(
 					([messageIndex, [numberValue, innerMap]]) => [messageIndex, [numberValue, Array.from(innerMap.entries())]],
 				)
-				await writeAtomic(path.join(taskDirectory, GlobalFileNames.contextHistory), JSON.stringify(serializedUpdates))
+				await writeAtomic(contextHistoryPath, JSON.stringify(serializedUpdates))
 			})
 		} catch (error) {
 			Logger.error("Failed to save context history:", error)
 		}
+	}
+
+	private mergeContextHistories(
+		persisted: Map<number, [number, Map<number, ContextUpdate[]>]>,
+		pending: Map<number, [number, Map<number, ContextUpdate[]>]>,
+	): Map<number, [number, Map<number, ContextUpdate[]>]> {
+		for (const [messageIndex, [pendingType, pendingBlocks]] of pending) {
+			const persistedEntry = persisted.get(messageIndex)
+			if (!persistedEntry) {
+				persisted.set(messageIndex, [pendingType, new Map(pendingBlocks)])
+				continue
+			}
+
+			persistedEntry[0] = pendingType
+			for (const [blockIndex, pendingUpdates] of pendingBlocks) {
+				const existingUpdates = persistedEntry[1].get(blockIndex) ?? []
+				const seen = new Set<string>()
+				const merged = [...existingUpdates, ...pendingUpdates]
+					.filter((update) => {
+						const serialized = JSON.stringify(update)
+						if (seen.has(serialized)) return false
+						seen.add(serialized)
+						return true
+					})
+					.sort((left, right) => left[0] - right[0])
+				persistedEntry[1].set(blockIndex, merged)
+			}
+		}
+		return persisted
 	}
 
 	/**
@@ -289,7 +423,7 @@ export class ContextManager {
 			const tier = getCompactionTierFromTokens(totalTokens, api)
 			if (tier !== "normal") {
 				const startIndex = conversationHistoryDeletedRange ? conversationHistoryDeletedRange[1] + 1 : 2
-				const result = this.applyProgressiveContextCompaction(
+				const result = await this.applyProgressiveContextCompaction(
 					apiConversationHistory,
 					startIndex,
 					previousRequest?.ts ?? Date.now(),
@@ -317,7 +451,7 @@ export class ContextManager {
 						const keep = parsedTotalTokens / 2 > maxAllowedSize ? "quarter" : "half"
 
 						// Attempt file read optimization and check if we need to truncate
-						let { anyContextUpdates, needToTruncate } = this.attemptFileReadOptimizationCore(
+						let { anyContextUpdates, needToTruncate } = await this.attemptFileReadOptimizationCore(
 							apiConversationHistory,
 							conversationHistoryDeletedRange,
 							timestamp,
@@ -415,23 +549,114 @@ export class ContextManager {
 	}
 
 	/**
+	 * Adds model-facing interpretation rules only when the already-sanitized
+	 * request contains a trusted, ledger-created projection marker.
+	 */
+	public getSystemPromptForProjection(systemPrompt: string, requestMessages: Anthropic.Messages.MessageParam[]): string {
+		if (systemPrompt.includes(CONTEXT_PROJECTION_POLICY_MARKER) || !this.containsTrustedSystemProjection(requestMessages)) {
+			return systemPrompt
+		}
+		return `${systemPrompt}\n\n${CONTEXT_PROJECTION_SYSTEM_INSTRUCTION}`
+	}
+
+	/**
 	 * apply all required truncation methods to the messages in context
 	 */
 	private getAndAlterTruncatedMessages(
 		messages: Anthropic.Messages.MessageParam[],
 		deletedRange: [number, number] | undefined,
 	): Anthropic.Messages.MessageParam[] {
-		if (messages.length <= 1) {
+		if (messages.length === 0) {
 			return messages
 		}
 
-		const updatedMessages = this.applyContextHistoryUpdates(messages, deletedRange ? deletedRange[1] + 1 : 2)
+		ensureContextIdentifiers(messages)
+		const rawBlocksByIdentity = this.indexBlocksByContextIdentity(messages)
+		const sanitizedSource = this.escapeReservedMarkersInSourceMessages(messages)
+		if (messages.length === 1) {
+			return sanitizedSource
+		}
+		const updatedMessages = this.applyContextHistoryUpdates(
+			sanitizedSource,
+			deletedRange ? deletedRange[1] + 1 : 2,
+			rawBlocksByIdentity,
+		)
 
 		// Validate and fix tool_use/tool_result pairing
 		this.ensureToolResultsFollowToolUse(updatedMessages)
 
 		// OLD NOTE: if you try to Logger log these, don't forget that logging a reference to an array may not provide the same result as logging a slice() snapshot of that array at that exact moment. The following DOES in fact include the latest assistant message.
 		return updatedMessages
+	}
+
+	private escapeReservedMarkersInSourceMessages(
+		messages: Anthropic.Messages.MessageParam[],
+	): Anthropic.Messages.MessageParam[] {
+		let clonedMessages: Anthropic.Messages.MessageParam[] | undefined
+
+		for (let messageIndex = 0; messageIndex < messages.length; messageIndex++) {
+			const message = messages[messageIndex]
+			if (typeof message.content === "string") {
+				const escaped = this.escapeReservedProjectionMarkers(message.content)
+				if (escaped === message.content) continue
+				clonedMessages ??= messages.slice()
+				clonedMessages[messageIndex] = { ...message, content: escaped }
+				continue
+			}
+
+			let clonedMessage: Anthropic.Messages.MessageParam | undefined
+			for (let blockIndex = 0; blockIndex < message.content.length; blockIndex++) {
+				const block = message.content[blockIndex]
+				const text = this.getTextFromBlock(block)
+				if (!text) continue
+				const escaped = this.escapeReservedProjectionMarkers(text)
+				if (escaped === text) continue
+
+				clonedMessages ??= messages.slice()
+				clonedMessage ??= cloneDeep(message)
+				const clonedBlock = Array.isArray(clonedMessage.content) ? clonedMessage.content[blockIndex] : undefined
+				if (clonedBlock) this.setTextInBlock(clonedBlock, escaped)
+			}
+
+			if (clonedMessage && clonedMessages) clonedMessages[messageIndex] = clonedMessage
+		}
+
+		return clonedMessages ?? messages
+	}
+
+	private containsTrustedSystemProjection(messages: Anthropic.Messages.MessageParam[]): boolean {
+		const trustedUpdates = this.getLatestIdentityProjectionUpdates()
+		for (const message of messages) {
+			if (!Array.isArray(message.content)) continue
+			const messageId = getMessageContextId(message)
+			if (!messageId) continue
+			for (const block of message.content) {
+				const blockId = getBlockContextId(block)
+				if (!blockId) continue
+				const trustedUpdate = trustedUpdates.get(this.getProjectionIdentityKey(messageId, blockId))
+				const text = this.getTextFromBlock(block)
+				if (trustedUpdate && text === trustedUpdate[2][0] && text.startsWith(TRUSTED_SYSTEM_PROJECTION_PREFIX)) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
+	private indexBlocksByContextIdentity(
+		messages: Anthropic.Messages.MessageParam[],
+	): Map<string, Anthropic.Messages.ContentBlockParam> {
+		const indexed = new Map<string, Anthropic.Messages.ContentBlockParam>()
+		for (const message of messages) {
+			if (!Array.isArray(message.content)) continue
+			const messageId = getMessageContextId(message)
+			if (!messageId) continue
+			for (const block of message.content) {
+				const blockId = getBlockContextId(block)
+				if (blockId) indexed.set(this.getProjectionIdentityKey(messageId, blockId), block)
+			}
+		}
+		return indexed
 	}
 
 	/**
@@ -548,6 +773,7 @@ export class ContextManager {
 	private applyContextHistoryUpdates(
 		messages: Anthropic.Messages.MessageParam[],
 		startFromIndex: number,
+		rawBlocksByIdentity: Map<string, Anthropic.Messages.ContentBlockParam>,
 	): Anthropic.Messages.MessageParam[] {
 		// runtime is linear in length of user messages, if expecting a limited number of alterations, could be more optimal to loop over alterations
 
@@ -577,39 +803,113 @@ export class ContextManager {
 				.fill(0)
 				.map((_, i) => i + startFromIndex),
 		]
+		const identityUpdates = this.getLatestIdentityProjectionUpdates()
 
 		for (let arrayIndex = 0; arrayIndex < messagesToUpdate.length; arrayIndex++) {
 			const messageIndex = originalIndices[arrayIndex]
-
 			const innerTuple = this.contextHistoryUpdates.get(messageIndex)
-			if (!innerTuple) {
-				continue
-			}
+			const message = messagesToUpdate[arrayIndex]
+			if (!Array.isArray(message.content)) continue
+			const messageId = getMessageContextId(message)
+			let clonedMessage: Anthropic.Messages.MessageParam | undefined
 
-			// because we are altering this, we need a deep copy
-			messagesToUpdate[arrayIndex] = cloneDeep(messagesToUpdate[arrayIndex])
+			for (let blockIndex = 0; blockIndex < message.content.length; blockIndex++) {
+				const sourceBlock = message.content[blockIndex]
+				const blockId = getBlockContextId(sourceBlock)
+				const identityKey = messageId && blockId ? this.getProjectionIdentityKey(messageId, blockId) : undefined
+				const identityCandidate = identityKey ? identityUpdates.get(identityKey) : undefined
+				const identityChange =
+					identityCandidate &&
+					identityKey &&
+					this.canApplyIdentityUpdate(identityCandidate, rawBlocksByIdentity.get(identityKey))
+						? identityCandidate
+						: undefined
+				const positionalChange = innerTuple?.[1].get(blockIndex)?.at(-1)
+				const safePositionalChange =
+					positionalChange && this.canApplyPositionalUpdate(positionalChange, sourceBlock)
+						? positionalChange
+						: undefined
+				const latestChange =
+					identityChange && safePositionalChange
+						? identityChange[0] >= safePositionalChange[0]
+							? identityChange
+							: safePositionalChange
+						: (identityChange ?? safePositionalChange)
 
-			// Extract the map from the tuple
-			const innerMap = innerTuple[1]
-			for (const [blockIndex, changes] of innerMap) {
-				// apply the latest change among n changes - [timestamp, updateType, update]
-				const latestChange = changes[changes.length - 1]
-
-				if (latestChange[1] === "text") {
-					// only altering text for now
-					const message = messagesToUpdate[arrayIndex]
-
-					if (Array.isArray(message.content)) {
-						const block = message.content[blockIndex]
-						if (block) {
-							this.setTextInBlock(block, latestChange[2][0])
-						}
-					}
+				if (latestChange?.[1] !== "text") continue
+				clonedMessage ??= cloneDeep(message)
+				const targetBlock = Array.isArray(clonedMessage.content) ? clonedMessage.content[blockIndex] : undefined
+				if (targetBlock) {
+					this.setTextInBlock(targetBlock, latestChange[2][0])
 				}
 			}
+
+			if (clonedMessage) messagesToUpdate[arrayIndex] = clonedMessage
 		}
 
 		return messagesToUpdate
+	}
+
+	private getLatestIdentityProjectionUpdates(): Map<string, ContextUpdate> {
+		const identityUpdates = new Map<string, ContextUpdate>()
+		for (const [key, updates] of this.getIdentityProjectionUpdateArrays()) {
+			const latestUpdate = this.getLatestProjectionUpdateForIdentity(updates, key)
+			if (latestUpdate) identityUpdates.set(key, latestUpdate)
+		}
+		return identityUpdates
+	}
+
+	private getLatestProjectionUpdateForIdentity(updates: ContextUpdate[], identityKey: string): ContextUpdate | undefined {
+		for (let index = updates.length - 1; index >= 0; index--) {
+			const update = updates[index]
+			if (this.getProjectionIdentityFromUpdate(update) === identityKey) return update
+		}
+		return undefined
+	}
+
+	private getProjectionIdentityFromUpdate(update: ContextUpdate): string | undefined {
+		const metadata = update[3]?.[0]
+		if (metadata?.[0] !== RECOVERABLE_PROJECTION_V2 || !metadata[3] || !metadata[4]) return undefined
+		return this.getProjectionIdentityKey(metadata[3], metadata[4])
+	}
+
+	private getProjectionIdentityKey(messageId: string, blockId: string): string {
+		return `${messageId}\0${blockId}`
+	}
+
+	private canApplyPositionalUpdate(update: ContextUpdate, sourceBlock: Anthropic.Messages.ContentBlockParam): boolean {
+		const metadata = update[3]?.[0]
+		if (metadata?.[0] === RECOVERABLE_PROJECTION_V2) {
+			// V2 updates are applied exclusively through immutable identity.
+			return false
+		}
+		if (metadata?.[0] !== RECOVERABLE_PROJECTION_V1) return true
+
+		// Legacy positional projections are accepted only if their digest still
+		// matches the block at that coordinate. This turns index rot into a safe
+		// miss instead of projecting the wrong source evidence.
+		const sourceText = this.getTextFromBlock(sourceBlock)
+		const expectedSha256 = metadata[2]
+		return (
+			typeof sourceText === "string" &&
+			typeof expectedSha256 === "string" &&
+			createHash("sha256").update(sourceText).digest("hex") === expectedSha256
+		)
+	}
+
+	private canApplyIdentityUpdate(
+		update: ContextUpdate,
+		sourceBlock: Anthropic.Messages.ContentBlockParam | undefined,
+	): boolean {
+		if (!sourceBlock) return false
+		const sourceText = this.getTextFromBlock(sourceBlock)
+		const expectedSha256 = update[3]?.[0]?.[2]
+		if (typeof sourceText !== "string" || typeof expectedSha256 !== "string") return false
+
+		// An in-memory subagent conversation may already contain this manager's
+		// exact projected replacement. Otherwise the stable identity must still
+		// resolve to source bytes matching the recorded digest.
+		return sourceText === update[2][0] || createHash("sha256").update(sourceText).digest("hex") === expectedSha256
 	}
 
 	/**
@@ -619,7 +919,7 @@ export class ContextManager {
 		this.truncateContextHistoryAtTimestamp(this.contextHistoryUpdates, timestamp)
 
 		// save the modified context history to disk
-		await this.saveContextHistory(taskDirectory)
+		await this.saveContextHistory(taskDirectory, "replace")
 	}
 
 	/**
@@ -689,17 +989,19 @@ export class ContextManager {
 	/**
 	 * Private helper that attempts file read optimization and checks threshold.
 	 */
-	private attemptFileReadOptimizationCore(
+	private async attemptFileReadOptimizationCore(
 		apiConversationHistory: Anthropic.Messages.MessageParam[],
 		conversationHistoryDeletedRange: [number, number] | undefined,
 		timestamp: number,
 		tier: CompactionTier = "emergency",
 		recoverySource = GlobalFileNames.apiConversationHistory,
-	): {
+		enableLegacyDuplicateOptimization = true,
+	): Promise<{
 		anyContextUpdates: boolean
 		needToTruncate: boolean
 		percentSaved: number
-	} {
+		references: RecoverableContextReference[]
+	}> {
 		const startIndex = conversationHistoryDeletedRange ? conversationHistoryDeletedRange[1] + 1 : 2
 		const limits = this.getProgressiveCompactionLimits(tier)
 		// The legacy duplicate-read optimizer predates bounded progressive
@@ -707,12 +1009,10 @@ export class ContextManager {
 		// a single request boundary never performs an unbounded history scan.
 		const duplicateScanStart = Math.max(startIndex, apiConversationHistory.length - limits.maxMessagesPerPass)
 
-		const [fileReadUpdates, uniqueFileReadIndices] = this.applyContextOptimizations(
-			apiConversationHistory,
-			duplicateScanStart,
-			timestamp,
-		)
-		const progressiveResult = this.applyProgressiveContextCompaction(
+		const [fileReadUpdates, uniqueFileReadIndices] = enableLegacyDuplicateOptimization
+			? this.applyContextOptimizations(apiConversationHistory, duplicateScanStart, timestamp)
+			: [false, new Set<number>()]
+		const progressiveResult = await this.applyProgressiveContextCompaction(
 			apiConversationHistory,
 			startIndex,
 			timestamp,
@@ -725,7 +1025,12 @@ export class ContextManager {
 		const anyContextUpdates = fileReadUpdates || progressiveResult.compactedBlocks > 0
 
 		if (!anyContextUpdates) {
-			return { anyContextUpdates: false, needToTruncate: true, percentSaved: 0 }
+			return {
+				anyContextUpdates: false,
+				needToTruncate: true,
+				percentSaved: 0,
+				references: progressiveResult.references,
+			}
 		}
 
 		const percentSaved = this.calculateContextOptimizationMetrics(
@@ -738,6 +1043,7 @@ export class ContextManager {
 			anyContextUpdates: true,
 			needToTruncate: percentSaved < 0.3,
 			percentSaved,
+			references: progressiveResult.references,
 		}
 	}
 
@@ -764,7 +1070,7 @@ export class ContextManager {
 
 		const timestamp = previousRequest.ts
 
-		const { anyContextUpdates, needToTruncate, percentSaved } = this.attemptFileReadOptimizationCore(
+		const { anyContextUpdates, needToTruncate, percentSaved } = await this.attemptFileReadOptimizationCore(
 			apiConversationHistory,
 			conversationHistoryDeletedRange,
 			timestamp,
@@ -789,23 +1095,25 @@ export class ContextManager {
 	/**
 	 * Public helper that attempts file read optimization in memory without persisting context history.
 	 */
-	public attemptFileReadOptimizationInMemory(
+	public async attemptFileReadOptimizationInMemory(
 		apiConversationHistory: Anthropic.Messages.MessageParam[],
 		conversationHistoryDeletedRange: [number, number] | undefined,
 		timestamp: number,
 		tier: CompactionTier = "emergency",
 		recoverySource = "subagent_transcript",
-	): {
+	): Promise<{
 		anyContextUpdates: boolean
 		needToTruncate: boolean
 		optimizedConversationHistory: Anthropic.Messages.MessageParam[]
-	} {
-		const { anyContextUpdates, needToTruncate } = this.attemptFileReadOptimizationCore(
+		references: RecoverableContextReference[]
+	}> {
+		const { anyContextUpdates, needToTruncate, references } = await this.attemptFileReadOptimizationCore(
 			apiConversationHistory,
 			conversationHistoryDeletedRange,
 			timestamp,
 			tier,
 			recoverySource,
+			false,
 		)
 
 		if (!anyContextUpdates) {
@@ -813,6 +1121,7 @@ export class ContextManager {
 				anyContextUpdates: false,
 				needToTruncate: true,
 				optimizedConversationHistory: apiConversationHistory,
+				references,
 			}
 		}
 
@@ -820,6 +1129,7 @@ export class ContextManager {
 			anyContextUpdates: true,
 			needToTruncate,
 			optimizedConversationHistory: this.getTruncatedMessages(apiConversationHistory, conversationHistoryDeletedRange),
+			references,
 		}
 	}
 
@@ -829,13 +1139,86 @@ export class ContextManager {
 	 * api_conversation_history.json
 	 * and every projection carries an exact message/block reference and digest.
 	 */
-	public applyProgressiveContextCompaction(
+	public async applyProgressiveContextCompaction(
+		apiMessages: Anthropic.Messages.MessageParam[],
+		startFromIndex: number,
+		timestamp: number,
+		tier: CompactionTier,
+		recoverySource = GlobalFileNames.apiConversationHistory,
+		trigger = "turn_boundary",
+	): Promise<ProgressiveCompactionResult> {
+		const effectiveRecoverySource =
+			this.centralStore && this.scope ? this.centralStore.getRecoverySource(this.scope.id) : recoverySource
+		const historyBefore = this.cloneContextHistory(this.contextHistoryUpdates)
+		const cursorBefore = this.getProgressiveCompactionCursor()
+		const startedAt = Date.now()
+		const result = this.planProgressiveContextCompaction(
+			apiMessages,
+			startFromIndex,
+			timestamp,
+			tier,
+			effectiveRecoverySource,
+		)
+		if (!this.centralStore || !this.scope || result.scannedMessages === 0) {
+			return result
+		}
+
+		try {
+			const records = this.buildCentralProjectionRecords(apiMessages, result.references, tier)
+			await this.centralStore.commit({
+				scopeId: this.scope.id,
+				scopeKind: this.scope.kind,
+				workspaceId: this.scope.workspaceId,
+				recoverySource: effectiveRecoverySource,
+				records,
+				cursor: this.getProgressiveCompactionCursor(),
+				run: {
+					trigger,
+					tier,
+					scannedMessages: result.scannedMessages,
+					scannedBlocks: result.scannedBlocks,
+					compactedBlocks: result.compactedBlocks,
+					originalCharacters: result.originalCharacters,
+					projectedCharacters: result.projectedCharacters,
+					startedAt,
+					completedAt: Date.now(),
+				},
+			})
+			return result
+		} catch (error) {
+			if (result.references.length === 0) {
+				Logger.debug("[ContextManager] Central cursor checkpoint failed; retaining in-process cursor:", error)
+				return result
+			}
+			// Fail closed: a marker is never exposed unless its exact source and
+			// projection metadata crossed BroccoliDB's explicit flush barrier.
+			this.contextHistoryUpdates = historyBefore
+			this.progressiveScanCursor = cursorBefore.messageOffset
+			this.progressiveBlockCursor = cursorBefore.blockOffset
+			this.progressiveCursorActiveStart = cursorBefore.activeStart
+			Logger.debug("[ContextManager] Central compaction commit failed; preserving raw context:", error)
+			return {
+				...result,
+				compactedBlocks: 0,
+				originalCharacters: 0,
+				projectedCharacters: 0,
+				updatedMessageIndices: new Set<number>(),
+				references: [],
+			}
+		}
+	}
+
+	private planProgressiveContextCompaction(
 		apiMessages: Anthropic.Messages.MessageParam[],
 		startFromIndex: number,
 		timestamp: number,
 		tier: CompactionTier,
 		recoverySource = GlobalFileNames.apiConversationHistory,
 	): ProgressiveCompactionResult {
+		// Legacy histories are upgraded in place with prompt-invisible IDs.
+		// MessageStateHandler persists these IDs; in-memory subagent histories
+		// retain them for the lifetime of the governed run.
+		ensureContextIdentifiers(apiMessages)
 		const limits = this.getProgressiveCompactionLimits(tier)
 		const updatedMessageIndices = new Set<number>()
 		const references: RecoverableContextReference[] = []
@@ -869,12 +1252,15 @@ export class ContextManager {
 		let originalCharacters = 0
 		let projectedCharacters = 0
 		let stoppedWithinMessage = false
+		const identityUpdateArrays = this.getIdentityProjectionUpdateArrays()
 
 		messageScan: for (let offset = 0; offset < scanCount; offset++) {
 			const messageIndex = activeStart + ((initialOffset + offset) % eligibleMessages)
 			const message = apiMessages[messageIndex]
 			scannedMessages++
 			if (message.role !== "user" || !Array.isArray(message.content)) continue
+			const messageId = getMessageContextId(message)
+			if (!messageId) continue
 
 			const firstBlockIndex = offset === 0 ? Math.min(this.progressiveBlockCursor, message.content.length) : 0
 			for (let blockIndex = firstBlockIndex; blockIndex < message.content.length; blockIndex++) {
@@ -886,43 +1272,72 @@ export class ContextManager {
 				}
 				scannedBlocks++
 				const block = message.content[blockIndex]
+				const blockId = getBlockContextId(block)
+				if (!blockId) continue
 				const text = this.getTextFromBlock(block)
 				if (!text || !this.hasMinimumLineCount(text, limits.minLinesToCompact)) continue
-				const existingUpdates = this.contextHistoryUpdates.get(messageIndex)?.[1].get(blockIndex)
-				const latestUpdate = existingUpdates?.at(-1)
-				const isPreviousRecoverableProjection = latestUpdate?.[3]?.[0]?.[0] === "recoverable-projection-v1"
+				const identityUpdates = identityUpdateArrays.get(this.getProjectionIdentityKey(messageId, blockId))
+				const positionalUpdates = this.contextHistoryUpdates.get(messageIndex)?.[1].get(blockIndex)
+				const identityKey = this.getProjectionIdentityKey(messageId, blockId)
+				const latestUpdate = identityUpdates
+					? this.getLatestProjectionUpdateForIdentity(identityUpdates, identityKey)
+					: positionalUpdates?.at(-1)
+				const projectionVersion = latestUpdate?.[3]?.[0]?.[0]
+				const isPreviousRecoverableProjection =
+					projectionVersion === RECOVERABLE_PROJECTION_V1 || projectionVersion === RECOVERABLE_PROJECTION_V2
 				if (latestUpdate && !isPreviousRecoverableProjection) continue
+				if (projectionVersion === RECOVERABLE_PROJECTION_V2) {
+					const expectedSha256 = latestUpdate?.[3]?.[0]?.[2]
+					// Parent histories still expose the original bytes and may
+					// refine them at a stricter tier. A subagent's active view may
+					// already contain the projection; never hash or persist that
+					// projection as though it were the recoverable source.
+					if (
+						text === latestUpdate?.[2]?.[0] ||
+						typeof expectedSha256 !== "string" ||
+						createHash("sha256").update(text).digest("hex") !== expectedSha256
+					) {
+						continue
+					}
+				}
 
 				const toolName = this.resolveToolResultName(apiMessages, messageIndex, block, text)
 				const projection = this.projectToolResult(toolName, text, limits.maxProjectedLines)
 				if (!projection || projection.foldedLines <= 0) continue
 
+				const recoveryReference = `${messageId}:${blockId}`
 				const reference: RecoverableContextReference = {
 					source: recoverySource,
-					messageIndex,
-					blockIndex,
+					ref: recoveryReference,
+					messageId,
+					blockId,
 					sha256: projection.sha256,
 					originalCharacters: text.length,
 					originalLines: projection.originalLines,
 				}
-				const recoveryReference = `${recoverySource}#${messageIndex}:${blockIndex}`
-				const pointer = `[recoverable_projection ref=${JSON.stringify(recoveryReference)} sha256="${reference.sha256}" original_lines="${reference.originalLines}"]`
-				const replacement = `${pointer}\n${projection.text}`
+				const pointer = this.createSystemProjectionMarker(reference)
+				const replacement = `${pointer}\n${this.escapeReservedProjectionMarkers(projection.text)}`
 				const currentProjectionLength = latestUpdate?.[2]?.[0]?.length ?? text.length
 
 				// Avoid churn when a small or pathologically dense result would
 				// become larger, or when a later pass cannot improve an
-				// already compacted projection by a meaningful amount.
-				if (replacement.length >= text.length * 0.9 || replacement.length >= currentProjectionLength * 0.95) continue
+				// already compacted projection by a meaningful amount. A v1
+				// positional pointer is always allowed to migrate to v2 identity.
+				if (
+					replacement.length >= text.length * 0.9 ||
+					(projectionVersion !== RECOVERABLE_PROJECTION_V1 && replacement.length >= currentProjectionLength * 0.95)
+				) {
+					continue
+				}
 
 				const innerTuple = this.contextHistoryUpdates.get(messageIndex)
 				const innerMap = innerTuple?.[1] ?? new Map<number, ContextUpdate[]>()
-				const updates = innerMap.get(blockIndex) ?? []
+				const updates = [...(identityUpdates ?? innerMap.get(blockIndex) ?? [])]
 				updates.push([
 					timestamp,
 					"text",
 					[replacement],
-					[["recoverable-projection-v1", recoveryReference, reference.sha256]],
+					[[RECOVERABLE_PROJECTION_V2, recoveryReference, reference.sha256, messageId, blockId, recoverySource]],
 				])
 				innerMap.set(blockIndex, updates)
 				if (!innerTuple) {
@@ -951,6 +1366,136 @@ export class ContextManager {
 			updatedMessageIndices,
 			references,
 		}
+	}
+
+	private cloneContextHistory(
+		source: Map<number, [number, Map<number, ContextUpdate[]>]>,
+	): Map<number, [number, Map<number, ContextUpdate[]>]> {
+		return new Map(
+			[...source].map(([messageIndex, [editType, blocks]]) => [
+				messageIndex,
+				[
+					editType,
+					new Map(
+						[...blocks].map(([blockIndex, updates]) => [
+							blockIndex,
+							updates.map(
+								([updateTimestamp, updateType, content, metadata]): ContextUpdate => [
+									updateTimestamp,
+									updateType,
+									[...content],
+									metadata.map((row) => [...row]),
+								],
+							),
+						]),
+					),
+				],
+			]),
+		)
+	}
+
+	private buildCentralProjectionRecords(
+		apiMessages: Anthropic.Messages.MessageParam[],
+		references: RecoverableContextReference[],
+		tier: CompactionTier,
+	): ContextCompactionProjectionInput[] {
+		const sourceByIdentity = new Map<string, string>()
+		for (const message of apiMessages) {
+			if (!Array.isArray(message.content)) continue
+			const messageId = getMessageContextId(message)
+			if (!messageId) continue
+			for (const block of message.content) {
+				const blockId = getBlockContextId(block)
+				const text = blockId ? this.getTextFromBlock(block) : null
+				if (blockId && text !== null) {
+					sourceByIdentity.set(this.getProjectionIdentityKey(messageId, blockId), text)
+				}
+			}
+		}
+		const updates = this.getLatestIdentityProjectionUpdates()
+		return references.map((reference) => {
+			const identityKey = this.getProjectionIdentityKey(reference.messageId, reference.blockId)
+			const sourceText = sourceByIdentity.get(identityKey)
+			const projectionText = updates.get(identityKey)?.[2]?.[0]
+			if (sourceText === undefined || projectionText === undefined) {
+				throw new Error(`Unable to materialize central context projection ${reference.ref}`)
+			}
+			if (createHash("sha256").update(sourceText).digest("hex") !== reference.sha256) {
+				throw new Error(`Central context source digest mismatch for ${reference.ref}`)
+			}
+			return {
+				messageId: reference.messageId,
+				blockId: reference.blockId,
+				ref: reference.ref,
+				sourceLocator: reference.source,
+				sourceText,
+				sourceSha256: reference.sha256,
+				projectionText,
+				projectionSha256: createHash("sha256").update(projectionText).digest("hex"),
+				tier,
+				tierRank: this.getCompactionTierRank(tier),
+				originalCharacters: reference.originalCharacters,
+				originalLines: reference.originalLines,
+			}
+		})
+	}
+
+	private getCompactionTierRank(tier: CompactionTier): number {
+		const ranks: Record<CompactionTier, number> = {
+			normal: 0,
+			micro: 1,
+			ast_prune: 2,
+			semantic_compact: 3,
+			zero_loss_ledger: 4,
+			hyper_compressed: 5,
+			emergency: 6,
+		}
+		return ranks[tier]
+	}
+
+	public getProgressiveCompactionCursor(): ProgressiveCompactionCursor {
+		return {
+			messageOffset: this.progressiveScanCursor,
+			blockOffset: this.progressiveBlockCursor,
+			activeStart: this.progressiveCursorActiveStart,
+		}
+	}
+
+	private getIdentityProjectionUpdateArrays(): Map<string, ContextUpdate[]> {
+		const indexed = new Map<string, ContextUpdate[]>(this.centralProjectionUpdates)
+		const latestTimestampByIdentity = new Map<string, number>()
+		for (const [key, updates] of this.centralProjectionUpdates) {
+			latestTimestampByIdentity.set(key, updates.at(-1)?.[0] ?? 0)
+		}
+		for (const [, innerMap] of this.contextHistoryUpdates.values()) {
+			for (const updates of innerMap.values()) {
+				for (const update of updates) {
+					const key = this.getProjectionIdentityFromUpdate(update)
+					if (!key) continue
+					const latestTimestamp = latestTimestampByIdentity.get(key)
+					if (latestTimestamp === undefined || update[0] >= latestTimestamp) {
+						indexed.set(key, updates)
+						latestTimestampByIdentity.set(key, update[0])
+					}
+				}
+			}
+		}
+		return indexed
+	}
+
+	private createSystemProjectionMarker(reference: RecoverableContextReference): string {
+		return `<${SYSTEM_PROJECTION_MARKER} schema="2" authority="lumi_internal" callable="false" ref="${this.escapeXmlAttribute(reference.ref)}" source="${this.escapeXmlAttribute(reference.source)}" sha256="${reference.sha256}" original_lines="${reference.originalLines}" syntax_fidelity="non_authoritative"/>`
+	}
+
+	private escapeXmlAttribute(value: string): string {
+		return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+	}
+
+	private escapeReservedProjectionMarkers(value: string): string {
+		return value.replace(
+			/<(\/?)system_context_projection\b/gi,
+			(_match, closing: string) => `&lt;${closing}${SYSTEM_PROJECTION_MARKER}`,
+		)
 	}
 
 	private getProgressiveCompactionLimits(tier: CompactionTier): ProgressiveCompactionLimits {

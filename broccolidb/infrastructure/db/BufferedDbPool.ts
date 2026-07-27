@@ -145,6 +145,32 @@ const TYPE_PRIORITY: Record<string, number> = {
   delete: 3,
 };
 
+// Foreign-key dependencies that must be materialized before their consumers
+// inside a flush transaction. Unlisted tables retain deterministic lexical
+// ordering after these dependency ranks are considered.
+const TABLE_PRIORITY: Record<string, number> = {
+  users: 0,
+  workspaces: 10,
+  agents: 10,
+  agent_streams: 10,
+  context_compaction_sources: 10,
+  repositories: 20,
+  knowledge: 20,
+  agent_tasks: 20,
+  agent_memory: 20,
+  agent_cognitive_snapshots: 20,
+  agent_knowledge: 20,
+  context_compaction_projections: 20,
+  context_compaction_cursors: 20,
+  context_compaction_runs: 20,
+  tasks: 30,
+  audit_events: 30,
+  logical_constraints: 30,
+  knowledge_edges: 30,
+  decisions: 30,
+  agent_knowledge_edges: 30,
+};
+
 const INDEXED_COLUMNS: Record<string, string[]> = {
   queue_jobs: ['status'],
   agent_tasks: ['status'],
@@ -188,6 +214,10 @@ const PRIMARY_KEYS: Record<string, string[]> = {
   agent_knowledge: ['id'],
   agent_knowledge_edges: ['sourceId', 'targetId', 'type'],
   swarm_locks: ['resource'],
+  context_compaction_sources: ['sourceSha256'],
+  context_compaction_projections: ['projectionId'],
+  context_compaction_cursors: ['cursorId'],
+  context_compaction_runs: ['runId'],
 };
 
 function normalizeWhere(where: WhereCondition | WhereCondition[] | undefined): WhereCondition[] {
@@ -245,6 +275,11 @@ export class BufferedDbPool {
   }
 
   constructor() {}
+
+  public isPersistent(): boolean {
+    this.assertOperational('isPersistent');
+    return this.rawDb?.memory === false;
+  }
 
   public async start(): Promise<void> {
     if (this.lifecycleState === 'started') return;
@@ -685,6 +720,50 @@ export class BufferedDbPool {
     }
   }
 
+  /**
+   * Executes a small, caller-ordered batch in one immediate SQLite transaction.
+   *
+   * Unlike the high-throughput write-behind path, this method propagates every
+   * failure to the caller. It is reserved for publication barriers where a
+   * caller must not expose a reference until every row is durably committed.
+   */
+  public async writeDurableBatch(ops: readonly WriteOp[]): Promise<void> {
+    this.assertOperational('writeDurableBatch');
+    if (ops.length === 0) return;
+    if (ops.length > 256) {
+      throw new BackpressureError('Durable batch exceeds the 256-operation safety limit');
+    }
+
+    // Drain earlier buffered work first, then exclude buffer swaps and reads
+    // while the strict transaction owns the shared connection.
+    await this.flush();
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const release = await this.stateMutex.acquire();
+      try {
+        const db = this.requireDb('writeDurableBatch');
+        await db.transaction().execute(async (trx) => {
+          for (const op of ops) {
+            await this.executeSingleOp(trx, { ...op });
+          }
+        });
+        this.totalTransactions++;
+        this.lastSuccessfulFlush = Date.now();
+        return;
+      } catch (error) {
+        const candidate = error as { code?: string; message?: string };
+        const retryable =
+          candidate.code === 'SQLITE_BUSY' ||
+          candidate.code === 'SQLITE_LOCKED' ||
+          candidate.message?.includes('database is locked');
+        if (!retryable || attempt === 3) throw error;
+        this.lockContentionCount++;
+      } finally {
+        release();
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100 * 2 ** attempt));
+    }
+  }
+
   public async flush(): Promise<void> {
     this.assertOperational('flush');
     return this.requestFlush();
@@ -749,6 +828,13 @@ export class BufferedDbPool {
           opsToFlush = Array.from(dirtyBuffer.values())
             .flat()
             .sort((a, b) => {
+              const tablePriorityA = TABLE_PRIORITY[a.table as string] ?? 15;
+              const tablePriorityB = TABLE_PRIORITY[b.table as string] ?? 15;
+              if (tablePriorityA !== tablePriorityB) {
+                return a.type === 'delete' && b.type === 'delete'
+                  ? tablePriorityB - tablePriorityA
+                  : tablePriorityA - tablePriorityB;
+              }
               const pA = (LAYER_PRIORITY as any)[a.layer ?? 'plumbing'];
               const pB = (LAYER_PRIORITY as any)[b.layer ?? 'plumbing'];
               if (pA !== pB) return pA - pB;
@@ -787,7 +873,12 @@ export class BufferedDbPool {
             totalFlushed += await this.executeBulkUpdate(trx, table, group);
           } else {
             for (const op of group) {
-              await this.executeSingleOp(trx, op);
+              try {
+                await this.executeSingleOp(trx, op);
+              } catch (error) {
+                Logger.error(`[DbPool] Write failed: ${op.type} ${String(op.table)}`);
+                throw error;
+              }
               totalFlushed++;
             }
           }

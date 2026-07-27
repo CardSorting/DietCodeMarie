@@ -7,17 +7,38 @@ Symptom: a compaction notice appears as a model-visible turn, an active tool/API
 Response:
 
 1. Confirm compaction is invoked only at the completed-turn boundary immediately before the next provider request. Do not call it from delta, partial-message, or tool-progress handlers.
-2. Inspect the original durable history/transcript and the request projection separately. The source must remain unchanged.
-3. Require each projection marker to contain the actual source artifact, message/block coordinates, original line count, and SHA-256 digest. Subagents must point to their governed transcript artifact, not the parent API-history filename.
+2. Inspect the original durable history and the matching
+   `context_compaction_sources` / `context_compaction_projections` rows
+   separately from the request projection. Source text must remain unchanged.
+3. Require each v2 marker to contain the `broccolidb://context/...` scope,
+   stable `ctx_msg_`/`ctx_blk_` IDs, original line count, and SHA-256. Never
+   accept array coordinates as recovery authority.
 4. For silent rollover, verify the original first user objective is retained and only the continuity assistant projection changes.
-5. Check `ProgressiveCompactionLimits`: a single pass must not exceed its message, inspected-block, transformed-block, candidate-line, or projected-line budget. Confirm the two-level cursor advances within a block-heavy message on the next pass.
-6. For a multi-megabyte block, verify line analysis uses the bounded full-span source sample while the recovery digest and line count still cover the complete original.
-7. Run the focused context suites, then the complete `SubagentRunner.test.ts` under `--timeout 10000`.
+5. Check scan/transform/output budgets plus the 2,000,000-character, 20,000-materialized-line, and 4,096-character-per-pattern limits. Confirm the two-level cursor advances within a block-heavy message.
+6. If a marker appears inside raw tool text, verify it is escaped as `&lt;system_context_projection`; only internal ledger state may reapply the reserved tag or activate `<context_projection_policy>`.
+7. Call `hydrateRecoverableReference()` and verify the CAS digest plus byte,
+   character, and line metadata. A corrupt blob should be quarantined.
+8. If a marker appears after a database failure, verify the call path awaited
+   `writeDurableBatch()` and the post-commit CAS check. Ordinary buffered
+   enqueue/flush is not a publication barrier.
+9. If old history is repeatedly rescanned after restore, inspect
+   `context_compaction_cursors`; scan-only passes must checkpoint it too.
+10. For an isolated subagent without a central store, verify the fallback
+    recovery JSON contains full text and matching digest. The JSONL excerpt is
+    insufficient.
+11. If sidecar updates disappear, inspect parent-process locked
+    read-merge-write. The sidecar is a cache; central authority remains
+    SQLite/CAS.
+12. Run the focused context, bridge, BroccoliDB, and complete subagent suites.
 
 Focused proof:
 
 ```sh
-TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha --no-config -r ts-node/register -r tsconfig-paths/register -r source-map-support/register -r ./src/test/requires.cjs src/core/context/__tests__/ContextPruner.test.ts src/core/context/context-management/__tests__/ContextManager.test.ts
+npm rebuild better-sqlite3
+npm --prefix broccolidb run build
+npx tsx broccolidb/tests/context-compaction.test.ts
+TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha --no-config -r ts-node/register -r tsconfig-paths/register -r source-map-support/register -r ./src/test/requires.cjs src/core/context/__tests__/ContextPruner.test.ts src/core/context/context-management/__tests__/ContextManager.test.ts src/core/context/context-management/__tests__/BroccoliContextCompactionStore.test.ts
+npm run rebuild:electron:better-sqlite3
 ```
 
 ## MoD Run Enters 'blocked' Terminal State with [TARGET_RESOLUTION_FAILURE]
@@ -133,7 +154,8 @@ Test workflow:
 
 ```sh
 npm rebuild better-sqlite3
-# run Node/Mocha database tests
+npm --prefix broccolidb run build
+# run Node/Mocha and BroccoliDB database tests
 npm run rebuild:electron:better-sqlite3
 ```
 

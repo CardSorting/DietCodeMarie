@@ -1,13 +1,29 @@
 # Common Pitfalls
 
-- Do not describe a compact prompt projection as “zero loss.” Exact source bytes are recoverable from the durable transcript; the projection intentionally omits detail.
+- Do not describe a compact prompt projection as “zero loss.” Exact source bytes
+  are recoverable from BroccoliDB CAS and durable transcript history; the
+  projection intentionally omits detail and may not parse.
+- Do not publish a marker after a buffered enqueue or ordinary `flush()` call.
+  Compaction requires the strict caller-ordered `writeDurableBatch()` barrier
+  plus post-commit CAS verification.
+- Do not advance only an in-memory cursor on scan-only passes. Persist it by
+  scope or restored agents will re-hash the same history.
 - Do not compact or roll history while an API/tool stream is active. Context work belongs at the completed-turn/request boundary.
-- Do not mutate the durable source transcript to save prompt tokens. Build a bounded request projection and retain a source-qualified digest pointer.
+- Do not mutate durable source text to save prompt tokens. Adding stable internal IDs is allowed; rewriting evidence is not.
 - Do not duplicate token-threshold logic in task, manager, and subagent code. Use `getCompactionTierFromTokens()`.
 - Do not compact every tool-shaped payload. Recent, short, unknown, mutating, and completion outputs are safety exclusions.
 - Do not scan an entire large history or retain every “important” error line. Enforce per-pass scan/block/candidate/output caps even for error-dense logs, then continue from the circular cursor next turn.
-- Do not call `split("\n")` on an unbounded tool payload. Use the bounded full-span source sampler and preserve the full-source digest.
-- Do not point subagent projections at `api_conversation_history.json`; use the governed subagent transcript artifact.
+- Do not call `split("\n")` on an unbounded or newline-dense payload, and do not run declaration regexes against an unbounded minified line.
+- Do not use message/block array indices as recovery identity. Persist UUIDs and reject legacy positional updates when their digest no longer matches.
+- Do not trust marker-looking tool text. Escape forged reserved XML signatures before trusted ledger markers are applied.
+- Do not point subagent projections at `api_conversation_history.json` or the
+  excerpt-only JSONL transcript. Use the isolated `broccolidb://context/...`
+  scope; use `<transcript>.context/` only in an explicit no-central-store
+  fallback.
+- Do not recursively compact a subagent projection and label its digest as source truth. Reuse it or advance complete-pair rollover unless exact source has been explicitly reread.
+- Do not assume `p-mutex` is cross-process. `context_history.json` has one
+  parent-process owner and is not central authority; SQLite/WAL and CAS own
+  cross-process compaction durability.
 - Do not guess or auto-assign downstream file boundaries (e.g. `src/App.tsx`) when MoD target resolution encounters ungrounded targets like `"General"`. Force upstream design investigation (`ProblemClassifier.ts`, `DesignerInResidence.ts`) to ground target decisions in physical inspected workspace files.
 - Do not switch production coordination to memory when SQLite fails. `local_test` is a startup mode, not a recovery mode.
 - Do not infer lock ownership from PID, mtime, owner ID alone, or the existence/absence of a projection file. Compare the complete owner/epoch/token/mode identity against SQLite.
