@@ -68,7 +68,19 @@ Additionally, BroccoliDB includes enterprise-grade resilience infrastructure:
 - **Multi-Agent Task DAG Scheduler**: Dependency-based task scheduling (`dependsOnTaskIds`) with failure cascade resolution.
 - **Token Bucket Rate Governor**: Global rate governor managing token-per-minute limits and swarm backpressure.
 
-See [the public API](docs/public-api.md#context-compaction), [current architecture](docs/architecture/current.md), and [ADR 009: Universal Zenith Hardening](docs/architecture/ADR_UNIVERSAL_ZENITH_PASS.md).
+See [the public API](docs/public-api.md#context-compaction), [current architecture](docs/architecture/current.md), [ADR 009: Universal Zenith Hardening](docs/architecture/ADR_UNIVERSAL_ZENITH_PASS.md), and [Master Architectural Decision Index](../.wiki/adr/MASTER_ADR_INDEX.md).
+
+## ADR Automation Tooling
+
+BroccoliDB and the workspace use automated MADR 3.0 CLI tooling to scaffold, validate, and compile Architectural Decision Records:
+
+```bash
+npm run scaffold:adr "<Title>"  # Scaffolds pre-formatted MADR 3.0 file in .wiki/adr/
+npm run audit:adr               # Audits all ADRs against MADR rules and link existence
+npm run link:adr                # Generates interactive Mermaid ADR dependency graph
+npm run export:adr              # Compiles all ADRs into MASTER_ADR_INDEX.md
+npm run docs:check-repo         # Runs all repo documentation checks and ADR auditors in parallel
+```
 
 ## Documentation
 
@@ -81,6 +93,7 @@ See [the public API](docs/public-api.md#context-compaction), [current architectu
 | [docs/cli.md](docs/cli.md) | CLI commands and output formats |
 | [docs/examples.md](docs/examples.md) | Golden-path scripts |
 | [docs/architecture/current.md](docs/architecture/current.md) | How the system fits together |
+| [docs/architecture/ADR_UNIVERSAL_ZENITH_PASS.md](docs/architecture/ADR_UNIVERSAL_ZENITH_PASS.md) | Universal Zenith Pass architectural decision |
 | [docs/papers/whitepaper.md](docs/papers/whitepaper.md) | Technical whitepaper |
 | [docs/papers/companion-brief.md](docs/papers/companion-brief.md) | Executive companion brief |
 | [docs/papers/philosophy.md](docs/papers/philosophy.md) | Philosophy & doctrine |
