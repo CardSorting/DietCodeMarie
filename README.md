@@ -196,9 +196,7 @@ Thank you to the Cline maintainers and contributors for the foundation this proj
 - **Roadmap steering** — `ROADMAP.md` integration with validation gates
 - **MCP** — connect external tools and prompts
 - **Governed subagents** — parallel lanes with execution modes, merge gate, and durable receipts
-- **Recoverable context compaction** — progressively reduces old tool evidence
-  between completed turns; BroccoliDB durably stores exact source, stable
-  projections, and cursors before the next request can use them
+- **Recoverable context compaction** — zero-loss, turn-boundary prompt projection engine powered by BroccoliDB sharded Brotli CAS and WAL-backed SQLite transaction barriers; preserves 100% exact original source bytes while automatically compacting prompt projections for long sessions
 - **Restart-safe completion & storage hardening** — terminal outcomes commit through an ownership- and state-checked SQLite transaction; multi-table retention sweeps, auto-vacuum page reclaiming, native statement handle disposal, and backoff WAL truncation prevent disk erosion and memory leaks
 - **Local-first** — settings and secrets under `~/.dietcode/data/`; workspace DB at `./dietcode.db`
 - **Nine providers** — OpenRouter, ChatGPT Subscription, NousResearch, Cloudflare Workers AI, Cerebras, ClinePass, Grok/X Subscription, Qwen Token Plan, and Z AI (GLM)
@@ -626,6 +624,7 @@ Press **F5** in VS Code → Extension Development Host. Package: `npm run packag
 | `npm run check-types` | TypeScript — extension + webview |
 | `npm run lint` | Biome + proto lint |
 | `npm test` | Unit + integration tests |
+| `npm --prefix broccolidb test` | BroccoliDB context compaction & cognitive substrate test suite |
 | `npm run ci:check-all` | Types, lint, format, roadmap audit, doc guardrails |
 | `npm run docs:check-all` | All doc guardrails + Mintlify links |
 
