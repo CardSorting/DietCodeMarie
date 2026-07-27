@@ -236,10 +236,22 @@ Provider setup: [docs/getting-started/quick-start.mdx](docs/getting-started/quic
 
 ## Quick start
 
-1. Open the LUMI activity bar panel
-2. Configure a provider in **LUMI Settings → API Configuration**
-3. Describe a task → review each tool proposal → **Approve** or **Reject**
-4. Keep checkpoints enabled for one-click rollback
+### Onboarding Walkthrough
+
+```mermaid
+flowchart LR
+  A[1. Install Extension] --> B[2. Set API Provider]
+  B --> C[3. Prompt in Plan/Act Mode]
+  C --> D[4. Review Diffs & Approve]
+  D --> E[5. Auto-Compacted & Governed Swarms]
+```
+
+1. **Open LUMI**: Click the LUMI icon in the VS Code Activity Bar.
+2. **Configure Provider**: Go to **LUMI Settings → API Configuration** and set up your preferred model provider (OpenRouter, ChatGPT Subscription, Anthropic, Cloudflare, etc.).
+3. **Plan Before Acting**: Start with **Plan Mode** (`plan_mode_respond`) to explore codebases, analyze architecture, and formulate plans safely before making changes.
+4. **Human-in-the-Loop Approval**: Switch to **Act Mode** (`act_mode_respond`) to execute file edits and terminal commands. Review exact diffs and tool parameters before approving.
+5. **Zero-Config Context Scaling**: As sessions accumulate tool output, **BroccoliDB Context Compaction** silently compacts prompt projections into sharded CAS blobs without interrupting execution or losing exact historical source bytes.
+6. **One-Click Checkpoints**: Keep checkpoints enabled to rollback to any state after tool execution.
 
 Tutorial: [your-first-project](docs/getting-started/your-first-project.mdx) · Plan/Act guide: [plan-and-act](docs/core-workflows/plan-and-act.mdx)
 
