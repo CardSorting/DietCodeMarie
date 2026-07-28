@@ -64,6 +64,78 @@ export abstract class WebviewProvider {
 	abstract isVisible(): boolean
 
 	/**
+	 * Builds a robust Content Security Policy array for webview rendering.
+	 *
+	 * @param nonce - Nonce string for inline script execution.
+	 * @param isHmr - Whether HMR mode is active (adds Vite HMR endpoints/eval).
+	 * @param hmrServer - Optional dev server URL string (e.g. `localhost:25463`).
+	 * @param hmrPort - Optional dev server port number.
+	 */
+	protected buildCspDirectives(nonce: string, isHmr = false, hmrServer?: string, hmrPort?: number): string[] {
+		const cspSource = this.getCspSource()
+
+		const connectSrc = ["https:", "http://localhost:*", "http://127.0.0.1:*", "ws:", "wss:", cspSource]
+
+		const styleSrc = [cspSource, "'unsafe-inline'", "https:"]
+		const scriptSrc = [`'nonce-${nonce}'`]
+
+		if (isHmr && hmrServer && hmrPort) {
+			connectSrc.push(`ws://${hmrServer}`, `ws://0.0.0.0:${hmrPort}`, `http://${hmrServer}`, `http://0.0.0.0:${hmrPort}`)
+			styleSrc.push(`http://${hmrServer}`, `http://0.0.0.0:${hmrPort}`)
+			scriptSrc.push("'unsafe-eval'", "https://*", `http://${hmrServer}`, `http://0.0.0.0:${hmrPort}`)
+		}
+
+		return [
+			"default-src 'none'",
+			`connect-src ${connectSrc.join(" ")}`,
+			`font-src ${cspSource} data: https:`,
+			`style-src ${styleSrc.join(" ")}`,
+			`img-src ${cspSource} https: data: blob:`,
+			`media-src ${cspSource} https: data: blob:`,
+			`worker-src ${cspSource} blob: 'unsafe-inline'`,
+			`child-src ${cspSource} blob:`,
+			`frame-src ${cspSource} https:`,
+			`manifest-src ${cspSource}`,
+			`script-src ${scriptSrc.join(" ")}`,
+		]
+	}
+
+	/**
+	 * Renders the HTML document structure for webviews in both production and HMR modes.
+	 */
+	protected renderHtmlDocument(options: {
+		stylesUrl: string
+		codiconsUrl: string
+		scriptUrl: string
+		nonce: string
+		csp: string[]
+		extraHead?: string
+		extraBody?: string
+	}): string {
+		return /*html*/ `
+			<!DOCTYPE html>
+			<html lang="en">
+				<head>
+					<meta charset="utf-8">
+					<meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
+					<meta name="theme-color" content="#000000">
+					${options.extraHead || ""}
+					<link rel="stylesheet" type="text/css" href="${options.stylesUrl}">
+					<link href="${options.codiconsUrl}" rel="stylesheet" />
+					<meta http-equiv="Content-Security-Policy" content="${options.csp.join("; ")}">
+					<title>DietCode</title>
+				</head>
+				<body>
+					<noscript>You need to enable JavaScript to run this app.</noscript>
+					<div id="root"></div>
+					${options.extraBody || ""}
+					<script type="module" nonce="${options.nonce}" src="${options.scriptUrl}"></script>
+				</body>
+			</html>
+		`
+	}
+
+	/**
 	 * Defines and returns the HTML that should be rendered within the webview panel.
 	 *
 	 * @remarks This is also the place where references to the React webview build files
@@ -87,44 +159,15 @@ export abstract class WebviewProvider {
 		// don't forget to add font-src ${webview.cspSource};
 		const codiconsUrl = this.getExtensionUrl("node_modules", "@vscode", "codicons", "dist", "codicon.css")
 
-		// Use a nonce to only allow a specific script to be run.
-		/*
-				content security policy of your webview to only allow scripts that have a specific nonce
-				create a content security policy meta tag so that only loading scripts with a nonce is allowed
-				As your extension grows you will likely want to add custom styles, fonts, and/or images to your webview. If you do, you will need to update the content security policy meta tag to explicitly allow for these resources. E.g.
-								<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; font-src ${webview.cspSource}; img-src ${webview.cspSource} https:; script-src 'nonce-${nonce}';">
-		- 'unsafe-inline' is required for styles due to vscode-webview-toolkit's dynamic style injection
-		- since we pass base64 images to the webview, we need to specify img-src ${webview.cspSource} data:;
-
-				in meta tag we add nonce attribute: A cryptographic nonce (only used once) to allow scripts. The server must generate a unique nonce value each time it transmits a policy. It is critical to provide a nonce that cannot be guessed as bypassing a resource's policy is otherwise trivial.
-				*/
 		const nonce = getNonce()
 
-		// Tip: Install the es6-string-html VS Code extension to enable code highlighting below
-		return /*html*/ `
-			<!DOCTYPE html>
-			<html lang="en">
-				<head>
-				<meta charset="utf-8">
-				<meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
-				<meta name="theme-color" content="#000000">
-				<link rel="stylesheet" type="text/css" href="${stylesUrl}">
-				<link href="${codiconsUrl}" rel="stylesheet" />
-				<meta http-equiv="Content-Security-Policy" content="default-src 'none';
-					connect-src https://*.posthog.com https://*.dietcode.bot; 
-					font-src ${this.getCspSource()} data:; 
-					style-src ${this.getCspSource()} 'unsafe-inline'; 
-					img-src ${this.getCspSource()} https: data:; 
-					script-src 'nonce-${nonce}';">
-				<title>DietCode</title>
-			</head>
-			<body>
-				<noscript>You need to enable JavaScript to run this app.</noscript>
-				<div id="root"></div>
-				<script type="module" nonce="${nonce}" src="${scriptUrl}"></script>
-			</body>
-		</html>
-		`
+		return this.renderHtmlDocument({
+			stylesUrl,
+			codiconsUrl,
+			scriptUrl,
+			nonce,
+			csp: this.buildCspDirectives(nonce),
+		})
 	}
 
 	/**
@@ -196,34 +239,15 @@ export abstract class WebviewProvider {
 			</script>
 		`
 
-		const csp = [
-			"default-src 'none'",
-			`font-src ${this.getCspSource()}`,
-			`style-src ${this.getCspSource()} 'unsafe-inline' https://* http://${localServerUrl} http://0.0.0.0:${localPort}`,
-			`img-src ${this.getCspSource()} https: data:`,
-			`script-src 'unsafe-eval' https://* http://${localServerUrl} http://0.0.0.0:${localPort} 'nonce-${nonce}'`,
-			`connect-src https://* ws://${localServerUrl} ws://0.0.0.0:${localPort} http://${localServerUrl} http://0.0.0.0:${localPort}`,
-		]
-
-		return /*html*/ `
-			<!DOCTYPE html>
-			<html lang="en">
-				<head>
-					${process.env.IS_DEV ? '<script src="http://localhost:8097"></script>' : ""}
-					<meta charset="utf-8">
-					<meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
-					<meta http-equiv="Content-Security-Policy" content="${csp.join("; ")}">
-					<link rel="stylesheet" type="text/css" href="${stylesUrl}">
-					<link href="${codiconsUrl}" rel="stylesheet" />
-					<title>DietCode</title>
-				</head>
-				<body>
-					<div id="root"></div>
-					${reactRefresh}
-					<script type="module" src="${scriptUrl}"></script>
-				</body>
-			</html>
-		`
+		return this.renderHtmlDocument({
+			stylesUrl,
+			codiconsUrl,
+			scriptUrl,
+			nonce,
+			csp: this.buildCspDirectives(nonce, true, localServerUrl, localPort),
+			extraHead: process.env.IS_DEV ? '<script src="http://localhost:8097"></script>' : "",
+			extraBody: reactRefresh,
+		})
 	}
 	/**
 	 * A helper function which will get the webview URL of a given file or resource in the extension directory.
