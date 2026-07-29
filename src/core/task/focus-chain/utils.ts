@@ -11,6 +11,18 @@ export interface FocusChainProgressGuidanceInput extends TodoListCounts {
 }
 
 /**
+ * Sanitizes a checklist label by stripping Markdown links, inline code, bold/italics, and HTML comments.
+ */
+export function sanitizeChecklistLabel(text: string): string {
+	return text
+		.replace(/<!--[\s\S]*?-->/g, "")
+		.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+		.replace(/`([^`]+)`/g, "$1")
+		.replace(/[*_]{1,3}([^*_]+)[*_]{1,3}/g, "$1")
+		.trim()
+}
+
+/**
  * Parses a focus chain list string and returns counts of total and completed items
  * @param todoList The focus chain list string to parse
  * @returns Object with totalItems and completedItems counts
@@ -101,14 +113,7 @@ export function mergeFocusChainChecklists(currentList: string, proposedList: str
 				matchedProposedNormalized.add(normalized)
 				const shouldBeChecked = item.parsed.checked || proposed.checked
 				if (shouldBeChecked !== item.parsed.checked) {
-					const checkboxIndex = item.line.indexOf("[")
-					if (checkboxIndex !== -1 && item.line[checkboxIndex + 2] === "]") {
-						return (
-							item.line.slice(0, checkboxIndex + 1) +
-							(shouldBeChecked ? "x" : " ") +
-							item.line.slice(checkboxIndex + 2)
-						)
-					}
+					return item.line.replace(/\[([ xX])\]/, `[${shouldBeChecked ? "x" : " "}]`)
 				}
 			}
 		}

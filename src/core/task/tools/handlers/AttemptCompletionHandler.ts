@@ -171,6 +171,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				result,
 				taskDescription,
 				command,
+				taskProgress,
 				originatingInvocationId: block.call_id!,
 			})
 		} catch (error) {

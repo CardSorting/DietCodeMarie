@@ -6,6 +6,17 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+### Added
+
+- **Monolithic Focus Chain Domain Engine V2 (`FocusChainAuthority.ts`)** — Centralized focus chain state management, atomic disk persistence, and completion gate instructions into a single monolithic domain authority with an explicit `FocusChainStatus` state machine (`IDLE`, `ACTIVE`, `COMPLETED`, `STALE`).
+- **Immutable Focus Chain Snapshot API (`FocusChainSnapshot`)** — Added `authority.getSnapshot()` providing cached, atomic metrics (`totalItems`, `completedItems`, `percentComplete`, `status`, `isComplete`, `userHasModified`) across completion gate pipelines and telemetry services.
+- **GFM & Markdown Label Sanitization Engine (`sanitizeChecklistLabel`)** — Enhanced checklist item parsing to support all standard GFM markers (`-`, `*`, `+`, `1.`, `1)`) and indented sub-items. Strips Markdown links (`[text](url)`), code backticks (`` `code` ``), bold/italics, and HTML comments from labels before fuzzy comparison to eliminate false-positive completion gate rejections.
+
+### Fixed
+
+- **Focus Chain State Leakage** — Purged task progress checklist state upon completion attempt finalization (`markCompletionAttemptFinished`), preventing state leakage and infinite retry loops on task completion.
+- **Delegated Handler State Sync** — Refactored `AttemptCompletionHandler.ts` to delegate Focus Chain synchronization directly to `config.callbacks.updateFCListFromToolResponse(taskProgress)` for single-source-of-truth consistency.
+
 ## [11.0.0] - 2026-07-26
 
 ### Added

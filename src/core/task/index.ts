@@ -147,7 +147,7 @@ import { EmbeddingHandler, KnowledgeGraphService } from "../context/KnowledgeGra
 import { IController } from "../controller/types"
 import { executeHook } from "../hooks/hook-executor"
 import { StateManager } from "../storage/StateManager"
-import { FocusChainManager } from "./focus-chain"
+import { FocusChainManager } from "./focus-chain/FocusChainAuthority"
 import { type TaskLatencySnapshot, TaskLatencyTracker } from "./latency/TaskLatencyTracker"
 import {
 	bindTaskLifecycleAuthority,
@@ -609,7 +609,7 @@ export class Task {
 
 		// Set up focus chain file watcher (async, runs in background) only if focus chain is enabled
 		if (this.FocusChainManager) {
-			this.FocusChainManager.setupFocusChainFileWatcher().catch((error) => {
+			this.FocusChainManager.setupFocusChainFileWatcher().catch((error: unknown) => {
 				Logger.error(`[Task ${this.taskId}] Failed to setup focus chain file watcher:`, error)
 			})
 		}

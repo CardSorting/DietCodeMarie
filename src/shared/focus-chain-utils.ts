@@ -7,7 +7,7 @@
  * Flexible regex pattern for matching focus chain items with spacing variations
  * Matches patterns like "- [x] text", "- [X] text", "- [ ] text", "-  [ ]  text", etc.
  */
-export const FOCUS_CHAIN_ITEM_REGEX = /^-\s*\[([ xX])\]\s*(.+)$/
+export const FOCUS_CHAIN_ITEM_REGEX = /^\s*(?:-|\*|\+|\d+[.)])\s*\[([ xX])\]\s*(.+)$/
 
 /**
  * Checks if a trimmed line matches focus chain item patterns

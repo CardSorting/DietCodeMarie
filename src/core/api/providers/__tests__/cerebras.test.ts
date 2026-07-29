@@ -122,12 +122,12 @@ describe("Cerebras provider", () => {
 		]
 
 		const compacted = compactHistoricalToolOutputs(mockMessages, 2)
-		// Turn 0 (historical tool) should be truncated
+		// Tool outputs > 700 chars are statically truncated for prefix stability
 		expect(compacted[0].content).to.include("HistOutputTruncated")
-		expect(compacted[0].content.length).to.be.below(longOutput.length)
+		expect((compacted[0].content as string).length).to.be.below(longOutput.length)
 
-		// Turn 3 (recent tool) should be untouched
-		expect(compacted[3].content).to.equal(longOutput)
+		expect(compacted[3].content).to.include("HistOutputTruncated")
+		expect((compacted[3].content as string).length).to.be.below(longOutput.length)
 	})
 
 	it("applies DSL token compression techniques (stripping, shortening, tabular structuring, RLE dividers)", () => {

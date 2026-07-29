@@ -59,15 +59,15 @@ function stripThinkingTags(content: string): string {
 		.trim()
 }
 
-import { defaultTokenBufferEngine, TokenIngestionBufferEngine } from "../transform/token-buffer-engine"
+import { ApcStableIngestionEngine, defaultApcStableEngine } from "../transform/apc-stable-engine"
 
 export const pruneHistoricalVisionPayloads = (messages: DietCodeStorageMessage[], activeVisionWindow = 1) =>
-	new TokenIngestionBufferEngine({ activeVisionWindow }).pruneHistoricalVisionPayloads(messages)
+	new ApcStableIngestionEngine({ activeVisionWindow }).pruneHistoricalVisionPayloads(messages)
 
-export const compressDslText = (text: string) => defaultTokenBufferEngine.compressDslText(text)
+export const compressDslText = (text: string) => defaultApcStableEngine.cleanText(text)
 
 export const compactHistoricalToolOutputs = (messages: OpenAI.Chat.ChatCompletionMessageParam[], keepFullTurns = 2) =>
-	new TokenIngestionBufferEngine({ keepFullToolTurns: keepFullTurns }).compactHistoricalToolOutputs(messages)
+	defaultApcStableEngine.processApcStableMessages(messages)
 
 /**
  * Cerebras rejects reasoning history on follow-up requests. Convert the stored
@@ -195,12 +195,12 @@ export class CerebrasHandler implements ApiHandler {
 	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[], tools?: DietCodeTool[]): ApiStream {
 		const client = this.ensureClient()
 		const model = this.getModel()
-		const normalizedSystemPrompt = systemPrompt.replace(/\r\n/g, "\n").trim()
-		const visionOptimized = pruneHistoricalVisionPayloads(messages, 1)
+		const normalizedSystemPrompt = defaultApcStableEngine.normalizeSystemPrompt(systemPrompt)
+		const visionOptimized = defaultApcStableEngine.pruneHistoricalVisionPayloads(messages)
 		const rawOpenAiMessages = prepareCerebrasMessages(visionOptimized)
-		const compactedMessages = compactHistoricalToolOutputs(rawOpenAiMessages, 2)
-		const cerebrasMessages = [{ role: "system" as const, content: normalizedSystemPrompt }, ...compactedMessages]
-		const sortedTools = tools?.length ? [...tools].sort((a, b) => getToolName(a).localeCompare(getToolName(b))) : undefined
+		const apcStableMessages = defaultApcStableEngine.processApcStableMessages(rawOpenAiMessages)
+		const cerebrasMessages = [{ role: "system" as const, content: normalizedSystemPrompt }, ...apcStableMessages]
+		const sortedTools = defaultApcStableEngine.alignToolSchemas(tools)
 
 		try {
 			const stream = await client.chat.completions.create({
@@ -257,7 +257,7 @@ export class CerebrasHandler implements ApiHandler {
 					const inputTokens = Math.max(0, (streamChunk.usage.prompt_tokens || 0) - cacheReadTokens)
 					const outputTokens = streamChunk.usage.completion_tokens || 0
 
-					defaultTokenBufferEngine.logCacheTelemetry(
+					defaultApcStableEngine.logCacheTelemetry(
 						"Cerebras",
 						model.id,
 						inputTokens,

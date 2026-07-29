@@ -29,7 +29,7 @@ import { DietCodeDefaultTool } from "@shared/tools"
 import { AUTO_GOVERNANCE } from "@/services/roadmap/RoadmapAutoGovernance"
 import { getRoadmapConfig } from "@/services/roadmap/RoadmapConfig"
 
-import { parseFocusChainListCounts } from "../focus-chain/utils"
+import { parseFocusChainListCounts, sanitizeChecklistLabel } from "../focus-chain/utils"
 import {
 	getGovernanceParalysisTracker,
 	hashWorkspaceFingerprint,
@@ -249,7 +249,7 @@ export function validateCompletionDemoCommand(command: string | undefined): stri
 }
 
 /** Markdown checklist lines — result summary should not duplicate task_progress. */
-const COMPLETION_CHECKLIST_IN_RESULT_PATTERN = /^\s*-\s*\[[ xX]\]/m
+const COMPLETION_CHECKLIST_IN_RESULT_PATTERN = /^\s*(?:-|\*|\+|\d+[.)])\s*\[[ xX]\]/m
 
 export function extractFocusChainItemLabels(checklist: string): string[] {
 	return checklist
@@ -257,7 +257,7 @@ export function extractFocusChainItemLabels(checklist: string): string[] {
 		.filter((line) => isFocusChainItem(line.trim()))
 		.map((line) => {
 			const parsed = parseFocusChainItem(line.trim())
-			return parsed ? parsed.text : ""
+			return parsed ? sanitizeChecklistLabel(parsed.text) : ""
 		})
 		.filter(Boolean)
 }
@@ -360,14 +360,20 @@ export function validateTaskProgressAlignsWithFocusChain(config: TaskConfig, tas
 
 	for (const focusLabel of focusLabels) {
 		const norm = normalizeForCompare(focusLabel)
-		if (!normalizedProgress.includes(norm)) {
+		const hasMatch = normalizedProgress.some((pNorm) => {
+			if (pNorm === norm) return true
+			if (pNorm.length >= 6 && norm.length >= 6) {
+				return pNorm.includes(norm) || norm.includes(pNorm)
+			}
+			return false
+		})
+		if (!hasMatch) {
 			missingLabels.push(focusLabel)
 		}
 	}
 
-	if (missingLabels.length > 0 || progressLabels.length < focusLabels.length) {
-		const missingDetail =
-			missingLabels.length > 0 ? ` Missing item(s): ${missingLabels.map((l) => `"${l}"`).join(", ")}.` : ""
+	if (missingLabels.length > 0) {
+		const missingDetail = ` Missing item(s): ${missingLabels.map((l) => `"${l}"`).join(", ")}.`
 		return (
 			`Advisory diagnostic: task_progress has ${progressLabels.length} item(s) but focus chain has ${focusLabels.length}.${missingDetail} ` +
 			"Consider including every focus chain item in task_progress."
@@ -764,9 +770,11 @@ export function buildCompletionGateFocusBlock(config: TaskConfig): string {
 	if (totalItems === 0) {
 		return ""
 	}
+	const isComplete = completedItems >= totalItems
+	const status = isComplete ? "completed" : "active"
 	return (
 		`<completion_gate_focus schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" total="${totalItems}" ` +
-		`completed="${completedItems}" complete="${completedItems >= totalItems ? "true" : "false"}" />`
+		`completed="${completedItems}" complete="${isComplete ? "true" : "false"}" status="${status}" />`
 	)
 }
 
@@ -1732,6 +1740,8 @@ export function markCompletionAttemptFinished(config: TaskConfig): void {
 	config.taskState.lastCompletionAttemptGraphRevision = undefined
 	config.taskState.reconciliationDebounceActive = false
 	config.taskState.lastProbeCheckpointHash = undefined
+	config.taskState.currentFocusChainChecklist = null
+	config.taskState.todoListWasUpdatedByUser = false
 	incrementCompletionGraphRevision(config)
 }
 

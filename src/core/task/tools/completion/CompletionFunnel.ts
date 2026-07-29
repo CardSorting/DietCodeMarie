@@ -1593,7 +1593,7 @@ export async function prepareCompletionAttempt(
 		input.taskDescription,
 		proposedDecisionId,
 		evaluatedStateVersion,
-		input.taskProgress,
+		input.taskProgress ?? config.taskState.currentFocusChainChecklist ?? undefined,
 		input.command,
 	)
 	const decision = evaluation.decision
@@ -1835,7 +1835,7 @@ export async function continueCompletionAttempt(
 		input.taskDescription,
 		attempt.decisionId || "",
 		attempt.expectedLifecycleRevision,
-		undefined, // taskProgress
+		config.taskState.currentFocusChainChecklist ?? undefined, // taskProgress
 		command,
 	)
 

@@ -1,6 +1,7 @@
+import { isCompletedFocusChainItem, isFocusChainItem, parseFocusChainItem } from "@shared/focus-chain-utils"
 import { expect } from "chai"
 import { FocusChainPrompts } from "../prompts"
-import { createFocusChainProgressGuidance, mergeFocusChainChecklists } from "../utils"
+import { createFocusChainProgressGuidance, mergeFocusChainChecklists, parseFocusChainListCounts } from "../utils"
 
 describe("focus-chain progress guidance", () => {
 	it("uses completion guidance when every progress item is done", () => {
@@ -51,5 +52,57 @@ describe("mergeFocusChainChecklists", () => {
 		const result = mergeFocusChainChecklists(currentList, proposedList)
 
 		expect(result).to.equal("- [x]  Implement   collision handling \n- [ ] User added item")
+	})
+
+	it("handles indented sub-items and alternative GFM bullet styles (*, +, 1.)", () => {
+		const currentList = "  * [ ] Indented asterisk subtask\n  1. [ ] Numbered item\n  + [ ] Plus bullet"
+		const proposedList = "  * [x] Indented asterisk subtask\n  1. [x] Numbered item"
+		const result = mergeFocusChainChecklists(currentList, proposedList)
+
+		expect(result).to.contain("  * [x] Indented asterisk subtask")
+		expect(result).to.contain("  1. [x] Numbered item")
+		expect(result).to.contain("  + [ ] Plus bullet")
+	})
+})
+
+describe("GFM Standard Focus Chain Pattern Matching", () => {
+	it("parses all standard GFM list markers and leading indentation", () => {
+		const items = [
+			"- [ ] Hyphen incomplete",
+			"- [x] Hyphen complete",
+			"* [ ] Asterisk incomplete",
+			"* [X] Asterisk complete uppercase",
+			"+ [ ] Plus incomplete",
+			"+ [x] Plus complete",
+			"1. [ ] Numbered dot incomplete",
+			"1) [x] Numbered paren complete",
+			"  - [x] Indented item",
+		]
+
+		for (const item of items) {
+			expect(isFocusChainItem(item)).to.equal(true, `Failed for item: ${item}`)
+		}
+
+		expect(isCompletedFocusChainItem("- [x] Done")).to.equal(true)
+		expect(isCompletedFocusChainItem("* [X] Done")).to.equal(true)
+		expect(isCompletedFocusChainItem("  + [x] Done")).to.equal(true)
+		expect(isCompletedFocusChainItem("1. [ ] Not Done")).to.equal(false)
+
+		const parsedIndented = parseFocusChainItem("  - [x] Indented task")
+		expect(parsedIndented).to.deep.equal({ checked: true, text: "Indented task" })
+	})
+
+	it("accurately counts list progress with mixed GFM markers and indentation", () => {
+		const list = `
+# Progress Checklist
+- [x] Setup environment
+  * [x] Install dependencies
+  * [ ] Configure linter
++ [x] Implement features
+1. [ ] Run verification tests
+`
+		const counts = parseFocusChainListCounts(list)
+		expect(counts.totalItems).to.equal(5)
+		expect(counts.completedItems).to.equal(3)
 	})
 })

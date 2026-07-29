@@ -345,6 +345,7 @@ describe("attemptCompletionUtils", () => {
 			block.should.containEql("<completion_gate_focus")
 			block.should.containEql('total="2"')
 			block.should.containEql('complete="false"')
+			block.should.containEql('status="active"')
 		})
 	})
 
@@ -720,18 +721,20 @@ describe("attemptCompletionUtils", () => {
 			should.not.exist(taskState.lastGateBlockCheckpointHash)
 		})
 
-		it("clears doubleCheckCompletionPending, gate block count, history, session, and fingerprint after a finished attempt", () => {
+		it("clears doubleCheckCompletionPending, gate block count, history, session, fingerprint, and focus chain checklist after a finished attempt", () => {
 			taskState.doubleCheckCompletionPending = true
 			taskState.completionGateBlockCount = 4
 			taskState.lastBlockedCompletionResultFingerprint = "abc123"
 			taskState.completionGateSessionId = "session123456"
 			taskState.completionGateBlockHistory = [{ reason: "audit_gate", stage: "audit", at: 1, soft: false, blockCount: 4 }]
+			taskState.currentFocusChainChecklist = "- [x] Step 1"
 			markCompletionAttemptFinished(configWithState(taskState))
 			taskState.doubleCheckCompletionPending.should.be.false()
 			taskState.completionGateBlockCount.should.equal(0)
 			should.not.exist(taskState.lastBlockedCompletionResultFingerprint)
 			should.not.exist(taskState.completionGateBlockHistory)
 			should.not.exist(taskState.completionGateSessionId)
+			should.not.exist(taskState.currentFocusChainChecklist)
 		})
 	})
 
