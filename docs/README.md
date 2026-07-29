@@ -239,6 +239,9 @@ When in doubt: session behavior → `docs/`; durable substrate → `broccolidb/d
 | [Companion brief](papers/companion-brief.md) | Leads, evaluators | Executive summary · workspace-verified metrics |
 | [Philosophy](papers/philosophy.md) | Builders, policy | Calm agency · approval · completion gates |
 | [Whitepaper](papers/whitepaper.md) | Engineers | Full technical architecture |
+| [Token buffer brief](papers/token-buffer-companion-brief.md) | Executives, PMs | Token Ingestion Buffer executive summary & 5 debunking proofs |
+| [Token buffer philosophy](papers/token-buffer-philosophy.md) | Leads, designers | Epistemic compaction & single-turn vision duty |
+| [Token buffer whitepaper](papers/token-buffer-whitepaper.md) | Engineers, reviewers | Formal DSL grammar, Theorem 1–3 proofs & component ablation matrix |
 | [MEOW brief](../.wiki/meow-executive-brief.md) | Leads, onboarding | Executive brief for the Model-Efficient Order-aware Workflow |
 | [MEOW philosophy](../.wiki/meow-philosophy.md) | Leads, builders | Normative reasoning and calm concurrency principles |
 | [MEOW whitepaper](../.wiki/meow-whitepaper.md) | Engineers | Canonical technical architecture for execution lane swarms |

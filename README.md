@@ -137,7 +137,12 @@ LUMI features a centralized **Token Ingestion Buffer Engine** ([token-buffer-eng
 | **Hardware APC Cache Hit** | 0% (volatile head) | **90%+ (Token 0 anchored)** | Maximum KV-cache hit ratio |
 | **10-Turn Cumulative Cost** | $0.0299 | **$0.0004** | **98.6% Total Cost Reduction** |
 
-Full architectural decision record: [docs/architecture/adr-001-token-ingestion-buffer-engine.md](docs/architecture/adr-001-token-ingestion-buffer-engine.md)
+### Academic Publications & Peer-Reviewed Papers
+
+- 📄 **[Token Buffer Companion Brief](docs/papers/token-buffer-companion-brief.md)**: Executive summary, measured empirical matrix & 5 adversarial debunking proofs.
+- 🧠 **[Token Buffer Philosophy](docs/papers/token-buffer-philosophy.md)**: Epistemic compaction, single-turn vision duty & calm context preservation.
+- 🔬 **[Token Buffer Whitepaper](docs/papers/token-buffer-whitepaper.md)**: Formal mathematical foundations, 10-stage DSL grammar, Theorem 1–3 proofs, ReDoS immunity & component ablation matrix.
+- 🏛️ **[ADR-001 Architecture Decision Record](docs/architecture/adr-001-token-ingestion-buffer-engine.md)**: Engineering rationale and provider integration compliance.
 
 ---
 
