@@ -114,11 +114,11 @@ Crucially, **full output retention applies to active turns ($W_t = 2$)**. By the
 *Hypothesis*: Token 0 prefix anchoring does not guarantee hardware prompt cache hits when cloud providers use PagedAttention with fixed memory page sizes (16 or 32 tokens).
 
 *Adversarial Analysis & Proof*:
-In PagedAttention, KV-cache blocks are allocated in fixed page sizes $B \in \{16, 32\}$. If sequence length $|\mathcal{N}(S_0) \concat \mathcal{O}(\text{Tools})|$ is not a multiple of $B$, the boundary page suffers partial cache re-computation.
+In PagedAttention, KV-cache blocks are allocated in fixed page sizes $B \in \{16, 32\}$. If sequence length $|\mathcal{N}(S_0) || \mathcal{O}(\text{Tools})|$ is not a multiple of $B$, the boundary page suffers partial cache re-computation.
 
 The engine enforces **Deterministic Page Padding**: system prompt normalization and sorted tool array serialization append canonical whitespace padding to align the prefix token length to exact 16-token page boundaries:
 
-$$|\mathcal{N}(S_0) \concat \mathcal{O}(\text{Tools})| \equiv 0 \pmod{16}$$
+$$|\mathcal{N}(S_0) || \mathcal{O}(\text{Tools})| \equiv 0 \pmod{16}$$
 
 This guarantees 100% page-aligned KV-cache reuse on vLLM, SGLang, and Cerebras inference architectures. **H3 Debunked.**
 
