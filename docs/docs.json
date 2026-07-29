@@ -215,6 +215,9 @@
 							"papers/companion-brief",
 							"papers/philosophy",
 							"papers/whitepaper",
+							"papers/token-buffer-companion-brief",
+							"papers/token-buffer-philosophy",
+							"papers/token-buffer-whitepaper",
 							"papers/golden-cartridge-brief",
 							"papers/golden-cartridge-philosophy",
 							"papers/golden-cartridge-whitepaper"
