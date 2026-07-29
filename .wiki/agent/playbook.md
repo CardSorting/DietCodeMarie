@@ -68,6 +68,8 @@ npm run ci:build
 npm run roadmap:audit
 npm run benchmark:meow-io
 TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha --no-config -r ts-node/register -r tsconfig-paths/register -r source-map-support/register -r ./src/test/requires.cjs src/core/context/__tests__/ContextPruner.test.ts src/core/context/context-management/__tests__/ContextManager.test.ts
+npx tsx scripts/apc-benchmark.ts
+npx tsx scripts/apc-pipeline-test.ts
 ```
 
 `mocha` must use `--no-config` for a truly focused run; `.mocharc.json` otherwise adds every `src/**/__tests__/*.ts` test.

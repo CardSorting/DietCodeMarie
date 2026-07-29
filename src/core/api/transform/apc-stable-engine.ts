@@ -73,8 +73,8 @@ export class ApcStableIngestionEngine {
 	public sanitizeAssistantContent(content: string): string {
 		if (!content || typeof content !== "string") return content
 		return content
-			.replace(/<think>[\s\S]*?<\/think>/gi, "")
-			.replace(/<think>[\s\S]*$/gi, "")
+			.replace(/<(?:think|thinking|reasoning)>[\s\S]*?<\/(?:think|thinking|reasoning)>/gi, "")
+			.replace(/<(?:think|thinking|reasoning)>[\s\S]*$/gi, "")
 			.trim()
 	}
 
@@ -88,9 +88,9 @@ export class ApcStableIngestionEngine {
 
 		let cleaned = text
 
-		// 1. ANSI Terminal Escape Sequence Stripping
+		// 1. ANSI Terminal Escape Sequence Stripping (CSI & OSC sequences)
 		// biome-ignore lint/complexity/useRegexLiterals: avoid control character regex literal warnings in linters
-		cleaned = cleaned.replace(new RegExp("\\x1b\\[[0-9;]*[a-zA-Z]", "g"), "")
+		cleaned = cleaned.replace(new RegExp("\\x1b(?:\\[[0-9;]*[a-zA-Z]|\\][^\\x07\\x1b]*(?:\\x07|\\x1b\\\\))", "g"), "")
 
 		// 2. Line Ending & Whitespace Minification
 		cleaned = cleaned
@@ -111,7 +111,7 @@ export class ApcStableIngestionEngine {
 
 		// 6. Framework & Internal Stack Frame Collapsing
 		cleaned = cleaned.replace(
-			/(\s+at\s+.*?\((?:node:internal|.*?\/node_modules\/).*?\)\n){3,}/g,
+			/(\s+at\s+.*?(?:node:internal|.*?\/node_modules\/).*?\n){3,}/g,
 			"\n    [... internal stack frames collapsed ...]\n",
 		)
 
@@ -157,7 +157,17 @@ export class ApcStableIngestionEngine {
 	 * Prunes raw base64 vision payloads in historical turns, replacing them with lightweight anchors.
 	 */
 	public pruneHistoricalVisionPayloads(messages: DietCodeStorageMessage[]): DietCodeStorageMessage[] {
-		const cutoffIndex = messages.length - this.options.activeVisionWindow
+		let userMsgCount = 0
+		let cutoffIndex = 0
+		for (let i = messages.length - 1; i >= 0; i--) {
+			if (messages[i].role === "user") {
+				userMsgCount++
+				if (userMsgCount === this.options.activeVisionWindow) {
+					cutoffIndex = i
+					break
+				}
+			}
+		}
 
 		return messages.map((msg, index) => {
 			if (index >= cutoffIndex || !Array.isArray(msg.content)) {
@@ -241,6 +251,12 @@ export class ApcStableIngestionEngine {
 			startIndex++
 		}
 
+		// Turn-boundary snap: Ensure startIndex snaps forward to the next 'user' role
+		// to guarantee API schema validity (first message after system prompt must be user)
+		while (startIndex < messages.length - preserveRecentTurns && messages[startIndex].role !== "user") {
+			startIndex++
+		}
+
 		return messages.slice(startIndex)
 	}
 
@@ -256,12 +272,9 @@ export class ApcStableIngestionEngine {
 	public processApcStableMessages(
 		messages: OpenAI.Chat.ChatCompletionMessageParam[],
 	): OpenAI.Chat.ChatCompletionMessageParam[] {
-		const deduplicated = this.deduplicateConsecutiveMessages(messages)
-
-		return deduplicated.map((msg: OpenAI.Chat.ChatCompletionMessageParam) => {
+		// Pre-process & unwrap single-element text array content to string for APC structure stability
+		const unwrapped = messages.map((msg: OpenAI.Chat.ChatCompletionMessageParam) => {
 			const cloned = { ...msg }
-
-			// Unwrap single-element text array content to string for APC structure stability
 			if (
 				Array.isArray(cloned.content) &&
 				cloned.content.length === 1 &&
@@ -274,6 +287,13 @@ export class ApcStableIngestionEngine {
 			) {
 				cloned.content = cloned.content[0].text
 			}
+			return cloned
+		})
+
+		const deduplicated = this.deduplicateConsecutiveMessages(unwrapped)
+
+		return deduplicated.map((msg: OpenAI.Chat.ChatCompletionMessageParam) => {
+			const cloned = { ...msg }
 
 			if (typeof cloned.content === "string") {
 				cloned.content = cloned.content.replace(/[\t ]+$/gm, "")

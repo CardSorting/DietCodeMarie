@@ -240,3 +240,21 @@ Symptom: Resuming a swarm execution restarts agents that were already marked "co
 Cause: The resume plan requires verification of a sealed governed authority receipt (`subagent_executions/<swarmId>.governed.json`) and a valid integrity checksum. If the receipt is unsealed, missing, or fails validation, agent results cannot be safely reused.
 
 Fix: Verify that the previous swarm run completed successfully up to a checkpoint and produced a sealed governed receipt. If the previous attempt was abruptly interrupted before sealing, the agent lanes must be restarted to guarantee workspace state integrity.
+
+## APC Prompt Cache Invalidation or Turn-Boundary API Rejection
+
+Symptom: Cerebras, Gemma, or OpenAI API requests fail with `Invalid Request Error: first message after system prompt must be user role`, or multi-turn agent sessions suffer low prompt cache hit ratios.
+
+Cause:
+1. Context ceiling truncation (`enforceApcStableContextCeiling`) trimmed messages based on token limits without snapping the start index forward to a `user` role boundary, causing the API payload to start with an orphaned `assistant` or `tool` message.
+2. Artificial shorthand symbols (`st:`, `msg:`, `err:`, `[@diff]`) were inserted into historical messages, breaking subword BPE tokenization for Gemma and Cerebras models.
+3. Single-element text block arrays (`[{ type: "text", text: "..." }]`) bypassed user message deduplication logic.
+
+Fix & Verification:
+- Pass multi-turn messages through `ApcStableIngestionEngine` (`defaultApcStableEngine`) before invoking Cerebras or OpenAI provider completion requests.
+- Verify turn-boundary snapping, BPE preservation, and 100% prefix invariance by running the validation suite:
+
+```sh
+npx tsx scripts/apc-benchmark.ts
+npx tsx scripts/apc-pipeline-test.ts
+```

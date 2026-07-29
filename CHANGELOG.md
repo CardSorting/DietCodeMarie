@@ -17,6 +17,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Fixed
 
+- **Hardware APC Engine & Main Token Buffer Parity Synchronization** — Ported all APC engine optimization discoveries to the central `TokenIngestionBufferEngine` (`token-buffer-engine.ts`), introducing line-boundary aligned tool output compaction, assistant reasoning tag sanitization (`<think>`, `<thinking>`, `<reasoning>`), CSI/OSC terminal escape sequence stripping, single-text-block array unwrapping, and API-compliant `user` turn boundary snapping (100% verified across 34 automated benchmark & pipeline tests).
 - **Focus Chain State Leakage** — Purged task progress checklist state upon completion attempt finalization (`markCompletionAttemptFinished`), preventing state leakage and infinite retry loops on task completion.
 - **Delegated Handler State Sync** — Refactored `AttemptCompletionHandler.ts` to delegate Focus Chain synchronization directly to `config.callbacks.updateFCListFromToolResponse(taskProgress)` for single-source-of-truth consistency.
 

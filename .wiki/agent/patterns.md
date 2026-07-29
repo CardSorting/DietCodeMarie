@@ -1,5 +1,16 @@
 # Execution Patterns
 
+## Hardware Automatic Prompt Caching Engine (APC) & Main Token Buffer Ingestion
+
+1. **System Prompt Token 0 Normalization**: Normalize line endings (`\r\n` -> `\n`) and strip leading/trailing whitespace (`normalizeSystemPrompt`) to guarantee Token 0 cache key alignment across provider models.
+2. **Deterministic Tool Schema Alignment**: Sort tool definitions alphabetically by tool name (`alignToolSchemas`) prior to prompt construction to prevent prompt cache drift.
+3. **Multi-Format Reasoning Tag Sanitization**: Strip `<think>`, `<thinking>`, and `<reasoning>` tags across DeepSeek R1, Qwen R1, Claude, and Gemma models (`sanitizeAssistantContent`) to eliminate internal reasoning trace leaks across turns.
+4. **Single-Element Text Array Pre-Unwrapping**: Unwrap single text-block array content (`[{ type: "text", text: "..." }]`) to standard string format before message deduplication.
+5. **Consecutive Message Deduplication**: Collapse consecutive duplicate user prompt turns (`deduplicateConsecutiveMessages`) exceeding 30-50 characters.
+6. **BPE Vocabulary Preservation**: Clean whitespace, CRLF, HTML comments, stack frames, paths, and URLs without introducing out-of-vocabulary shorthand symbols (`st:`, `msg:`, `err:`, `[@diff]`) that break Gemma / Cerebras subword tokenization.
+7. **Line-Boundary Aligned Tool Output Compaction**: Compact historical tool outputs by snapping head and tail truncation bounds to whole newline characters (`\n`) to prevent mid-token or mid-line splits.
+8. **API-Compliant User Turn Boundary Snapping**: When context ceiling limits force context window trimming (`enforceApcStableContextCeiling` / `enforceContextCeiling`), snap truncated start indices forward to the next `user` role to guarantee API schema compliance (`user` role start).
+
 ## Recoverable Turn-Boundary Context Projection
 
 1. Read the last completed request usage and classify it with `getCompactionTierFromTokens()`.

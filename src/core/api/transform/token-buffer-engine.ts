@@ -46,7 +46,17 @@ export class TokenIngestionBufferEngine {
 	 * Replaces historical base64 images with lightweight semantic anchors across any provider.
 	 */
 	public pruneHistoricalVisionPayloads(messages: DietCodeStorageMessage[]): DietCodeStorageMessage[] {
-		const cutoffIndex = messages.length - this.options.activeVisionWindow
+		let userMsgCount = 0
+		let cutoffIndex = 0
+		for (let i = messages.length - 1; i >= 0; i--) {
+			if (messages[i].role === "user") {
+				userMsgCount++
+				if (userMsgCount === this.options.activeVisionWindow) {
+					cutoffIndex = i
+					break
+				}
+			}
+		}
 
 		return messages.map((msg, index) => {
 			if (index >= cutoffIndex || !Array.isArray(msg.content)) {
@@ -68,6 +78,18 @@ export class TokenIngestionBufferEngine {
 	}
 
 	/**
+	 * Sanitizes assistant text content by stripping reasoning/thinking tags
+	 * across DeepSeek R1, Qwen R1, Claude, and Gemma models.
+	 */
+	public sanitizeAssistantContent(content: string): string {
+		if (!content || typeof content !== "string") return content
+		return content
+			.replace(/<(?:think|thinking|reasoning)>[\s\S]*?<\/(?:think|thinking|reasoning)>/gi, "")
+			.replace(/<(?:think|thinking|reasoning)>[\s\S]*$/gi, "")
+			.trim()
+	}
+
+	/**
 	 * Applies 10-Stage Domain-Specific Language (DSL) Token Compression to reduce payload size.
 	 */
 	public compressDslText(text: string): string {
@@ -75,8 +97,10 @@ export class TokenIngestionBufferEngine {
 
 		let compressed = text
 
-		// 1. Syntactic Stripping: Strip HTML comments, comment headers, and collapse line gaps
+		// 1. Syntactic & ANSI Stripping: Strip CSI & OSC terminal sequences, HTML comments, comment headers, and line gaps
+		// biome-ignore lint/complexity/useRegexLiterals: avoid control character regex literal warnings in linters
 		compressed = compressed
+			.replace(/\x1b(?:\[[0-9;]*[a-zA-Z]|\][^\x07\x1b]*(?:\x07|\x1b\\))/g, "")
 			.replace(/<!--[\s\S]*?-->/g, "")
 			.replace(/^\s*\/\/#.*$/gm, "")
 			.replace(/\r\n/g, "\n")
@@ -146,8 +170,20 @@ export class TokenIngestionBufferEngine {
 			const dslCompressed = this.options.enableDslCompression ? this.compressDslText(msg.content) : msg.content
 
 			if (dslCompressed.length > this.options.maxToolOutputLength) {
-				const head = dslCompressed.slice(0, 350)
-				const tail = dslCompressed.slice(-350)
+				const headSize = Math.floor(this.options.maxToolOutputLength * 0.45)
+				const tailSize = Math.floor(this.options.maxToolOutputLength * 0.45)
+
+				const rawHead = dslCompressed.slice(0, headSize)
+				const rawTail = dslCompressed.slice(-tailSize)
+
+				// Snap head boundary to last newline if present
+				const headLastNl = rawHead.lastIndexOf("\n")
+				const head = headLastNl > headSize * 0.5 ? rawHead.slice(0, headLastNl) : rawHead
+
+				// Snap tail boundary to first newline if present
+				const tailFirstNl = rawTail.indexOf("\n")
+				const tail = tailFirstNl !== -1 && tailFirstNl < tailSize * 0.5 ? rawTail.slice(tailFirstNl + 1) : rawTail
+
 				return {
 					...msg,
 					content: `${head}\n\n... [HistOutputTruncated] ...\n\n${tail}`,
@@ -328,7 +364,21 @@ export class TokenIngestionBufferEngine {
 			result.push(msg)
 		}
 
-		return [...result, ...recentTurns]
+		const combined = [...result, ...recentTurns]
+
+		// Turn-boundary snap: Ensure combined array starts with a valid 'user' role (at or after index 1 if index 0 is system)
+		let userSnapIndex = combined[0]?.role === "system" ? 1 : 0
+		while (userSnapIndex < combined.length - preserveRecentTurns && combined[userSnapIndex]?.role !== "user") {
+			userSnapIndex++
+		}
+
+		if (userSnapIndex > (combined[0]?.role === "system" ? 1 : 0)) {
+			return combined[0]?.role === "system"
+				? [combined[0], ...combined.slice(userSnapIndex)]
+				: combined.slice(userSnapIndex)
+		}
+
+		return combined
 	}
 
 	/**
@@ -340,7 +390,28 @@ export class TokenIngestionBufferEngine {
 		const rawSystem = options.systemPrompt
 		const normalizedSystemPrompt = this.normalizeSystemPrompt(rawSystem)
 
-		let processedMessages = this.pruneHistoricalVisionPayloads(options.messages)
+		// Unwrap single text-block array content to plain string and sanitize assistant content before deduplication
+		let processedMessages = options.messages.map((msg) => {
+			let cloned = { ...msg }
+			if (
+				Array.isArray(cloned.content) &&
+				cloned.content.length === 1 &&
+				typeof cloned.content[0] === "object" &&
+				cloned.content[0] !== null &&
+				"type" in cloned.content[0] &&
+				cloned.content[0].type === "text" &&
+				"text" in cloned.content[0] &&
+				typeof cloned.content[0].text === "string"
+			) {
+				cloned = { ...cloned, content: cloned.content[0].text }
+			}
+			if (cloned.role === "assistant" && typeof cloned.content === "string") {
+				cloned = { ...cloned, content: this.sanitizeAssistantContent(cloned.content) }
+			}
+			return cloned
+		})
+
+		processedMessages = this.pruneHistoricalVisionPayloads(processedMessages)
 		processedMessages = this.compactHistoricalToolOutputs(processedMessages)
 		processedMessages = this.deduplicateConsecutiveMessages(processedMessages)
 
