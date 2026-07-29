@@ -166,4 +166,57 @@ Execution Status: Success
 		expect(stats.averageCacheHitRatio).to.include("%")
 		expect(stats.totalEstDollarsSaved).to.include("$")
 	})
+
+	describe("Adversarial Heavy Pressure & Security Fuzzing Suite", () => {
+		it("handles binary control characters, unclosed tags, and deep path floods safely", () => {
+			const adversarialInput =
+				`
+\x00\xFF\xFE\x00<!-- Unclosed comment block
+/Users/bozoegg/Downloads/codemarie-new/src/core/api/providers/cerebras.ts
+`.repeat(100) + `[tool:fake_tool path="/etc/passwd"] {"status": 500}`
+
+			const compressed = engine.compressDslText(adversarialInput)
+			expect(compressed).to.exist
+			expect(compressed).to.include("~.../cerebras.ts")
+			expect(compressed).to.include("st: 500")
+		})
+
+		it("survives 1,000,000+ token context ceiling flood while preserving Token 0 system prompt and active turn", () => {
+			const massiveMessages = [
+				{ role: "system", content: "System Instruction Token 0 Anchor" },
+				...Array.from({ length: 50 }, (_, i) => ({
+					role: i % 2 === 0 ? "user" : "assistant",
+					content: `Historical turn ${i} payload bloat ` + "A".repeat(10_000),
+				})),
+				{ role: "user", content: "Active turn directive: execute critical action" },
+			]
+
+			const guarded = engine.enforceContextCeiling(massiveMessages, 500, 1)
+			expect(guarded.length).to.be.below(massiveMessages.length)
+			expect(guarded[0].content).to.equal("System Instruction Token 0 Anchor")
+			expect(guarded[guarded.length - 1].content).to.equal("Active turn directive: execute critical action")
+		})
+
+		it("maintains sub-millisecond throughput under high-frequency pipeline pressure (1,000 runs)", () => {
+			const { TokenBufferProfiles } = require("../token-buffer-engine")
+			const profile = TokenBufferProfiles.STRICT_CACHE_STABILITY
+			const sampleInput = {
+				systemPrompt: "System instruction prompt \r\n",
+				messages: [
+					{ role: "user", content: "Run test suite on /Users/bozoegg/Downloads/codemarie-new/src/index.ts" },
+					{ role: "assistant", content: "Executing test suite" },
+					{ role: "tool", content: '{"status": 200, "message": "Success"} \n' + "=".repeat(100) },
+				],
+			}
+
+			const start = performance.now()
+			for (let i = 0; i < 1_000; i++) {
+				profile.optimizeMessagesPipeline(sampleInput)
+			}
+			const totalMs = performance.now() - start
+			const avgMsPerRun = totalMs / 1_000
+
+			expect(avgMsPerRun).to.be.below(1.0) // Must run in under 1ms average under pressure
+		})
+	})
 })
