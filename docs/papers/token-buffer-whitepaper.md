@@ -40,9 +40,9 @@ Historical tool results ($k < N - W_t$, where full tool window $W_t = 2$) exceed
 
 $$\pi_{\text{tool}}(c_{k,\text{tool}}) = \text{Head}_{350}(c_{k,\text{tool}}) \mathbin{||} \text{"... [truncated] ..."} \mathbin{||} \text{Tail}_{350}(c_{k,\text{tool}})$$
 
-where $||$ denotes string concatenation. Historical text content is transformed via 10-stage transpilation operator $\mathcal{D} : \Sigma^{*} \to \Sigma^{*}_{\text{DSL}}$. Thus, optimized token load $T^{*}_{\text{ingest}}(N)$ is strictly bounded by:
+where $||$ denotes string concatenation. Historical text content is transformed via 10-stage transpilation operator $\mathcal{D} : \Sigma^{*} \to \Sigma_{\text{DSL}}^{*}$. Thus, optimized token load $T_{\text{ingest}}^{*}(N)$ is strictly bounded by:
 
-$$T^{*}_{\text{ingest}}(N) = |\mathcal{N}(S_0)| + \sum_{k=1}^{N-W_t} |\mathcal{D}(\pi_{\text{tool}}(c_{k,\text{tool}}))| + \sum_{k=N-W_t+1}^{N} |m_k| \ll T_{\text{ingest}}(N)$$
+$$T_{\text{ingest}}^{*}(N) = |\mathcal{N}(S_0)| + \sum_{k=1}^{N-W_t} |\mathcal{D}(\pi_{\text{tool}}(c_{k,\text{tool}}))| + \sum_{k=N-W_t+1}^{N} |m_k| \ll T_{\text{ingest}}(N)$$
 
 ### 2.2 KV-Cache Hit Efficiency Formulation
 
@@ -191,12 +191,12 @@ Let $\mathbb{T}^{*}$ be the space of all valid optimization transformations on a
 $$T_{\text{min}}^{*}(N) \triangleq H(S_0) + H(\text{Tools}) + \sum_{k=N-W_t+1}^N H(m_k) + H(\text{StateAnchors})$$
 
 **Theorem 3 (Near-Optimal Floor Approximation)**:
-The total token load produced by `TokenIngestionBufferEngine`, denoted $T^{*}_{\text{buffer}}(N)$, satisfies:
+The total token load produced by `TokenIngestionBufferEngine`, denoted $T_{\text{buffer}}^{*}(N)$, satisfies:
 
-$$T^{*}_{\text{buffer}}(N) \le 1.04 \cdot T_{\text{min}}^{*}(N)$$
+$$T_{\text{buffer}}^{*}(N) \le 1.04 \cdot T_{\text{min}}^{*}(N)$$
 
 *Proof*:
-Because single-turn vision eviction reduces vision payload mass to $O(1)$ anchors ($|\pi_{\text{vision}}| \le 10$ tokens), tool output compaction bounds historical tool tokens to $|\text{Snippet}_{350}| \le 200$ tokens, and 10-stage DSL transpilation eliminates $\approx 85.6\%$ of syntactic redundancy, the overhead ratio $\gamma = T^{*}_{\text{buffer}}(N) / T_{\text{min}}^{*}(N)$ is bounded by $\gamma \le 1.04$. Thus, the engine operates within **4% of the theoretical Shannon entropy lower bound**. $\blacksquare$
+Because single-turn vision eviction reduces vision payload mass to $O(1)$ anchors ($|\pi_{\text{vision}}| \le 10$ tokens), tool output compaction bounds historical tool tokens to $|\text{Snippet}_{350}| \le 200$ tokens, and 10-stage DSL transpilation eliminates $\approx 85.6\%$ of syntactic redundancy, the overhead ratio $\gamma = T_{\text{buffer}}^{*}(N) / T_{\text{min}}^{*}(N)$ is bounded by $\gamma \le 1.04$. Thus, the engine operates within **4% of the theoretical Shannon entropy lower bound**. $\blacksquare$
 
 ---
 
