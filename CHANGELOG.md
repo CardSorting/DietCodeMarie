@@ -6,11 +6,11 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
-## [11.3.1] - 2026-07-29
+## [11.4.0] - 2026-07-29
 
 ### Added
 
-- **Automatic Prompt Caching (APC) Hardware Optimization Engine (`ApcStableIngestionEngine`)** — Hardware prompt caching optimization engine for Cerebras and Gemma models guaranteeing 100% KV-cache prefix invariance, BPE vocabulary preservation, line-boundary aligned truncation, and deterministic tool schema sorting.
+- **Hardware Automatic Prompt Caching Engine (`ApcStableIngestionEngine`)** — Dedicated hardware Automatic Prompt Caching (APC) token optimization engine for Cerebras and Gemma models guaranteeing 100% prefix invariance across multi-turn agent sessions.
 - **Monolithic Focus Chain Domain Engine V2 (`FocusChainAuthority.ts`)** — Centralized focus chain state management, atomic disk persistence, and completion gate instructions into a single monolithic domain authority with an explicit `FocusChainStatus` state machine (`IDLE`, `ACTIVE`, `COMPLETED`, `STALE`).
 - **Immutable Focus Chain Snapshot API (`FocusChainSnapshot`)** — Added `authority.getSnapshot()` providing cached, atomic metrics (`totalItems`, `completedItems`, `percentComplete`, `status`, `isComplete`, `userHasModified`) across completion gate pipelines and telemetry services.
 - **GFM & Markdown Label Sanitization Engine (`sanitizeChecklistLabel`)** — Enhanced checklist item parsing to support all standard GFM markers (`-`, `*`, `+`, `1.`, `1)`) and indented sub-items. Strips Markdown links (`[text](url)`), code backticks (`` `code` ``), bold/italics, and HTML comments from labels before fuzzy comparison to eliminate false-positive completion gate rejections.
