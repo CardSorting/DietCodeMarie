@@ -85,7 +85,7 @@ In addition to the 5-minute interval timer, `BufferedDbPool` tracks `opsFlushedS
 
 ### Zero-Allocation Parameter Chunking
 In `BufferedDbPool.ts`, `executeChunkedRawInsert` bounds parameter array sizing:
-$$\text{CHUNK\_SIZE} = \min\left(100, \max\left(1, \left\lfloor \frac{\text{parameterBuffer.length}}{\max(1, \text{columns.length})} \right\rfloor\right)\right)$$
+$$\text{CHUNK\_SIZE} = \min(100, \max(1, \lfloor \frac{\text{parameterBuffer.length}}{\max(1, \text{columns.length})} \rfloor))$$
 This strictly guarantees that chunk parameter flattening never exceeds `parameterBuffer.length` (2,000 slots), preventing V8 array expansion and sparse dictionary memory leaks.
 
 ---

@@ -28,7 +28,7 @@ Let $M = (m_1, m_2, \dots, m_N)$ be a sequence of historical messages in an agen
 
 In an unoptimized baseline, total ingestion token load $T_{\text{ingest}}(N)$ at turn $N$ is modeled by:
 
-$$T_{\text{ingest}}(N) = |S_0|_{\text{tokens}} + \sum_{k=1}^{N-1} \left( |c_{k,\text{text}}| + |c_{k,\text{img}}| + |c_{k,\text{tool}}| \right) + |m_N|$$
+$$T_{\text{ingest}}(N) = |S_0|_{\text{tokens}} + \sum_{k=1}^{N-1} ( |c_{k,\text{text}}| + |c_{k,\text{img}}| + |c_{k,\text{tool}}| ) + |m_N|$$
 
 where $|S_0|_{\text{tokens}}$ denotes the token length of system prompt $S_0$, and $|c_{k,\text{img}}| \approx 4000$ tokens per base64 image block.
 
@@ -40,9 +40,9 @@ Historical tool results ($k < N - W_t$, where full tool window $W_t = 2$) exceed
 
 $$\pi_{\text{tool}}(c_{k,\text{tool}}) = \text{Head}_{350}(c_{k,\text{tool}}) \mathbin{||} \text{"... [truncated] ..."} \mathbin{||} \text{Tail}_{350}(c_{k,\text{tool}})$$
 
-where $||$ denotes string concatenation. Historical text content is transformed via 10-stage transpilation operator $\mathcal{D} : \Sigma^* \to \Sigma^*_{\text{DSL}}$. Thus, optimized token load $T^*_{\text{ingest}}(N)$ is strictly bounded by:
+where $||$ denotes string concatenation. Historical text content is transformed via 10-stage transpilation operator $\mathcal{D} : \Sigma^{*} \to \Sigma^{*}_{\text{DSL}}$. Thus, optimized token load $T^{*}_{\text{ingest}}(N)$ is strictly bounded by:
 
-$$T^*_{\text{ingest}}(N) = |\mathcal{N}(S_0)| + \sum_{k=1}^{N-W_t} |\mathcal{D}(\pi_{\text{tool}}(c_{k,\text{tool}}))| + \sum_{k=N-W_t+1}^{N} |m_k| \ll T_{\text{ingest}}(N)$$
+$$T^{*}_{\text{ingest}}(N) = |\mathcal{N}(S_0)| + \sum_{k=1}^{N-W_t} |\mathcal{D}(\pi_{\text{tool}}(c_{k,\text{tool}}))| + \sum_{k=N-W_t+1}^{N} |m_k| \ll T_{\text{ingest}}(N)$$
 
 ### 2.2 KV-Cache Hit Efficiency Formulation
 
@@ -54,11 +54,11 @@ If $t_1 \neq c_1$ (e.g., due to OS line endings $\text{CRLF}$ or non-determinist
 
 By applying **System Normalization** $\mathcal{N}$ and **Deterministic Lexical Tool Ordering** $\mathcal{O}_{\text{tool}}$:
 
-$$\mathbf{t}^* = \mathcal{N}(S_0) || \mathcal{O}_{\text{tool}}(\text{Tools}) || \mathcal{P}(M)$$
+$$\mathbf{t}^{*} = \mathcal{N}(S_0) || \mathcal{O}_{\text{tool}}(\text{Tools}) || \mathcal{P}(M)$$
 
 The prefix up to turn $N-1$ remains byte-identical across consecutive turns, guaranteeing $H = |\mathcal{N}(S_0) || \mathcal{O}_{\text{tool}}(\text{Tools}) || \mathcal{P}(M_{<N})|$, achieving a Cache Hit Ratio $\text{CER}$:
 
-$$\text{CER}(N) \triangleq \frac{H(\mathbf{t}^*, \mathbf{c})}{L_{\text{total}}} \times 100\% \ge 90.0\%$$
+$$\text{CER}(N) \triangleq \frac{H(\mathbf{t}^{*}, \mathbf{c})}{L_{\text{total}}} \times 100\% \ge 90.0\%$$
 
 ---
 
@@ -92,7 +92,7 @@ To ensure complete scientific rigor, we formulate and test five adversarial debu
 We evaluated transpiled outputs across three standard tokenizers (tiktoken `cl100k_base`, Llama-3 BPE, and Gemma SentencePiece). The DSL transpiler avoids arbitrary single-character abbreviations that trigger BPE fragmentation. Instead, it utilizes high-frequency ASCII vocabulary primitives present as single tokens in BPE dictionaries (e.g. `[`, `]`, `path`, `st`, `OK`, `err`).
 
 **Theorem 1 (Subword Monotonicity)**:
-For any tool output string $s \in \Sigma^*$ processed by $\mathcal{D}$, the subword token count $|BPE(\mathcal{D}(s))|$ satisfies:
+For any tool output string $s \in \Sigma^{*}$ processed by $\mathcal{D}$, the subword token count $|BPE(\mathcal{D}(s))|$ satisfies:
 
 $$|BPE(\mathcal{D}(s))| \le |BPE(s)| - \Delta_{\text{json}} - \Delta_{\text{paths}}$$
 
@@ -171,7 +171,7 @@ Let $\mathcal{I}(M)$ be the mutual information between historical tool message $
 $$H(M) = H(E(M)) + H(W(M))$$
 
 **Theorem 2 (Epistemic Information Preservation)**:
-The transpilation operator $\mathcal{D}: \Sigma^* \to \Sigma^*_{\text{DSL}}$ is an information-preserving projection on the epistemic subspace:
+The transpilation operator $\mathcal{D}: \Sigma^{*} \to \Sigma^{*}_{\text{DSL}}$ is an information-preserving projection on the epistemic subspace:
 
 $$\mathcal{I}(\mathcal{D}(M); A) = \mathcal{I}(M; A)$$
 
@@ -186,17 +186,17 @@ Because $\mathcal{D}$ maps exact failure diagnostics (exception types, line numb
 
 ### 4.8 Theorem 3 (Asymptotic Information-Theoretic Context Ingestion Floor)
 
-Let $\mathbb{T}^*$ be the space of all valid optimization transformations on agent message history $M$. We define the theoretical minimal ingestion token floor $T_{\text{min}}^*(N)$ required for non-degraded agent reasoning at turn $N$:
+Let $\mathbb{T}^{*}$ be the space of all valid optimization transformations on agent message history $M$. We define the theoretical minimal ingestion token floor $T_{\text{min}}^{*}(N)$ required for non-degraded agent reasoning at turn $N$:
 
-$$T_{\text{min}}^*(N) \triangleq H(S_0) + H(\text{Tools}) + \sum_{k=N-W_t+1}^N H(m_k) + H(\text{StateAnchors})$$
+$$T_{\text{min}}^{*}(N) \triangleq H(S_0) + H(\text{Tools}) + \sum_{k=N-W_t+1}^N H(m_k) + H(\text{StateAnchors})$$
 
 **Theorem 3 (Near-Optimal Floor Approximation)**:
-The total token load produced by `TokenIngestionBufferEngine`, denoted $T^*_{\text{buffer}}(N)$, satisfies:
+The total token load produced by `TokenIngestionBufferEngine`, denoted $T^{*}_{\text{buffer}}(N)$, satisfies:
 
-$$T^*_{\text{buffer}}(N) \le 1.04 \cdot T_{\text{min}}^*(N)$$
+$$T^{*}_{\text{buffer}}(N) \le 1.04 \cdot T_{\text{min}}^{*}(N)$$
 
 *Proof*:
-Because single-turn vision eviction reduces vision payload mass to $O(1)$ anchors ($|\pi_{\text{vision}}| \le 10$ tokens), tool output compaction bounds historical tool tokens to $|\text{Snippet}_{350}| \le 200$ tokens, and 10-stage DSL transpilation eliminates $\approx 85.6\%$ of syntactic redundancy, the overhead ratio $\gamma = T^*_{\text{buffer}}(N) / T_{\text{min}}^*(N)$ is bounded by $\gamma \le 1.04$. Thus, the engine operates within **4% of the theoretical Shannon entropy lower bound**. $\blacksquare$
+Because single-turn vision eviction reduces vision payload mass to $O(1)$ anchors ($|\pi_{\text{vision}}| \le 10$ tokens), tool output compaction bounds historical tool tokens to $|\text{Snippet}_{350}| \le 200$ tokens, and 10-stage DSL transpilation eliminates $\approx 85.6\%$ of syntactic redundancy, the overhead ratio $\gamma = T^{*}_{\text{buffer}}(N) / T_{\text{min}}^{*}(N)$ is bounded by $\gamma \le 1.04$. Thus, the engine operates within **4% of the theoretical Shannon entropy lower bound**. $\blacksquare$
 
 ---
 
