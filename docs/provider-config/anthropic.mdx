@@ -74,7 +74,17 @@ For comprehensive details on how extended thinking works, including API examples
 
 ### Tips and Notes
 
--   **Prompt Caching:** Claude 3 models support [prompt caching](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching), which can significantly reduce costs and latency for repeated prompts.
+-   **Prompt Caching:** Claude models support [prompt caching](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching), which can significantly reduce costs and latency for repeated prompts.
 -   **Context Window:** Claude models have large context windows (200,000 tokens), allowing you to include a significant amount of code and context in your prompts.
 -   **Pricing:** Refer to the [Anthropic Pricing](https://www.anthropic.com/pricing) page for the latest pricing information.
 -   **Rate Limits:** Anthropic has strict rate limits based on [usage tiers](https://docs.anthropic.com/en/api/rate-limits#requirements-to-advance-tier). If you're repeatedly hitting rate limits, consider contacting Anthropic sales or accessing Claude through a different provider like [OpenRouter](/provider-config/openrouter) or [Requesty](/provider-config/requesty).
+
+### Ephemeral Prompt Caching & Token Ingestion Buffer Engine
+
+LUMI integrates Anthropic models with the centralized **Token Ingestion Buffer Engine** ([token-buffer-engine.ts](/architecture/current)):
+
+- **Explicit Ephemeral Tagging**: Automatically injects `{ cache_control: { type: "ephemeral" } }` onto the system prompt and the last 2 user messages.
+- **System Prompt Anchoring**: System prompt headers remain static at Token 0 to maximize prompt cache hit rates ($90\%+$ hit ratio).
+- **Single-Turn Vision Eviction**: Historical base64 images in older turns are replaced with lightweight text anchors (`[VisAnchor #N]`), preserving context while preventing vision token re-ingestion bloat.
+- **10-Stage DSL Compression**: Transpiles tool outputs, diff headers (`[@diff path Lrange]`), stack traces, and deep file paths (`~.../file.ts`) to minimize input tokens.
+

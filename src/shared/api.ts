@@ -3884,11 +3884,12 @@ export const cerebrasModels = {
 		maxTokens: 40960,
 		contextWindow: 131072,
 		supportsImages: true,
-		supportsPromptCache: false,
+		supportsPromptCache: true,
 		supportsReasoning: true,
 		temperature: 1,
 		inputPrice: 0.99,
 		outputPrice: 1.49,
+		cacheReadsPrice: 0.0,
 		description: "Gemma 4 multimodal reasoning model served on Cerebras wafer-scale hardware.",
 	},
 	"zai-glm-4.7": {

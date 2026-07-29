@@ -18,6 +18,8 @@ Use this when you change code and need to update the matching doc.
 | `src/core/task/tools/ToolExecutorCoordinator.ts` | [All tools](tools-reference/all-dietcode-tools.mdx) |
 | `src/shared/tools.ts` | [All tools](tools-reference/all-dietcode-tools.mdx) |
 | `src/core/api/index.ts` | [Model selection](core-features/model-selection-guide.mdx) · [Providers overview](provider-config/README.mdx) |
+| `src/core/api/transform/token-buffer-engine.ts` | [ADR-001 Token Buffer Engine](architecture/adr-001-token-ingestion-buffer-engine.md) · [Architecture (current)](architecture/current.md) |
+| `src/core/api/providers/cerebras.ts` | [ADR-001 Token Buffer Engine](architecture/adr-001-token-ingestion-buffer-engine.md) · [Providers overview](provider-config/README.mdx) |
 | `src/shared/providers/providers.json` | [Providers overview](provider-config/README.mdx) |
 
 ## Safety & customization

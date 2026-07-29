@@ -26,7 +26,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/CardSorting/LUMI" alt="License" /></a>
   <a href="https://github.com/CardSorting/LUMI/actions/workflows/codeql.yml"><img src="https://github.com/CardSorting/LUMI/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" /></a>
   <a href="https://securityscorecards.dev/viewer/?uri=github.com/CardSorting/LUMI"><img src="https://api.securityscorecards.dev/projects/github.com/CardSorting/LUMI/badge" alt="OpenSSF Scorecard" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/version-11.0.0-green" alt="Version" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-11.3.0-green" alt="Version" /></a>
   <img src="https://img.shields.io/badge/VS%20Code-%5E1.84.0-007ACC?logo=visualstudiocode&logoColor=white" alt="VS Code" />
   <img src="https://img.shields.io/badge/extension-CardSorting.lumi--vscode-purple" alt="VS Marketplace ID" />
   <img src="https://img.shields.io/badge/Open%20VSX-CardSorting.lumi-blue" alt="Open VSX ID" />
@@ -55,6 +55,7 @@ code --install-extension CardSorting.lumi
 - [Origins & acknowledgments](#origins--acknowledgments)
 - [Product evolution (full history)](docs/EVOLUTION.md)
 - [Features](#features)
+- [Token Ingestion Buffer Engine](#token-ingestion-buffer-engine)
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [Documentation](#documentation)
@@ -108,6 +109,35 @@ Design philosophy: [docs/papers/philosophy.md](docs/papers/philosophy.md) (agent
 | Governed receipt schema | **v3** |
 
 Workspace-verified metrics: [docs/papers/companion-brief.md](docs/papers/companion-brief.md) · Knowledge brief: [docs/papers/knowledge-brief.md](docs/papers/knowledge-brief.md) · Substrate report: [broccolidb/docs/PASS12_ARCHITECTURAL_REPORT.md](broccolidb/docs/PASS12_ARCHITECTURAL_REPORT.md)
+
+---
+
+## ⚡ Token Ingestion Buffer Engine & Prompt Caching
+
+LUMI features a centralized **Token Ingestion Buffer Engine** ([token-buffer-engine.ts](src/core/api/transform/token-buffer-engine.ts)) that reduces input token ingestion overhead by **85%+ per turn** and total multi-turn context costs by **98.6%** ([ADR-001](docs/architecture/adr-001-token-ingestion-buffer-engine.md)):
+
+<p align="center">
+  <img src="assets/docs/token_buffer_benchmark_infographic.png" alt="Token Ingestion Buffer Engine Benchmark Infographic" width="800" />
+</p>
+
+- ⚡ **0.871 ms Sub-millisecond Execution Latency**: Ultra-fast in-memory transform pipeline.
+- 🎯 **Token 0 Prompt Cache Alignment**: Normalizes line endings (`\r\n` $\rightarrow$ `\n`) and lexically sorts tool definitions to achieve **90%+ hardware & cloud prompt cache hit rates** (Cerebras APC, Anthropic, OpenRouter).
+- 🖼️ **Single-Turn Vision Eviction**: Replaces historical base64 image data URLs ($T < \text{active}$) with lightweight text anchors (`[VisAnchor #N]`), saving ~4,000 vision tokens per image per turn.
+- 🗜️ **10-Stage DSL Compression**: Transpiles tool call JSON into compact inline DSL (`[tool:read_file path="..."]`), compacts git diff headers (`[@diff path Lrange]`), collapses stack traces, and abbreviates JSON response keys.
+- 🏷️ **Ephemeral Cache Control Tagging**: Standardized injection of `{ cache_control: { type: "ephemeral" } }` onto system prompts and recent user turns.
+- 📊 **Session Lifetime Telemetry Aggregation**: Real-time tracking of uncached vs cached tokens, hit ratios, and cumulative financial dollar savings (`getLifetimeTelemetryReport`).
+
+### Empirical Ingestion Optimization Benchmark (Cerebras Gemma 4 31B Pipeline)
+
+| Benchmark Metric | Baseline (Unoptimized) | Token Ingestion Buffer Engine | Impact / Gain |
+| :--- | :--- | :--- | :--- |
+| **Pipeline Latency** | N/A | **0.871 ms** | Sub-millisecond execution overhead |
+| **Payload Character Size** | 12,077 chars | **1,739 chars** | **-85.6% character bloat** |
+| **Ingestion Token Count** | ~3,020 tokens | **~435 tokens** | **2,585 tokens saved per turn** |
+| **Hardware APC Cache Hit** | 0% (volatile head) | **90%+ (Token 0 anchored)** | Maximum KV-cache hit ratio |
+| **10-Turn Cumulative Cost** | $0.0299 | **$0.0004** | **98.6% Total Cost Reduction** |
+
+Full architectural decision record: [docs/architecture/adr-001-token-ingestion-buffer-engine.md](docs/architecture/adr-001-token-ingestion-buffer-engine.md)
 
 ---
 

@@ -8,6 +8,7 @@ import { fetch } from "@/shared/net"
 import { withRetry } from "../retry"
 import { sanitizeAnthropicMessages } from "../transform/anthropic-format"
 import { ApiStream } from "../transform/stream"
+import { defaultTokenBufferEngine } from "../transform/token-buffer-engine"
 import { ApiHandler, CommonApiHandlerOptions } from "../types"
 
 interface AnthropicHandlerOptions extends CommonApiHandlerOptions {
@@ -119,9 +120,18 @@ export class AnthropicHandler implements ApiHandler {
 		for await (const chunk of stream) {
 			switch (chunk?.type) {
 				case "message_start":
+					// useful for getting input tokens at the start of the response
 					{
-						// tells us cache reads/writes/input/output
 						const usage = chunk.message.usage
+						defaultTokenBufferEngine.logCacheTelemetry(
+							"Anthropic",
+							model.id,
+							usage.input_tokens || 0,
+							usage.cache_read_input_tokens || 0,
+							usage.output_tokens || 0,
+							model.info.inputPrice || 3.0,
+						)
+
 						yield {
 							type: "usage",
 							inputTokens: usage.input_tokens || 0,

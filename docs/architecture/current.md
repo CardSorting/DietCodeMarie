@@ -49,6 +49,7 @@ src/extension.ts
 | `src/core/task/tools/` | Tool handlers and coordinator |
 | `src/core/task/tools/completion/` | **Completion lifecycle decision engine** — single deterministic authority for completion/finalization eligibility, with binding action contracts enforced at the tool boundary |
 | `src/core/api/` | LLM provider handlers and streaming transforms |
+| `src/core/api/transform/token-buffer-engine.ts` | **Token Ingestion Buffer Engine** — Centralized context buffering, 10-stage DSL token compression, vision eviction, and prompt cache alignment (see [ADR-001](adr-001-token-ingestion-buffer-engine.md)) |
 | `src/core/context/` | Context window, file tracking, user rules |
 | `src/core/prompts/` | System prompts, slash-command templates |
 | `src/core/hooks/` | Lifecycle hooks (PreToolUse, PostToolUse, etc.) |

@@ -70,6 +70,7 @@ Provider handlers are in **`src/core/api/providers/`**, not `src/services/provid
 | Slash commands | `src/core/slash-commands/index.ts` |
 | System prompts | `src/core/prompts/system-prompt/` |
 | Storage & Cache Manager | `src/services/storage/StorageManager.ts` |
+| Token Ingestion Buffer Engine | `src/core/api/transform/token-buffer-engine.ts` |
 | Package metadata | `package.json` (name: `lumi`, publisher: `CardSorting`) |
 
 ## Architectural patterns

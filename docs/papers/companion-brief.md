@@ -2,7 +2,7 @@
 
 # LUMI Companion Brief
 
-**Executive summary · v10.7.0 · workspace-verified**
+**Executive summary · v11.3.0 · workspace-verified**
 
 *Companion to the [Technical Whitepaper](whitepaper.md). All figures below are measured from the agent workspace (`src/`, `webview-ui/`, root `package.json`).*
 
@@ -27,7 +27,7 @@
 | Minimum VS Code engine | `^1.84.0` | `package.json` |
 | Minimum Node engine | `^20.19.43` | `package.json` |
 | Core developer license | Apache-2.0 | `LICENSE` |
-| Extension version | **11.0.0** | `package.json` |
+| Extension version | **11.3.0** | `package.json` |
 | Registered VS Code commands | **~25** `lumi.*` | `package.json` `contributes.commands` |
 | Static tool enum values | **64** | `DietCodeDefaultTool` in `src/shared/tools.ts` |
 | Tool handler files | **55** | `src/core/task/tools/handlers/` |

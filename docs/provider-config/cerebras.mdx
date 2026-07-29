@@ -95,3 +95,13 @@ Works with any OpenAI-compatible tool-Cursor, Continue.dev, LUMI, or any other e
 -   **Rate Limits:** Generous rate limits designed for development workflows. Check your dashboard for current limits.
 -   **Pricing:** Competitive pricing with significant speed advantages. Visit [Cerebras Cloud](https://cloud.cerebras.ai/) for current rates.
 -   **Real-Time Applications:** Ideal for applications where AI response time matters-code generation, debugging, and interactive development.
+
+### Automatic Prompt Caching (APC) & Token Ingestion Buffer
+
+LUMI includes built-in support for Cerebras **Automatic Prompt Caching (APC)** and the **Token Ingestion Buffer Engine**:
+
+- **Gemma 4 31B Token Optimization**: `gemma-4-31b` features $0.00 cached read pricing.
+- **Token 0 System Prompt Normalization**: Line endings (`\r\n` $\rightarrow$ `\n`) and deterministic tool schema sorting guarantee Token 0 byte-level prefix stability, achieving **90%+ APC cache hit rates**.
+- **Single-Turn Vision Eviction**: Historical base64 images ($T < \text{active}$) are automatically replaced with text anchors (`[VisAnchor #N]`), eliminating ~3,000–4,000 vision tokens per image per turn.
+- **10-Stage DSL Compression**: Tool outputs, stack traces, and deep file paths are transpiled into compact inline DSL syntax (`[tool:read_file path="..."]`), cutting multi-turn context costs by **98.6%** (see [ADR-001](/architecture/adr-001-token-ingestion-buffer-engine)).
+

@@ -53,3 +53,15 @@ Run **`LUMI: Clear Cache & Optimize Storage`** from the VS Code Command Palette 
 - `⚡ Quick Storage Cleanup`: Vacuums shadow repos and purges temporary cache/temp files while preserving active tasks.
 - `🧹 Full Storage Optimization`: Vacuums shadow repos, purges non-favorited tasks, clears browser caches, and truncates SQLite WAL files.
 - `📊 View Storage Space Breakdown`: Displays exact MB used by Checkpoints, Tasks, Cache, Puppeteer, and System Temp.
+
+---
+
+## LLM Token Ingestion & Prompt Cache Optimization
+
+Beyond disk storage, LUMI optimizes LLM prompt context and token ingestion via the **[TokenIngestionBufferEngine](file:///Users/bozoegg/Downloads/codemarie-new/src/core/api/transform/token-buffer-engine.ts)** (see [ADR-001](../architecture/adr-001-token-ingestion-buffer-engine.md)):
+
+1. **Token 0 Prompt Cache Anchoring**: System prompt line endings and tool definitions are lexically stabilized to maximize hardware/cloud prompt cache hits (**90%+ APC hit rate**).
+2. **Single-Turn Vision Eviction**: Removes historical base64 image data URLs ($T < \text{active}$), saving ~4,000 vision tokens per image per turn.
+3. **10-Stage DSL Compression**: Transpiles tool outputs into inline DSL (`[tool:read_file path="..."]`), compacts diff headers (`[@diff path Lrange]`), collapses node_modules stack frames, and abbreviates JSON response keys.
+4. **Ephemeral Cache Control Tagging**: Standardized injection of `{ cache_control: { type: "ephemeral" } }` onto system prompts and recent user turns.
+

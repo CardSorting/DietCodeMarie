@@ -14,6 +14,7 @@ import OpenAI from "openai"
 import { ChatCompletionTool } from "openai/resources/chat/completions"
 import { convertToOpenAiMessages, sanitizeGeminiMessages } from "./openai-format"
 import { convertToR1Format } from "./r1-format"
+import { defaultTokenBufferEngine } from "./token-buffer-engine"
 import { getOpenAIToolParams } from "./tool-call-processor"
 
 export async function createOpenRouterStream(
@@ -92,25 +93,7 @@ export async function createOpenRouterStream(
 					},
 				],
 			}
-			// Add cache_control to the last two user messages
-			// (note: this works because we only ever add one user message at a time, but if we added multiple we'd need to mark the user message before the last assistant message)
-			const lastTwoUserMessages = openAiMessages.filter((msg) => msg.role === "user").slice(-2)
-			lastTwoUserMessages.forEach((msg) => {
-				if (typeof msg.content === "string") {
-					msg.content = [{ type: "text", text: msg.content }]
-				}
-				if (Array.isArray(msg.content)) {
-					// NOTE: this is fine since env details will always be added at the end. but if it weren't there, and the user added a image_url type message, it would pop a text part before it and then move it after to the end.
-					let lastTextPart = msg.content.filter((part) => part.type === "text").pop()
-
-					if (!lastTextPart) {
-						lastTextPart = { type: "text", text: "..." }
-						msg.content.push(lastTextPart)
-					}
-					// @ts-expect-error-next-line
-					lastTextPart.cache_control = { type: "ephemeral" }
-				}
-			})
+			openAiMessages = defaultTokenBufferEngine.applyEphemeralCacheControl(openAiMessages)
 			break
 		default:
 			break

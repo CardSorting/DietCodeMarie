@@ -59,6 +59,16 @@ function stripThinkingTags(content: string): string {
 		.trim()
 }
 
+import { defaultTokenBufferEngine, TokenIngestionBufferEngine } from "../transform/token-buffer-engine"
+
+export const pruneHistoricalVisionPayloads = (messages: DietCodeStorageMessage[], activeVisionWindow = 1) =>
+	new TokenIngestionBufferEngine({ activeVisionWindow }).pruneHistoricalVisionPayloads(messages)
+
+export const compressDslText = (text: string) => defaultTokenBufferEngine.compressDslText(text)
+
+export const compactHistoricalToolOutputs = (messages: OpenAI.Chat.ChatCompletionMessageParam[], keepFullTurns = 2) =>
+	new TokenIngestionBufferEngine({ keepFullToolTurns: keepFullTurns }).compactHistoricalToolOutputs(messages)
+
 /**
  * Cerebras rejects reasoning history on follow-up requests. Convert the stored
  * conversation to OpenAI-compatible messages, remove private reasoning fields,
@@ -86,6 +96,10 @@ export function prepareCerebrasMessages(messages: DietCodeStorageMessage[]): Ope
 			(typeof sanitized.content === "string" && sanitized.content.trim().length > 0) ||
 			(Array.isArray(sanitized.content) && sanitized.content.length > 0)
 		const hasToolCalls = Array.isArray(sanitized.tool_calls) && sanitized.tool_calls.length > 0
+
+		if (!hasContent && hasToolCalls && typeof sanitized.content === "string") {
+			sanitized.content = null as unknown as string
+		}
 
 		if (hasContent || hasToolCalls) {
 			prepared.push(sanitized)
@@ -127,6 +141,16 @@ function splitLegacyThinkingChunk(
 	}
 
 	return { reasoning, text, inReasoning }
+}
+
+function getToolName(tool: DietCodeTool): string {
+	if ("function" in tool && tool.function && typeof tool.function.name === "string") {
+		return tool.function.name
+	}
+	if ("name" in tool && typeof tool.name === "string") {
+		return tool.name
+	}
+	return ""
 }
 
 export class CerebrasHandler implements ApiHandler {
@@ -171,7 +195,12 @@ export class CerebrasHandler implements ApiHandler {
 	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[], tools?: DietCodeTool[]): ApiStream {
 		const client = this.ensureClient()
 		const model = this.getModel()
-		const cerebrasMessages = [{ role: "system" as const, content: systemPrompt }, ...prepareCerebrasMessages(messages)]
+		const normalizedSystemPrompt = systemPrompt.replace(/\r\n/g, "\n").trim()
+		const visionOptimized = pruneHistoricalVisionPayloads(messages, 1)
+		const rawOpenAiMessages = prepareCerebrasMessages(visionOptimized)
+		const compactedMessages = compactHistoricalToolOutputs(rawOpenAiMessages, 2)
+		const cerebrasMessages = [{ role: "system" as const, content: normalizedSystemPrompt }, ...compactedMessages]
+		const sortedTools = tools?.length ? [...tools].sort((a, b) => getToolName(a).localeCompare(getToolName(b))) : undefined
 
 		try {
 			const stream = await client.chat.completions.create({
@@ -181,8 +210,8 @@ export class CerebrasHandler implements ApiHandler {
 				stream: true,
 				stream_options: { include_usage: true },
 				max_completion_tokens: CEREBRAS_DEFAULT_MAX_TOKENS,
-				tools: tools?.length ? (tools as unknown as CerebrasTools) : undefined,
-				tool_choice: tools?.length ? "auto" : undefined,
+				tools: sortedTools?.length ? (sortedTools as unknown as CerebrasTools) : undefined,
+				tool_choice: sortedTools?.length ? "auto" : undefined,
 				parallel_tool_calls: false,
 			})
 
@@ -227,6 +256,15 @@ export class CerebrasHandler implements ApiHandler {
 					const cacheReadTokens = streamChunk.usage.prompt_tokens_details?.cached_tokens || 0
 					const inputTokens = Math.max(0, (streamChunk.usage.prompt_tokens || 0) - cacheReadTokens)
 					const outputTokens = streamChunk.usage.completion_tokens || 0
+
+					defaultTokenBufferEngine.logCacheTelemetry(
+						"Cerebras",
+						model.id,
+						inputTokens,
+						cacheReadTokens,
+						outputTokens,
+						model.info.inputPrice || 0.99,
+					)
 
 					yield {
 						type: "usage",

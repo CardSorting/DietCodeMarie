@@ -38,3 +38,12 @@ OpenRouter provides an [optional "middle-out" message transform](https://openrou
     -   For most models, caching should activate automatically if supported by the model itself (similar to how Requesty works).
     -   **Exception for Gemini Models via OpenRouter:** Due to potential response delays sometimes observed with Google's caching mechanism when accessed via OpenRouter, a manual activation step is required _specifically for Gemini models_.
     -   If using a **Gemini model** via OpenRouter, you **must manually check** the "Enable Prompt Caching" box in the provider settings to activate caching for that model. This checkbox serves as a temporary workaround. For non-Gemini models on OpenRouter, this checkbox is not necessary for caching.
+
+### Unified Token Ingestion Buffer Engine
+
+OpenRouter calls in LUMI are automatically optimized using the **Token Ingestion Buffer Engine** ([token-buffer-engine.ts](/architecture/current)):
+
+- **Explicit Ephemeral Tagging**: Automatically injects `{ cache_control: { type: "ephemeral" } }` onto the system prompt and the last 2 user messages for Claude & MiniMax models via OpenRouter.
+- **10-Stage DSL Compression**: Strips comments, collapses stack trace frames, minifies file path bloat (`~.../file.ts`), and transpiles tool call JSON into compact inline DSL syntax (`[tool:name key="val"]`).
+- **Context Window Ceiling Guard**: Dynamically trims older middle turns when context window thresholds are reached, preserving system prompt, recent active turns, and user intent.
+
