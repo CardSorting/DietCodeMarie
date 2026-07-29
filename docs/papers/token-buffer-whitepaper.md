@@ -24,41 +24,41 @@ This paper presents the **Token Ingestion Buffer Engine** ([token-buffer-engine.
 
 ### 2.1 Ingestion Token Accretion Model
 
-Let $M = \left( m_1, m_2, \dots, m_N \right)$ be a sequence of historical messages in an agent session at turn $N \in \mathbb{N}_{>0}$. Each message $m_k$ consists of content blocks $c_{k,j} \in \mathcal{C} = \mathcal{C}_{\text{text}} \cup \mathcal{C}_{\text{img}} \cup \mathcal{C}_{\text{tool}}$.
+Let $M = (m_1, m_2, \dots, m_N)$ be a sequence of historical messages in an agent session at turn $N \in \mathbb{N}_{>0}$. Each message $m_k$ consists of content blocks $c_{k,j} \in \mathcal{C} = \mathcal{C}_{\text{text}} \cup \mathcal{C}_{\text{img}} \cup \mathcal{C}_{\text{tool}}$.
 
 In an unoptimized baseline, total ingestion token load $T_{\text{ingest}}(N)$ at turn $N$ is modeled by:
 
 $$T_{\text{ingest}}(N) = |S_0|_{\text{tokens}} + \sum_{k=1}^{N-1} \left( |c_{k,\text{text}}| + |c_{k,\text{img}}| + |c_{k,\text{tool}}| \right) + |m_N|$$
 
-where $|S_0|_{\text{tokens}}$ denotes the token length of system prompt $S_0$, and $|c_{k,\text{img}}| \approx 4{,}000$ tokens per base64 image block.
+where $|S_0|_{\text{tokens}}$ denotes the token length of system prompt $S_0$, and $|c_{k,\text{img}}| \approx 4000$ tokens per base64 image block.
 
 Under the **Token Ingestion Buffer Engine**, historical vision payloads ($k < N - W_v$, where active vision window $W_v = 1$) are projected via visual eviction operator $\pi_{\text{vision}}$:
 
-$$\pi_{\text{vision}}\left( c_{k,\text{img}} \right) = \text{Anchor}(k) \implies \left| \pi_{\text{vision}}\left( c_{k,\text{img}} \right) \right| \le \theta_{\text{anchor}} \approx 10 \text{ tokens}$$
+$$\pi_{\text{vision}}(c_{k,\text{img}}) = \text{Anchor}(k) \implies |\pi_{\text{vision}}(c_{k,\text{img}})| \le \theta_{\text{anchor}} \approx 10 \text{ tokens}$$
 
 Historical tool results ($k < N - W_t$, where full tool window $W_t = 2$) exceeding character threshold $L_{\max} = 800$ are compacted via snippet operator $\pi_{\text{tool}}$:
 
-$$\pi_{\text{tool}}\left( c_{k,\text{tool}} \right) = \text{Head}_{350}\left( c_{k,\text{tool}} \right) \mathbin{\Vert} \text{"... [truncated] ..."} \mathbin{\Vert} \text{Tail}_{350}\left( c_{k,\text{tool}} \right)$$
+$$\pi_{\text{tool}}(c_{k,\text{tool}}) = \text{Head}_{350}(c_{k,\text{tool}}) \mathbin{||} \text{"... [truncated] ..."} \mathbin{||} \text{Tail}_{350}(c_{k,\text{tool}})$$
 
-where $\mathbin{\Vert}$ denotes string concatenation. Historical text content is transformed via 10-stage transpilation operator $\mathcal{D} : \Sigma^* \to \Sigma^*_{\text{DSL}}$. Thus, optimized token load $T^*_{\text{ingest}}(N)$ is strictly bounded by:
+where $||$ denotes string concatenation. Historical text content is transformed via 10-stage transpilation operator $\mathcal{D} : \Sigma^* \to \Sigma^*_{\text{DSL}}$. Thus, optimized token load $T^*_{\text{ingest}}(N)$ is strictly bounded by:
 
-$$T^*_{\text{ingest}}(N) = \left| \mathcal{N}(S_0) \right| + \sum_{k=1}^{N-W_t} \left| \mathcal{D}\left( \pi_{\text{tool}}\left( c_{k,\text{tool}} \right) \right) \right| + \sum_{k=N-W_t+1}^{N} |m_k| \ll T_{\text{ingest}}(N)$$
+$$T^*_{\text{ingest}}(N) = |\mathcal{N}(S_0)| + \sum_{k=1}^{N-W_t} |\mathcal{D}(\pi_{\text{tool}}(c_{k,\text{tool}}))| + \sum_{k=N-W_t+1}^{N} |m_k| \ll T_{\text{ingest}}(N)$$
 
 ### 2.2 KV-Cache Hit Efficiency Formulation
 
-Let $\mathbf{t}\left( S_0 \mathbin{\Vert} M \right) = \left( t_1, t_2, \dots, t_L \right)$ be the token sequence submitted to an inference engine with Automatic Prompt Caching (APC). The prefix hit length $H$ relative to cached sequence $\mathbf{c} = \left( c_1, c_2, \dots, c_K \right)$ is defined by:
+Let $\mathbf{t}(S_0 || M) = (t_1, t_2, \dots, t_L)$ be the token sequence submitted to an inference engine with Automatic Prompt Caching (APC). The prefix hit length $H$ relative to cached sequence $\mathbf{c} = (c_1, c_2, \dots, c_K)$ is defined by:
 
-$$H(\mathbf{t}, \mathbf{c}) \triangleq \max \left\{ h \in \mathbb{N}_0 \; \middle|\; \forall i \in \{1, \dots, h\}, \; t_i = c_i \right\}$$
+$$H(\mathbf{t}, \mathbf{c}) \triangleq \max \{ h \in \mathbb{N}_0 \mid \forall i \in \{1, \dots, h\}, t_i = c_i \}$$
 
 If $t_1 \neq c_1$ (e.g., due to OS line endings $\text{CRLF}$ or non-deterministic tool schema order), $H = 0$, yielding a **0% Cache Hit Rate**.
 
 By applying **System Normalization** $\mathcal{N}$ and **Deterministic Lexical Tool Ordering** $\mathcal{O}_{\text{tool}}$:
 
-$$\mathbf{t}^* = \mathcal{N}(S_0) \mathbin{\Vert} \mathcal{O}_{\text{tool}}(\text{Tools}) \mathbin{\Vert} \mathcal{P}(M)$$
+$$\mathbf{t}^* = \mathcal{N}(S_0) || \mathcal{O}_{\text{tool}}(\text{Tools}) || \mathcal{P}(M)$$
 
-The prefix up to turn $N-1$ remains byte-identical across consecutive turns, guaranteeing $H = \left| \mathcal{N}(S_0) \mathbin{\Vert} \mathcal{O}_{\text{tool}}(\text{Tools}) \mathbin{\Vert} \mathcal{P}(M_{<N}) \right|$, achieving a Cache Hit Ratio $\text{CER}$:
+The prefix up to turn $N-1$ remains byte-identical across consecutive turns, guaranteeing $H = |\mathcal{N}(S_0) || \mathcal{O}_{\text{tool}}(\text{Tools}) || \mathcal{P}(M_{<N})|$, achieving a Cache Hit Ratio $\text{CER}$:
 
-$$\text{CER}(N) \triangleq \frac{H\left(\mathbf{t}^*, \mathbf{c}\right)}{L_{\text{total}}} \times 100\% \ge 90.0\%$$
+$$\text{CER}(N) \triangleq \frac{H(\mathbf{t}^*, \mathbf{c})}{L_{\text{total}}} \times 100\% \ge 90.0\%$$
 
 ---
 

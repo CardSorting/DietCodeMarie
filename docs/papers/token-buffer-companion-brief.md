@@ -77,7 +77,7 @@ Total 10-Turn Financial Savings: $0.0295 (98.6% Cost Reduction)
 
 | Debunk Hypothesis | Adversarial Counter-Claim | Mathematical / Empirical Proof | Status |
 | :--- | :--- | :--- | :--- |
-| **H1: BPE Subword Fragmentation** | Transpiling strings into shorthand creates rare BPE tokens, increasing total token count. | **Theorem 1 (Subword Monotonicity)**: Transpiler uses high-frequency ASCII dictionary primitives (`[`, `]`, `path`, `st`, `OK`), guaranteeing $\|BPE(\mathcal{D}(s))\| \le \|BPE(s)\|$. | **DEBUNKED** |
+| **H1: BPE Subword Fragmentation** | Transpiling strings into shorthand creates rare BPE tokens, increasing total token count. | **Theorem 1 (Subword Monotonicity)**: Transpiler uses high-frequency ASCII dictionary primitives (`[`, `]`, `path`, `st`, `OK`), guaranteeing $|BPE(\mathcal{D}(s))| \le |BPE(s)|$. | **DEBUNKED** |
 | **H2: Epistemic Retrieval Loss** | Snippet truncation of historical tool outputs removes error root causes. | Full tool output retention applies to active turns ($W_t = 2$). In historical turns ($T < N-2$), 99.4% of errors reside in Head (invocation) or Tail (traceback). | **DEBUNKED** |
 | **H3: PagedAttention Cache Misses** | Boundary misalignment causes partial KV-cache page misses in 16-token PagedAttention blocks. | **Deterministic Page Padding**: System prompt normalization & sorted tool arrays pad token sequences to exact multiples of 16 tokens ($K \equiv 0 \pmod{16}$). | **DEBUNKED** |
 | **H4: ReDoS Backtracking Attacks** | Complex 10-stage transpilation regexes stall the event loop on adversarial inputs. | All 10 regex rules are $O(n)$ non-backtracking DFAs. 1,000-run continuous fuzzing measured **0.000857 ms / run** average latency with 0 stalls. | **DEBUNKED** |
