@@ -35,12 +35,7 @@ function reopensCompletedTask(message: DietCodeMessage): boolean {
 	if (message.type === "ask") {
 		return !(message.ask === "completion_result" || message.ask === "resume_task" || message.ask === "resume_completed_task")
 	}
-	return (
-		message.say === "task" ||
-		message.say === "user_feedback" ||
-		message.say === "user_feedback_diff" ||
-		message.say === "api_req_started"
-	)
+	return message.say === "user_feedback" || message.say === "user_feedback_diff" || message.say === "api_req_started"
 }
 
 /**
@@ -53,21 +48,33 @@ export function getTerminalCompletionEvidence(
 	messages: readonly DietCodeMessage[],
 	durableStatus?: DurableTaskCompletionStatus,
 ): TerminalCompletionEvidence | undefined {
+	let latest: TerminalCompletionEvidence | undefined
 	if (durableStatus === "succeeded") {
-		return { source: "durable_completion" }
+		latest = { source: "durable_completion" }
 	}
 
-	let latest: TerminalCompletionEvidence | undefined
+	let hasMessageCompletionEvidence = false
 	for (let index = 0; index < messages.length; index++) {
 		const source = completionEvidenceFromMessage(messages[index])
 		if (source) {
 			latest = { source, messageIndex: index }
+			hasMessageCompletionEvidence = true
 			continue
 		}
 		if (latest && reopensCompletedTask(messages[index])) {
 			latest = undefined
 		}
 	}
+
+	if (durableStatus === "succeeded" && latest?.source === "durable_completion" && messages.length > 0) {
+		const hasMidTaskExecutionMessage = messages.some(
+			(m) => !(m.say === "task" || m.ask === "resume_task" || m.ask === "resume_completed_task"),
+		)
+		if (hasMidTaskExecutionMessage && !hasMessageCompletionEvidence) {
+			latest = undefined
+		}
+	}
+
 	return latest
 }
 

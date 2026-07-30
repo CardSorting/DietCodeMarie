@@ -35,19 +35,36 @@ export type FrontmatterParseResult = {
  * - If no frontmatter exists, returns data={} and body=original markdown.
  */
 export function parseYamlFrontmatter(markdown: string): FrontmatterParseResult {
+	// Strip UTF-8 Byte Order Mark (BOM) if present before regex matching
+	const cleanMarkdown = markdown.replace(/^\uFEFF/, "")
+
+	// Fail-safe check for binary / null-byte corruption
+	if (cleanMarkdown.includes("\0")) {
+		return { data: {}, body: "", hadFrontmatter: false, parseError: "Binary or null-byte corruption detected in file" }
+	}
+
 	const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/
-	const match = markdown.match(frontmatterRegex)
+	const match = cleanMarkdown.match(frontmatterRegex)
 
 	if (!match) {
-		return { data: {}, body: markdown, hadFrontmatter: false }
+		const unclosedRegex = /^---\r?\n([\s\S]*)$/
+		if (unclosedRegex.test(cleanMarkdown)) {
+			return {
+				data: {},
+				body: cleanMarkdown,
+				hadFrontmatter: true,
+				parseError: "Unclosed YAML frontmatter block (missing closing '---')",
+			}
+		}
+		return { data: {}, body: cleanMarkdown, hadFrontmatter: false }
 	}
 
 	const [, yamlContent, body] = match
 	try {
-		const data = (yaml.load(yamlContent, { schema: yaml.JSON_SCHEMA }) as Record<string, unknown>) || {}
+		const data = (yaml.load(yamlContent, { schema: yaml.DEFAULT_SCHEMA }) as Record<string, unknown>) || {}
 		return { data, body, hadFrontmatter: true }
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error)
-		return { data: {}, body: markdown, hadFrontmatter: true, parseError: message }
+		return { data: {}, body: cleanMarkdown, hadFrontmatter: true, parseError: message }
 	}
 }

@@ -6,6 +6,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+### Fixed
+
+- **Completed Task Reopening & Re-edit Architecture (`taskCompletionEvidence.ts`)** — Resolved issue where completed tasks remained permanently locked when users edited messages, restored pre-completion checkpoints, or provided follow-up feedback. Refactored `getTerminalCompletionEvidence` to evaluate sequential `reopensCompletedTask` markers across message history and override durable completion status when history is restored or edited prior to completion.
+- **Skill Subsystem & Frontmatter Encoding Hardening** — Resolved skill loading failures on extension startup for bundled skills (`auto-rolling-roadmap`, `golden-cartridge-protocol`) and global user skills (`dogfood`). Fixed UTF-8 BOM (`\uFEFF`) frontmatter parsing failures, unclosed file handle resource leaks in `getBundledSkillMetadata`, strict case/whitespace matching in `getSkillContent` and `UseSkillToolHandler`, and path normalization issues in `skillRuntime.ts`.
+- **Observable Skill Discovery Diagnostics API (`discoverSkillsWithDiagnostics`)** — Added structured diagnostic reason codes (`MISSING_SKILL_MD`, `MISSING_NAME`, `MISSING_DESCRIPTION`, `NAME_MISMATCH`, `READ_ERROR`, `PERMISSION_DENIED`) for robust error reporting during skill folder scanning.
+- **Subagent Swarm & Slash Command Skill Resolution Parity** — Standardized case and whitespace resilience in slash command matching (`/skillName`) and subagent skill configuration inheritance (`SubagentRunner.ts`).
+
 ## [11.4.0] - 2026-07-29
 
 ### Added

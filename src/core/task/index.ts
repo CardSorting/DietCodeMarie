@@ -2626,7 +2626,8 @@ export class Task {
 		const availableSkills = filterEnabledSkills(resolvedSkills, globalSkillsToggles, localSkillsToggles)
 		const promptSkills = filterPromptSkills(availableSkills)
 		const goldenCartridgeAvailable =
-			this.taskState.goldenCartridgeActive || availableSkills.some((skill) => skill.name === GOLDEN_CARTRIDGE_SKILL_NAME)
+			this.taskState.goldenCartridgeActive ||
+			availableSkills.some((skill) => skill.name.toLowerCase() === GOLDEN_CARTRIDGE_SKILL_NAME.toLowerCase())
 
 		// Snapshot editor tabs so prompt tools can decide whether to include
 		// filetype-specific instructions (e.g. notebooks) without adding bespoke flags.

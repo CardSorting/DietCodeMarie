@@ -231,11 +231,14 @@ export async function parseSlashCommands(
 			const localSkillsToggles = stateManager.getWorkspaceStateKey("localSkillsToggles") ?? {}
 			const resolvedSkills = await getResolvedSkillsForCwd(workspace || process.cwd())
 			const availableSkills = filterEnabledSkills(resolvedSkills, globalSkillsToggles, localSkillsToggles)
-			const matchingSkill = availableSkills.find((skill) => skill.name === commandName)
+			const targetName = commandName.trim().toLowerCase()
+			const matchingSkill = availableSkills.find(
+				(skill) => skill.name === commandName || skill.name.trim().toLowerCase() === targetName,
+			)
 
 			if (matchingSkill) {
 				try {
-					const skillContent = await getSkillContent(commandName, availableSkills, { mode: "full" })
+					const skillContent = await getSkillContent(matchingSkill.name, availableSkills, { mode: "full" })
 					if (skillContent) {
 						// remove the slash command and add skill instructions
 						const textWithoutSlashCommand = removeSlashCommand(text, tagContent, contentStartIndex, slashMatch)

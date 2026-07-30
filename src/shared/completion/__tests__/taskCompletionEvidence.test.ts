@@ -68,4 +68,22 @@ describe("terminal completion evidence", () => {
 		should(resolveTaskResumeAsk([task], "failed")).equal("resume_task")
 		should(resolveTaskResumeAsk([task], "cancelled")).equal("resume_task")
 	})
+
+	it("reopens a completed task with durable success when user feedback is appended after completion", () => {
+		const messages: DietCodeMessage[] = [
+			task,
+			{ ts: 2, type: "say", say: "completion_result", text: "Done" },
+			{ ts: 3, type: "say", say: "user_feedback", text: "Please edit this part" },
+		]
+
+		should(getTerminalCompletionEvidence(messages, "succeeded")).be.undefined()
+		should(resolveTaskResumeAsk(messages, "succeeded")).equal("resume_task")
+	})
+
+	it("reopens a completed task with durable success when history is restored/edited to before completion", () => {
+		const preCompletionMessages: DietCodeMessage[] = [task, { ts: 2, type: "say", say: "text", text: "Working on it" }]
+
+		should(getTerminalCompletionEvidence(preCompletionMessages, "succeeded")).be.undefined()
+		should(resolveTaskResumeAsk(preCompletionMessages, "succeeded")).equal("resume_task")
+	})
 })

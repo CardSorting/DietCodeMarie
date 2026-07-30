@@ -84,10 +84,11 @@ The webview displays task terminality only from the lifecycle event. The semanti
 
 ## Relationship to resume
 
-Resume reads the committed lifecycle record:
+Resume reads the committed lifecycle record and active completion evidence:
 
 - suspended generations may resume explicitly;
-- terminal completed generations require a new generation for new user work;
+- terminal completed generations allow user continuation by creating a new generation when new user work or pre-completion timeline restores occur;
+- `getTerminalCompletionEvidence` in `src/shared/completion/taskCompletionEvidence.ts` evaluates message history sequentially (`reopensCompletedTask`); pre-completion checkpoint restores or user feedback override terminal evidence, resolving `resolveTaskResumeAsk` back to `resume_task`;
 - generic transcript bookkeeping cannot demote or revive terminal state;
 - old completion callbacks cannot mutate a replacement generation.
 

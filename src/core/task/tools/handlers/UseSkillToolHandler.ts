@@ -65,7 +65,8 @@ export class UseSkillToolHandler implements IToolHandler, IPartialBlockHandler {
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
-		const skillName: string | undefined = block.params.skill_name
+		const rawSkillName: string | undefined = block.params.skill_name
+		const skillName = rawSkillName?.trim()
 		const fullReference = parseFullReference(block.params.full_reference)
 
 		if (!skillName) {
@@ -79,7 +80,8 @@ export class UseSkillToolHandler implements IToolHandler, IPartialBlockHandler {
 		const resolvedSkills = await getResolvedSkillsForCwd(config.cwd)
 		const cacheHit = wasLastSkillsCacheHit()
 		const availableSkills = filterEnabledSkills(resolvedSkills, globalSkillsToggles, localSkillsToggles)
-		const requestedGoldenCartridge = skillName === GOLDEN_CARTRIDGE_SKILL_NAME
+		const requestedGoldenCartridge =
+			skillName === GOLDEN_CARTRIDGE_SKILL_NAME || skillName.toLowerCase() === GOLDEN_CARTRIDGE_SKILL_NAME.toLowerCase()
 		if (requestedGoldenCartridge) {
 			const bundledGoldenCartridge = resolvedSkills.find((skill) => skill.name === GOLDEN_CARTRIDGE_SKILL_NAME)
 			if (bundledGoldenCartridge && !availableSkills.some((skill) => skill.name === GOLDEN_CARTRIDGE_SKILL_NAME)) {

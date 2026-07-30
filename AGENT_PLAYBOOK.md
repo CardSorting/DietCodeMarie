@@ -31,6 +31,7 @@ The active work now includes complete 12-pass mechanical sympathy, zero-allocati
 - `src/core/governance/AdministrativeLockCleaner.ts` isolates explicit, logged ownership overrides from normal orchestration.
 - `src/core/task/tools/subagent/TarjanDeadlockDetector.ts` detects only unresolvable SCCs from a versioned scheduler snapshot.
 - `src/core/task/tools/handlers/AttemptCompletionHandler.ts` persists terminal results through a lease/state CAS in `task_completions`.
+- `src/shared/completion/taskCompletionEvidence.ts`: Provides single-source-of-truth task completion resolution. `getTerminalCompletionEvidence` evaluates sequential `reopensCompletedTask` markers across active message history (`user_feedback`, `user_feedback_diff`, `api_req_started`), allowing completed tasks to dynamically reopen on user message edits, pre-completion checkpoint restorations, or follow-up feedback. `resolveTaskResumeAsk` seamlessly transitions between `resume_completed_task` and `resume_task`, unlocking chat inputs and enabling continuous agent turns without modal locks.
 - `src/integrations/terminal/CommandExecutor.ts` implements scoped command cancellation using `ownerId` to cancel processes concurrently and independently.
 - `src/core/task/tools/subagent/SubagentTranscriptRecorder.ts`: Single-pass JSON serialization for checksum computation and byte length calculation, eliminating duplicate `JSON.stringify` calls per subagent append event.
 - `src/infrastructure/db/BufferedDbPool.ts`: Exported `createMonomorphicWriteOp()` factory function enforcing constant property layout (`type`, `table`, `values`, `where`, `conflictTarget`, `agentId`, `layer`, `hasIncrements`, `dedupKey`).
@@ -66,6 +67,7 @@ The active work now includes complete 12-pass mechanical sympathy, zero-allocati
 | Keep completion/finalization lifecycle deterministic | Recent architecture centers on one durable completion authority | Do not bypass `CompletionFunnel` or infer completion from execution success |
 | Preserve one production coordination authority | Database outage must not create split-brain fallback | Keep `sqlite` fail-closed and `local_test` explicit |
 | Keep terminalization restart-safe | In-memory completion state is not durable | Commit `task_completions` only through lease/state CAS |
+| Preserve seamless completed task reopening | Completed tasks must allow non-technical user edits and chat continuation without permanent locks | Ensure `getTerminalCompletionEvidence` checks `reopensCompletedTask` and history truncation |
 
 ## Current Blockers And Friction
 
@@ -97,6 +99,8 @@ The active work now includes complete 12-pass mechanical sympathy, zero-allocati
 | `src/infrastructure/db/Config.ts` | SQLite PRAGMA order fix (`auto_vacuum = INCREMENTAL`), `VACUUM` header migration, and native statement `.dispose()` LRU handle lifecycle. |
 | `src/infrastructure/db/SQLiteMaintenanceEngine.ts` | Multi-table retention sweeps (`task_lifecycle_records`, ephemeral `branches`, `swarm_lock_generations`, CAS `files`), and backoff WAL checkpointing. |
 | `src/infrastructure/db/BufferedDbPool.ts` | Statement handle disposal on connection transition and bounded ring-buffer latency metrics. |
+| `src/shared/completion/taskCompletionEvidence.ts` | Sequential `reopensCompletedTask` evaluation in `getTerminalCompletionEvidence` for user edits, checkpoint restores, and follow-ups. |
+| `src/shared/completion/__tests__/taskCompletionEvidence.test.ts` | Unit tests for reopening completed tasks on user edit / pre-completion checkpoint restore. |
 | `src/core/task/tools/subagent/__tests__/executionHarnessGaps.test.ts` | Tests for transcript durability, retry, integrity, and replay contract. |
 
 ## Files To Avoid Touching Casually

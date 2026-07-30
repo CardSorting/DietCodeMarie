@@ -26,16 +26,21 @@ function bundledSkillCandidates(skillName = BUNDLED_SKILL_NAME): string[] {
 	const candidates: string[] = []
 	if (extensionRoot) {
 		candidates.push(path.join(extensionRoot, "optional-skills", "dietcode", skillName, "SKILL.md"))
+		candidates.push(path.join(extensionRoot, "optional-skills", skillName, "SKILL.md"))
 		if (skillName === BUNDLED_SKILL_NAME) candidates.push(path.join(extensionRoot, "SKILL.md"))
 	}
 	const roots = [
 		process.cwd(),
 		path.resolve(process.cwd(), ".."),
+		path.resolve(__dirname, "."),
+		path.resolve(__dirname, ".."),
+		path.resolve(__dirname, "..", ".."),
 		path.resolve(__dirname, "..", "..", ".."),
 		path.resolve(__dirname, "..", "..", "..", ".."),
 	]
 	for (const root of roots) {
 		candidates.push(path.join(root, "optional-skills", "dietcode", skillName, "SKILL.md"))
+		candidates.push(path.join(root, "optional-skills", skillName, "SKILL.md"))
 		if (skillName === BUNDLED_SKILL_NAME) candidates.push(path.join(root, "SKILL.md"))
 	}
 	return [...new Set(candidates)]
@@ -68,37 +73,43 @@ export async function isWorkspaceSkillInstalled(_workspace?: string): Promise<bo
 	return isBundledSkillAvailable()
 }
 
-export async function getBundledRoadmapSkillMetadata(): Promise<SkillMetadata | null> {
+export async function getBundledSkillMetadata(
+	skillName: string = BUNDLED_SKILL_NAME,
+	defaultDescription: string = BUNDLED_SKILL_DESCRIPTION,
+	defaultEnabled?: boolean,
+): Promise<SkillMetadata | null> {
 	if (!getRoadmapConfig().auto_install_skills) {
 		return null
 	}
 
 	let skillPath: string
 	try {
-		skillPath = await bundledSkillPath()
+		skillPath = await bundledSkillPath(skillName)
 		await fs.access(skillPath)
 	} catch {
 		return null
 	}
 
-	let description = BUNDLED_SKILL_DESCRIPTION
+	let description = defaultDescription
 	try {
-		const fh = await fs.open(skillPath, "r")
-		const buf = Buffer.alloc(2048)
-		await fh.read(buf, 0, 2048, 0)
-		await fh.close()
-		const { data: frontmatter } = parseYamlFrontmatter(buf.toString("utf-8"))
+		const fileContent = await fs.readFile(skillPath, "utf-8")
+		const { data: frontmatter } = parseYamlFrontmatter(fileContent.slice(0, 4096))
 		if (typeof frontmatter.description === "string" && frontmatter.description.trim()) {
 			description = frontmatter.description.trim()
 		}
 	} catch {}
 
 	return {
-		name: BUNDLED_SKILL_NAME,
+		name: skillName,
 		description,
-		path: `${BUNDLED_SKILL_URI_PREFIX}${BUNDLED_SKILL_NAME}`,
+		path: `${BUNDLED_SKILL_URI_PREFIX}${skillName}`,
 		source: "bundled",
+		...(defaultEnabled !== undefined ? { defaultEnabled } : {}),
 	}
+}
+
+export async function getBundledRoadmapSkillMetadata(): Promise<SkillMetadata | null> {
+	return getBundledSkillMetadata(BUNDLED_SKILL_NAME, BUNDLED_SKILL_DESCRIPTION)
 }
 
 export async function ensurePrimarySkill(_workspace: string): Promise<{ available: boolean }> {

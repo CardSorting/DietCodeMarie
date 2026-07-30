@@ -388,16 +388,54 @@ Content`)
 			expect(skills).to.have.lengthOf(0)
 		})
 
-		it("should handle file without frontmatter", async () => {
-			const skillDir = path.join(GLOBAL_SKILLS_DIR, "no-front")
+		it("should reject skill with binary or null-byte corruption", async () => {
+			const skillDir = path.join(GLOBAL_SKILLS_DIR, "corrupt-binary")
 			const skillMdPath = path.join(skillDir, "SKILL.md")
 
 			fileExistsStub.withArgs(GLOBAL_SKILLS_DIR).resolves(true)
 			fileExistsStub.withArgs(skillMdPath).resolves(true)
 			isDirectoryStub.withArgs(GLOBAL_SKILLS_DIR).resolves(true)
-			readdirStub.withArgs(GLOBAL_SKILLS_DIR).resolves(["no-front"])
+			readdirStub.withArgs(GLOBAL_SKILLS_DIR).resolves(["corrupt-binary"])
 			statStub.withArgs(skillDir).resolves({ isDirectory: () => true })
-			readFileStub.withArgs(skillMdPath, "utf-8").resolves(`Just plain markdown content without frontmatter`)
+			statStub.withArgs(skillMdPath).resolves({ size: 100 })
+			readFileStub
+				.withArgs(skillMdPath, "utf-8")
+				.resolves(`---\nname: corrupt-binary\ndescription: bad\n---\n\0\0\0PNG\r\n\x1a\n`)
+
+			const skills = await discoverSkills(TEST_CWD)
+
+			expect(skills).to.have.lengthOf(0)
+		})
+
+		it("should reject skill exceeding maximum file size limit", async () => {
+			const skillDir = path.join(GLOBAL_SKILLS_DIR, "huge-skill")
+			const skillMdPath = path.join(skillDir, "SKILL.md")
+
+			fileExistsStub.withArgs(GLOBAL_SKILLS_DIR).resolves(true)
+			fileExistsStub.withArgs(skillMdPath).resolves(true)
+			isDirectoryStub.withArgs(GLOBAL_SKILLS_DIR).resolves(true)
+			readdirStub.withArgs(GLOBAL_SKILLS_DIR).resolves(["huge-skill"])
+			statStub.withArgs(skillDir).resolves({ isDirectory: () => true })
+			statStub.withArgs(skillMdPath).resolves({ size: 1024 * 1024 }) // 1MB > 512KB limit
+
+			const skills = await discoverSkills(TEST_CWD)
+
+			expect(skills).to.have.lengthOf(0)
+		})
+
+		it("should reject skill with unclosed YAML frontmatter block", async () => {
+			const skillDir = path.join(GLOBAL_SKILLS_DIR, "unclosed-skill")
+			const skillMdPath = path.join(skillDir, "SKILL.md")
+
+			fileExistsStub.withArgs(GLOBAL_SKILLS_DIR).resolves(true)
+			fileExistsStub.withArgs(skillMdPath).resolves(true)
+			isDirectoryStub.withArgs(GLOBAL_SKILLS_DIR).resolves(true)
+			readdirStub.withArgs(GLOBAL_SKILLS_DIR).resolves(["unclosed-skill"])
+			statStub.withArgs(skillDir).resolves({ isDirectory: () => true })
+			statStub.withArgs(skillMdPath).resolves({ size: 150 })
+			readFileStub
+				.withArgs(skillMdPath, "utf-8")
+				.resolves(`---\nname: unclosed-skill\ndescription: missing closing delimiter\nNo closing dashes here`)
 
 			const skills = await discoverSkills(TEST_CWD)
 

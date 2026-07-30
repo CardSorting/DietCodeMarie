@@ -653,7 +653,11 @@ export class SubagentRunner {
 				configuredSkillNames !== undefined
 					? configuredSkillNames
 							.map((skillName) => {
-								const skill = resolvedForPrompt.find((candidate) => candidate.name === skillName)
+								const targetName = skillName.trim().toLowerCase()
+								const skill = resolvedForPrompt.find(
+									(candidate) =>
+										candidate.name === skillName || candidate.name.trim().toLowerCase() === targetName,
+								)
 								if (!skill) {
 									Logger.warn(
 										`[SubagentRunner] Configured skill '${skillName}' not found or disabled for subagent run.`,

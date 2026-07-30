@@ -184,6 +184,20 @@ When a global skill and project skill have the same name, the global skill takes
 
 Version control your project skills by committing `.dietcode/skills/`. Your team can share, review, and improve them together.
 
+### Skill Discovery & Diagnostics
+
+Skill discovery uses resilient parsing and diagnostic validation:
+
+- **Encoding & BOM Handling**: Files saved with a UTF-8 Byte Order Mark (`\uFEFF`) are automatically stripped before YAML frontmatter parsing.
+- **Name & Description Normalization**: Frontmatter fields are whitespace-trimmed, and skill lookups (via tool call, subagents, or slash commands like `/my-skill`) support case-insensitive resolution.
+- **Discovery Diagnostics**: Invalid or incomplete skill packages are flagged with diagnostic reason codes:
+  - `MISSING_SKILL_MD`: Directory exists but lacks `SKILL.md`.
+  - `MISSING_NAME`: Frontmatter lacks required `name` field.
+  - `MISSING_DESCRIPTION`: Frontmatter lacks required `description` field.
+  - `NAME_MISMATCH`: Frontmatter `name` does not match the parent directory name.
+  - `READ_ERROR`: IO or YAML syntax parsing failure.
+  - `PERMISSION_DENIED`: Restricted directory access (`EACCES`).
+
 ## Bundling Supporting Files
 
 Skills can include additional files that LUMI accesses only when needed.

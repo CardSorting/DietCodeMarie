@@ -1,5 +1,6 @@
 import type { SkillMetadata } from "@shared/skills"
 import { isSkillEnabled } from "@shared/skills"
+import * as path from "path"
 import { getRoadmapConfig } from "@/services/roadmap/RoadmapConfig"
 import { BUNDLED_SKILL_NAME } from "@/services/roadmap/RoadmapSkillInstall"
 import { discoverSkills, getAvailableSkills } from "./skills"
@@ -20,7 +21,8 @@ const cacheMetrics = {
 }
 
 function cacheKey(cwd: string): string {
-	return cwd || "__no_workspace__"
+	if (!cwd) return "__no_workspace__"
+	return path.resolve(path.normalize(cwd))
 }
 
 export function invalidateSkillsCache(cwd?: string): void {
