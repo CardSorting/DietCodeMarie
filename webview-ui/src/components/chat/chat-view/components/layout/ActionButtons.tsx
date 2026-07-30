@@ -48,7 +48,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, ch
 		lastMessage?.type === "ask" && (lastMessage.ask === "completion_result" || lastMessage.ask === "resume_completed_task")
 	const lifecycleCompleted =
 		taskLifecycleEvent?.committed.state === "terminal" && taskLifecycleEvent.committed.terminalOutcome === "completed"
-	const canInteract = enableButtons && !isProcessing && (!completionAction || lifecycleCompleted)
+	const canInteract = enableButtons && !isProcessing
 	const executionControlConfigured = secondaryAction === "cancel" && !primaryAction
 	const isExecutionControl = Boolean(executionControlConfigured && lastMessage && isApiRequestInProgress(lastMessage))
 	const checkpointAvailable = enableCheckpointsSetting !== false && !checkpointManagerErrorMessage

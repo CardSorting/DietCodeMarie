@@ -146,10 +146,10 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 	completion_result: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "New chat",
-		secondaryText: undefined,
-		primaryAction: "new_task",
-		secondaryAction: undefined,
+		primaryText: "Resume task",
+		secondaryText: "New chat",
+		primaryAction: "proceed",
+		secondaryAction: "new_task",
 	},
 	resume_task: {
 		sendingDisabled: false,
@@ -162,10 +162,10 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 	resume_completed_task: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "New chat",
-		secondaryText: undefined,
-		primaryAction: "new_task",
-		secondaryAction: undefined,
+		primaryText: "Resume task",
+		secondaryText: "New chat",
+		primaryAction: "proceed",
+		secondaryAction: "new_task",
 	},
 	new_task: {
 		sendingDisabled: false,
