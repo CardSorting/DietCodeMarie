@@ -37,7 +37,7 @@ export function shouldAcceptIdleGapFeedback(params: {
 	if (params.abort || !params.taskHasMessages) {
 		return false
 	}
-	if (params.askResponse !== "messageResponse") {
+	if (params.askResponse !== "messageResponse" && params.askResponse !== "yesButtonClicked") {
 		return false
 	}
 	if (!hasSteeringFeedback(params.feedback)) {

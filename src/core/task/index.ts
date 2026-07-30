@@ -68,6 +68,7 @@ import { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
 import { featureFlagsService } from "@services/feature-flags"
 import { listFiles } from "@services/glob/list-files"
 import { McpHub } from "@services/mcp/McpHub"
+import { hasUnansweredAsk as sharedHasUnansweredAsk } from "@shared/agentActivity"
 import { ApiConfiguration } from "@shared/api"
 import { findLast, findLastIndex } from "@shared/array"
 import { combineApiRequests } from "@shared/combineApiRequests"
@@ -919,8 +920,7 @@ export class Task {
 	}
 
 	private hasUnansweredAsk(): boolean {
-		const lastMessage = this.messageStateHandler.getDietCodeMessages().at(-1)
-		return lastMessage?.type === "ask" && lastMessage.partial !== true
+		return sharedHasUnansweredAsk(this.messageStateHandler.getDietCodeMessages())
 	}
 
 	private async consumeIdleGapFeedbackIfPending(): Promise<DietCodeContent[] | null> {

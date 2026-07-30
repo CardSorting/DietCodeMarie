@@ -56,7 +56,14 @@ export function canSendSteeringMessage(messages: DietCodeMessage[], dietcodeAsk?
  */
 export function hasUnansweredAsk(messages: DietCodeMessage[]): boolean {
 	const lastMessage = messages.at(-1)
-	return lastMessage?.type === "ask" && lastMessage.partial !== true
+	if (!lastMessage || lastMessage.type !== "ask" || lastMessage.partial === true) {
+		return false
+	}
+	return !(
+		lastMessage.ask === "completion_result" ||
+		lastMessage.ask === "resume_task" ||
+		lastMessage.ask === "resume_completed_task"
+	)
 }
 
 /**
