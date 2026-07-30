@@ -45,10 +45,6 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 		const delay = type === "task" ? 500 : 1000 // Delay for task and workspace restore
 		setIsEditing(false)
 
-		if (text === editedText) {
-			return
-		}
-
 		try {
 			await CheckpointsServiceClient.checkpointRestore(
 				CheckpointRestoreRequest.create({
