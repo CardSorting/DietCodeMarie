@@ -6,6 +6,8 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+## [11.5.0] - 2026-07-30
+
 ### Fixed
 
 - **Completed Task Reopening & Re-edit Architecture (`taskCompletionEvidence.ts`)** — Resolved issue where completed tasks remained permanently locked when users edited messages, restored pre-completion checkpoints, or provided follow-up feedback. Refactored `getTerminalCompletionEvidence` to evaluate sequential `reopensCompletedTask` markers across message history and override durable completion status when history is restored or edited prior to completion.

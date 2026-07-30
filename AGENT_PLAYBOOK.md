@@ -4,13 +4,13 @@
 > **When do I use it?** At task start to understand the active developer landscape, blockers, and orientation paths.
 > **What is the source of truth?** The live workspace layout, manifests, package files, and the active task requirements.
 
-Last audited: 2026-07-26
+Last audited: 2026-07-30
 
 ## Current Status
 
 | Area | State | Evidence |
 |---|---|---|
-| Product | LUMI VS Code extension monorepo | `package.json` name `lumi-vscode`, version `9.0.0` |
+| Product | LUMI VS Code extension monorepo | `package.json` name `lumi-vscode`, version `11.5.0` |
 | Workspaces | Root package plus `broccolidb` | `package.json` workspaces: `.`, `broccolidb` |
 | UI | React/Vite webview | `webview-ui/package.json` |
 | Substrate | BroccoliDB package | `broccolidb/package.json` name `@noorm/broccolidb` |
