@@ -6,6 +6,17 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+## [11.6.0] - 2026-07-30
+
+### Fixed
+
+- **5-Gate Completed Task Reopening & Ergonomics Architecture (`agentActivity.ts`, `composerState.ts`, `chatInputPolicy.ts`, `UserMessage.tsx`, `Task.ts`)** — Resolved the complete 5-gate pipeline that permanently locked completed tasks and prevented prompt reopening/resending.
+  1. **Dual-Action Completion Presentation (`buttonConfig.ts` & `ActionButtons.tsx`)**: Replaced single "New chat" completion button with dual-action "Resume task" (primary) and "New chat" (secondary) controls matching Cursor & ChatGPT developer ergonomics. Simplified `canInteract` to guarantee immediate button responsiveness on completion rows.
+  2. **Unblocked User Message Resend & Checkpoint Restore (`UserMessage.tsx`)**: Removed `text === editedText` restriction so clicking "Resend" or "Undo files & resend" always restores workspace checkpoints and re-runs prompts even when text is unchanged.
+  3. **Chat Send Routing Priority (`chatInputPolicy.ts`)**: Reordered `resolveChatSendRoute` to evaluate `canSendTaskFeedback` before `dietcodeAsk` so follow-ups on completed tasks route as `"follow_up"`, preventing `useMessageHandlers` from force-disabling chat inputs in React state.
+  4. **Activity & Composer Unlocking (`agentActivity.ts` & `composerState.ts`)**: Excluded completion/resume asks from `BLOCKING_TASK_ASKS` and integrated `hasTerminalCompletionEvidence(messages)` into `deriveComposerMode` to keep composer controls open (`"ready"`) on reopened tasks.
+  5. **Backend Generation Replacement (`Task.ts` & `TaskLifecycleFunnel.ts`)**: Integrated `commitResumeLifecycle()` at the start of `initiateTaskLoop` to issue `ResumeWithGeneration` with a fresh generation ID (`G2`) whenever execution starts on a terminal task.
+
 ## [11.5.0] - 2026-07-30
 
 ### Fixed

@@ -86,9 +86,9 @@ The webview displays task terminality only from the lifecycle event. The semanti
 
 Resume reads the committed lifecycle record and active completion evidence:
 
-- suspended generations may resume explicitly;
-- terminal completed generations allow user continuation by creating a new generation when new user work or pre-completion timeline restores occur;
+- terminal completed generations allow user continuation by creating a new generation (`ResumeWithGeneration`) when new user feedback, prompt resends, or pre-completion timeline restores occur;
 - `getTerminalCompletionEvidence` in `src/shared/completion/taskCompletionEvidence.ts` evaluates message history sequentially (`reopensCompletedTask`); pre-completion checkpoint restores or user feedback override terminal evidence, resolving `resolveTaskResumeAsk` back to `resume_task`;
+- dual-action UI controls (`buttonConfig.ts`) provide explicit "Resume task" (primary) and "New chat" (secondary) actions on completion rows;
 - generic transcript bookkeeping cannot demote or revive terminal state;
 - old completion callbacks cannot mutate a replacement generation.
 

@@ -10,7 +10,7 @@ Last audited: 2026-07-30
 
 | Area | State | Evidence |
 |---|---|---|
-| Product | LUMI VS Code extension monorepo | `package.json` name `lumi-vscode`, version `11.5.0` |
+| Product | LUMI VS Code extension monorepo | `package.json` name `lumi-vscode`, version `11.6.0` |
 | Workspaces | Root package plus `broccolidb` | `package.json` workspaces: `.`, `broccolidb` |
 | UI | React/Vite webview | `webview-ui/package.json` |
 | Substrate | BroccoliDB package | `broccolidb/package.json` name `@noorm/broccolidb` |
@@ -31,7 +31,7 @@ The active work now includes complete 12-pass mechanical sympathy, zero-allocati
 - `src/core/governance/AdministrativeLockCleaner.ts` isolates explicit, logged ownership overrides from normal orchestration.
 - `src/core/task/tools/subagent/TarjanDeadlockDetector.ts` detects only unresolvable SCCs from a versioned scheduler snapshot.
 - `src/core/task/tools/handlers/AttemptCompletionHandler.ts` persists terminal results through a lease/state CAS in `task_completions`.
-- `src/shared/completion/taskCompletionEvidence.ts`: Provides single-source-of-truth task completion resolution. `getTerminalCompletionEvidence` evaluates sequential `reopensCompletedTask` markers across active message history (`user_feedback`, `user_feedback_diff`, `api_req_started`), allowing completed tasks to dynamically reopen on user message edits, pre-completion checkpoint restorations, or follow-up feedback. `resolveTaskResumeAsk` seamlessly transitions between `resume_completed_task` and `resume_task`, unlocking chat inputs and enabling continuous agent turns without modal locks.
+- `src/shared/completion/taskCompletionEvidence.ts`: Single-source-of-truth task completion resolution and 5-Gate Task Reopening Architecture. Evaluates sequential `reopensCompletedTask` markers across active message history (`user_feedback`, `user_feedback_diff`, `api_req_started`), allowing completed tasks to dynamically reopen on user message edits, prompt resends, pre-completion checkpoint restorations, or follow-up feedback. Works with `buttonConfig.ts` (dual-action "Resume task" and "New chat" controls), `chatInputPolicy.ts` (follow-up routing priority), `composerState.ts` (dynamic composer mode unlocking), and `Task.ts` (`commitResumeLifecycle` generation replacement via `ResumeWithGeneration`).
 - `src/integrations/terminal/CommandExecutor.ts` implements scoped command cancellation using `ownerId` to cancel processes concurrently and independently.
 - `src/core/task/tools/subagent/SubagentTranscriptRecorder.ts`: Single-pass JSON serialization for checksum computation and byte length calculation, eliminating duplicate `JSON.stringify` calls per subagent append event.
 - `src/infrastructure/db/BufferedDbPool.ts`: Exported `createMonomorphicWriteOp()` factory function enforcing constant property layout (`type`, `table`, `values`, `where`, `conflictTarget`, `agentId`, `layer`, `hasIncrements`, `dedupKey`).

@@ -84,7 +84,7 @@ Each intent includes an idempotency identity, task ID, generation ID, and `TaskL
 - Registration creates revision 1 in `registered`; activation is a separate committed revision.
 - A suspended generation resumes only through an explicit same-generation `ResumeWithGeneration`.
 - A terminal generation requires a different `newGenerationId` for new user turns.
-- When a completed task receives new user feedback or pre-completion timeline edits, `getTerminalCompletionEvidence` in `src/shared/completion/taskCompletionEvidence.ts` evaluates `reopensCompletedTask` and resets completion evidence, prompting `ResumeWithGeneration` to issue a fresh generation.
+- When a completed task receives new user feedback, a prompt resend, or pre-completion timeline edits, `getTerminalCompletionEvidence` in `src/shared/completion/taskCompletionEvidence.ts` evaluates `reopensCompletedTask` and resets completion evidence. `initiateTaskLoop` in `Task.ts` invokes `commitResumeLifecycle()` at turn start, atomically submitting `ResumeWithGeneration` with a fresh `newGenerationId` (e.g. `G2`).
 - Generation replacement is one compare-and-swap commit; it clears terminal and cancellation state in the new generation.
 - A callback, permit, event, or intent carrying generation N is rejected after N+1 becomes current.
 - Parent generation replacement is blocked while an attached child of the old generation remains non-terminal.
