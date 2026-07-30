@@ -1929,6 +1929,8 @@ export class Task {
 			return
 		}
 
+		await this.commitResumeLifecycle()
+
 		this.taskLoopActive = true
 		let nextUserContent = userContent
 		let includeFileDetails = true

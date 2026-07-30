@@ -1,6 +1,13 @@
 import type { DietCodeMessage } from "./ExtensionMessage"
 
-const BLOCKING_TASK_ASKS = new Set<DietCodeMessage["ask"]>(["completion_result", "resume_task", "resume_completed_task"])
+const BLOCKING_TASK_ASKS = new Set<DietCodeMessage["ask"]>([
+	"tool",
+	"command",
+	"command_output",
+	"browser_action_launch",
+	"use_mcp_server",
+	"use_subagents",
+])
 
 export function isBlockingTaskAsk(dietcodeAsk?: DietCodeMessage["ask"] | null): boolean {
 	return dietcodeAsk != null && BLOCKING_TASK_ASKS.has(dietcodeAsk)
@@ -74,7 +81,12 @@ export function canSendTaskFeedback(messages: DietCodeMessage[], dietcodeAsk?: D
 	if (isBlockingTaskAsk(dietcodeAsk)) {
 		return false
 	}
-	if (dietcodeAsk) {
+	if (
+		dietcodeAsk &&
+		dietcodeAsk !== "completion_result" &&
+		dietcodeAsk !== "resume_task" &&
+		dietcodeAsk !== "resume_completed_task"
+	) {
 		return false
 	}
 	if (hasUnansweredAsk(messages)) {

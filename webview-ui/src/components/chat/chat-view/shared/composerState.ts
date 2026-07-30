@@ -13,6 +13,8 @@ const APPROVAL_ASKS = new Set<DietCodeMessage["ask"]>([
 	"use_subagents",
 ])
 
+import { hasTerminalCompletionEvidence } from "@shared/completion/taskCompletionEvidence"
+
 export function deriveComposerMode(
 	messages: DietCodeMessage[],
 	dietcodeAsk: DietCodeMessage["ask"] | null | undefined,
@@ -20,7 +22,7 @@ export function deriveComposerMode(
 	lifecycleEvent?: TaskLifecycleEvent,
 ): ComposerMode {
 	if (!inputEnabled) return "disabled"
-	if (lifecycleEvent?.committed.state === "terminal") {
+	if (hasTerminalCompletionEvidence(messages) && lifecycleEvent?.committed.state === "terminal") {
 		return lifecycleEvent.committed.terminalOutcome === "completed" ? "completion" : "resume"
 	}
 	const lastMessage = messages.at(-1)
