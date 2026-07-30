@@ -22,8 +22,12 @@ export function deriveComposerMode(
 	lifecycleEvent?: TaskLifecycleEvent,
 ): ComposerMode {
 	if (!inputEnabled) return "disabled"
-	if (hasTerminalCompletionEvidence(messages) && lifecycleEvent?.committed.state === "terminal") {
-		return lifecycleEvent.committed.terminalOutcome === "completed" ? "completion" : "resume"
+	if (lifecycleEvent?.committed.state === "terminal") {
+		const outcome = lifecycleEvent.committed.terminalOutcome
+		if (outcome === "completed") {
+			return hasTerminalCompletionEvidence(messages) ? "completion" : "ready"
+		}
+		return "resume"
 	}
 	const lastMessage = messages.at(-1)
 	if (lastMessage?.type === "ask" && APPROVAL_ASKS.has(lastMessage.ask)) return "approval"

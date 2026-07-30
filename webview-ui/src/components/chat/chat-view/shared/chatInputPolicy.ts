@@ -24,11 +24,11 @@ export function resolveChatSendRoute(
 	if (options?.taskSessionActive === false) {
 		return "none"
 	}
-	if (dietcodeAsk) {
-		return "ask"
-	}
 	if (canSendTaskFeedback(messages, dietcodeAsk)) {
 		return "follow_up"
+	}
+	if (dietcodeAsk) {
+		return "ask"
 	}
 	return "none"
 }
