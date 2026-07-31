@@ -6,19 +6,21 @@ const GENERIC: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id: DietCodeDefaultTool.BASH,
 	name: "execute_command",
-	description: `Request to execute a CLI command on the system. Use this when you need to perform system operations or run specific commands to accomplish any step in the user's task. You must tailor your command to the user's system and provide a clear explanation of what the command does. For command chaining, use the appropriate chaining syntax for the user's shell. Prefer to execute complex CLI commands over creating executable scripts, as they are more flexible and easier to run. Commands will be executed in the current working directory: {{CWD}}{{MULTI_ROOT_HINT}}`,
+	description: `[EXECUTE_COMMAND_CONTRACT]
+- PURPOSE: Execute CLI commands in working directory ({{CWD}}{{MULTI_ROOT_HINT}}).
+- EXECUTION_RULES: Tailor to OS context | Prefer CLI flags over script files | Prefer non-interactive flags (--no-pager, -y).`,
 	parameters: [
 		{
 			name: "command",
 			required: true,
-			instruction: `The CLI command to execute. This should be valid for the current operating system. Ensure the command is properly formatted and does not contain any harmful instructions.`,
+			instruction: `CLI command to execute. Valid for OS, absolute paths required, no standalone cd.`,
 			usage: "Your command here",
 		},
 		{
 			name: "requires_approval",
 			required: true,
 			instruction:
-				"A boolean indicating whether this command requires explicit user approval before execution in case the user has auto-approve mode enabled. Set to 'true' for potentially impactful operations like installing/uninstalling packages, deleting/overwriting files, system configuration changes, network operations, or any commands that could have unintended side effects. Set to 'false' for safe operations like reading files/directories, running development servers, building projects, and other non-destructive operations.",
+				"Boolean: true for destructive/modifying operations (installs, deletes, system config); false for safe reads/builds.",
 			usage: "true or false",
 			type: "boolean",
 		},
@@ -27,8 +29,7 @@ const GENERIC: DietCodeToolSpec = {
 			required: false,
 			type: "integer",
 			contextRequirements: (context) => context.yoloModeToggled === true,
-			instruction:
-				"Integer representing the timeout in seconds for how long to run the terminal command, before timing out and continuing the task.",
+			instruction: "Command execution timeout in seconds.",
 			usage: "30",
 		},
 	],
@@ -38,20 +39,17 @@ const NATIVE_GPT_5: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_GPT_5,
 	id: DietCodeDefaultTool.BASH,
 	name: DietCodeDefaultTool.BASH,
-	description:
-		"Request to execute a CLI command on the system. Use this when you need to perform system operations or run specific commands to accomplish any step in the user's task.",
+	description: "[EXECUTE_COMMAND_CONTRACT]\n- PURPOSE: Execute system CLI operations.",
 	parameters: [
 		{
 			name: "command",
 			required: true,
-			instruction:
-				"The CLI command to execute. This should be valid for the current operating system. Do not use the ~ character or $HOME to refer to the home directory. Always use absolute paths. The command will be executed from the current workspace, you do not need to cd to the workspace.",
+			instruction: "CLI command to execute. No ~ or $HOME. Absolute paths required.",
 		},
 		{
 			name: "requires_approval",
 			required: true,
-			instruction:
-				"To indicate whether this command requires explicit user approval or interaction before it should be executed. For system/file altering operations like installing/uninstalling packages, removing/overwriting files, system configuration changes, network operations, or any commands that are considered potentially dangerous must be set to true. False for safe operations like running development servers, building projects, and other non-destructive operations.",
+			instruction: "Boolean: true for destructive operations, false for non-destructive reads/builds.",
 			type: "boolean",
 		},
 	],
@@ -67,19 +65,17 @@ const GEMINI_3: DietCodeToolSpec = {
 	id: DietCodeDefaultTool.BASH,
 	name: DietCodeDefaultTool.BASH,
 	description:
-		"Request to execute a CLI command on the system. Use this when you need to perform system operations or run specific commands to accomplish any step in the user's task. When chaining commands, use the shell operator && (not the HTML entity &amp;&amp;). If using search/grep commands, be careful to not use vague search terms that may return thousands of results. When in PLAN MODE, you may use the execute_command tool, but only in a non-destructive manner and in a way that does not alter any files.",
+		"[EXECUTE_COMMAND_CONTRACT]\n- PURPOSE: Execute CLI commands. Use shell operator && for chaining. Avoid vague search commands.",
 	parameters: [
 		{
 			name: "command",
 			required: true,
-			instruction:
-				"The CLI command to execute. This should be valid for the current operating system. For command chaining, use proper shell operators like && to chain commands (e.g., 'cd path && command'). Do not use the ~ character or $HOME to refer to the home directory. Always use absolute paths. Do not run search/grep commands that may return thousands of results.",
+			instruction: "CLI command to execute. Use proper shell operators (&&). No ~ or $HOME.",
 		},
 		{
 			name: "requires_approval",
 			required: true,
-			instruction:
-				"To indicate whether this command requires explicit user approval or interaction before it should be executed. For system/file altering operations like installing/uninstalling packages, removing/overwriting files, system configuration changes, network operations, or any commands that are considered potentially dangerous must be set to true. False for safe operations like running development servers, building projects, and other non-destructive operations.",
+			instruction: "Boolean: true for destructive operations, false for non-destructive reads/builds.",
 			type: "boolean",
 		},
 	],

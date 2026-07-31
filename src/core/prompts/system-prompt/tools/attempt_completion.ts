@@ -8,32 +8,31 @@ const generic: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "attempt_completion",
-	description: `After each tool use, the user will respond with the result of that tool use, i.e. if it succeeded or failed, along with any reasons for failure. Once you've received the results of tool uses and can confirm that the task is complete, use this tool to present the result of your work to the user. Optionally you may provide a CLI command to showcase the result of your work. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again.
-IMPORTANT NOTE: This tool CANNOT be used until you've confirmed from the user that any previous tool uses were successful. Failure to do so will result in code corruption and system failure. Before using this tool, you must ask yourself in <thinking></thinking> tags if you've confirmed from the user that any previous tool uses were successful. If not, then DO NOT use this tool.`,
+	description: `[ATTEMPT_COMPLETION_CONTRACT]
+- PURPOSE: Present verified task completion result to the user.
+- PREREQUISITE: Confirm previous tool executions succeeded and all requirements are met.
+- CONVERSATION_STYLE: Non-conversational final report. Do NOT end with questions or offers of assistance.`,
 	parameters: [
 		{
 			name: "result",
 			required: true,
-			instruction: "The result of the tool use. This should be a clear, specific description of the result.",
+			instruction: "Clear, specific description of task results.",
 			usage: "Your final result description here",
 		},
 		{
 			name: "command",
 			required: false,
 			instruction:
-				"A CLI command to execute to show a live demo of the result to the user. For example, use `open index.html` to display a created html website, or `open localhost:3000` to display a locally running development server. But DO NOT use commands like `echo` or `cat` that merely print text. This command should be valid for the current operating system. Ensure the command is properly formatted and does not contain any harmful instructions",
+				"Optional OS-compatible demo CLI command (e.g. `open index.html` or `open localhost:3000`). BANNED: echo/cat text printing.",
 			usage: "Your command here (optional)",
 		},
 		// Different than the vanilla ASK_PROGRESS_PARAMETER
 		{
 			name: "task_progress",
 			required: false,
-			instruction:
-				"A checklist showing task progress after this tool use is completed. (See 'Updating Task Progress' section for more details)",
-			usage: "Checklist here (required if you used task_progress in previous tool uses)",
+			instruction: "Completed checklist showing task progress.",
+			usage: "Checklist here",
 			dependencies: [DietCodeDefaultTool.TODO],
-			description:
-				"If you were using task_progress to update the task progress, you must include the completed list in the result as well.",
 		},
 	],
 }
@@ -42,32 +41,29 @@ const GPT_5: DietCodeToolSpec = {
 	variant: ModelFamily.GPT_5,
 	id,
 	name: "attempt_completion",
-	description: `After each tool use, the user will respond with the result of that tool use, i.e. if it succeeded or failed, along with any reasons for failure. Once you've received the results of tool uses and can confirm that the task is complete, use this tool to present the result of your work to the user. Optionally you may provide a CLI command to showcase the result of your work. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again.
-IMPORTANT NOTE: This tool CANNOT be used until you've confirmed from the user that any previous tool uses were successful and all tasks have been completed in full. Failure to do so will result in code corruption and system failure. Before using this tool, you must ask yourself in <thinking></thinking> tags if you've confirmed from the user that any previous tool uses were successful and all goals defined by the user have been completed. If not, then DO NOT use this tool.`,
+	description: `[ATTEMPT_COMPLETION_CONTRACT]
+- PURPOSE: Present verified final task completion result.
+- PREREQUISITE: Confirm tool success and complete goal fulfillment.`,
 	parameters: [
 		{
 			name: "result",
 			required: true,
-			instruction: "The result of the tool use. This should be a clear, specific description of the result.",
+			instruction: "Clear, specific description of task results.",
 			usage: "Your final result description here",
 		},
 		{
 			name: "command",
 			required: false,
-			instruction:
-				"A CLI command to execute to show a live demo of the result to the user. For example, use `open index.html` to display a created html website, or `open localhost:3000` to display a locally running development server. But DO NOT use commands like `echo` or `cat` that merely print text. This command should be valid for the current operating system. Ensure the command is properly formatted and does not contain any harmful instructions",
+			instruction: "Optional OS-compatible demo CLI command. BANNED: echo/cat text printing.",
 			usage: "Your command here (optional)",
 		},
 		// Different than the vanilla ASK_PROGRESS_PARAMETER
 		{
 			name: "task_progress",
 			required: false,
-			instruction:
-				"A checklist showing task progress after this tool use is completed. (See 'Updating Task Progress' section for more details)",
-			usage: "Checklist here (required if you used task_progress in previous tool uses)",
+			instruction: "Completed checklist showing task progress.",
+			usage: "Checklist here",
 			dependencies: [DietCodeDefaultTool.TODO],
-			description:
-				"If you were using task_progress to update the task progress, you must include the completed list in the result as well.",
 		},
 	],
 }
@@ -77,25 +73,23 @@ const NATIVE_NEXT_GEN: DietCodeToolSpec = {
 	id,
 	name: "attempt_completion",
 	description:
-		"Once you've completed the user's task, use this tool to present the final result to the user, including a brief and very short (1-2 paragraph) summary of the task and what was done to resolve it. Provide the basics, hitting the highlights, but do delve into the specifics. You should only call this tool when you have completed all tasks in the task_progress list, and completed all changes that are necessary to satisfy the user's request. You should not provide the contents of the task_progress list in the result parameter, it must be included in the task_progress parameter.",
+		"[ATTEMPT_COMPLETION_CONTRACT]\n- PURPOSE: Present verified task completion result.\n- PREREQUISITE: Complete all task_progress checklist items and required workspace edits.",
 	parameters: [
 		{
 			name: "result",
 			required: true,
-			instruction: "A clear, brief and very short (1-2 paragraph) summary of the final result of the task.",
+			instruction: "Clear, concise 1-2 paragraph summary of the final result.",
 		},
 		{
 			name: "command",
 			required: false,
-			instruction:
-				"An actionable terminal command that is non-verbose that allows user to review the result of your work. For example, use `start localhost:3000` to start a locally running development server. Commands like `echo` or `cat` that merely print text or open a file are not allowed. Ensure the command is properly formatted for user's OS and does not contain any harmful instructions",
+			instruction: "Actionable terminal demo command (e.g. `start localhost:3000`). BANNED: echo/cat text printing.",
 		},
 		{
 			name: "task_progress",
 			required: false,
 			dependencies: [DietCodeDefaultTool.TODO],
-			instruction:
-				"A checklist showing task progress with the latest status of each subtasks included previously, if any. If you are calling attempt completion, and all items in this list have been completed, they must be marked as completed in this response.",
+			instruction: "Completed task progress checklist.",
 		},
 	],
 }

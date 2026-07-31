@@ -25,20 +25,20 @@ const generic: DietCodeToolSpec = {
 	id: DietCodeDefaultTool.MCP_ACCESS,
 	name: "access_mcp_resource",
 	description:
-		"Request to access a resource provided by a connected MCP server. Resources represent data sources that can be used as context, such as files, API responses, or system information.",
+		"[ACCESS_MCP_RESOURCE_CONTRACT]\n- PURPOSE: Read resource (file/API/data) provided by connected MCP server via URI.",
 	contextRequirements: (context) => context.mcpHub !== undefined && context.mcpHub !== null,
 	parameters: [
 		{
 			name: "server_name",
 			required: true,
-			instruction: "The name of the MCP server providing the resource",
-			usage: "server name here",
+			instruction: "Name of target MCP server.",
+			usage: "server_name",
 		},
 		{
 			name: "uri",
 			required: true,
-			instruction: "The URI identifying the specific resource to access",
-			usage: "resource URI here",
+			instruction: "Target resource URI.",
+			usage: "resource_uri",
 		},
 		TASK_PROGRESS_PARAMETER,
 	],
@@ -48,21 +48,20 @@ const NATIVE_GPT_5: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_GPT_5,
 	id: DietCodeDefaultTool.MCP_ACCESS,
 	name: "access_mcp_resource",
-	description:
-		"Request to access a resource provided by a connected MCP server. Resources represent data sources that can be used as context, such as files, API responses, or system information. You must only use this tool if you have been informed of the MCP server and the resource you are trying to access.",
+	description: "[ACCESS_MCP_RESOURCE_CONTRACT]\n- PURPOSE: Read MCP server resource via URI.",
 	contextRequirements: (context) => context.mcpHub !== undefined && context.mcpHub !== null,
 	parameters: [
 		{
 			name: "server_name",
 			required: true,
-			instruction: "The name of the MCP server providing the resource",
-			usage: "server name here",
+			instruction: "Target MCP server name.",
+			usage: "server_name",
 		},
 		{
 			name: "uri",
 			required: true,
-			instruction: "The URI identifying the specific resource to access",
-			usage: "resource URI here",
+			instruction: "Target resource URI.",
+			usage: "resource_uri",
 		},
 		TASK_PROGRESS_PARAMETER,
 	],

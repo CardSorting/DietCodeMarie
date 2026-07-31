@@ -10,12 +10,12 @@ const generic: DietCodeToolSpec = {
 	id,
 	name: "list_code_definition_names",
 	description:
-		"Request to list definition names (classes, functions, methods, etc.) used in source code files at the top level of the specified directory. This tool provides insights into the codebase structure and important constructs, encapsulating high-level concepts and relationships that are crucial for understanding the overall architecture.",
+		"[LIST_CODE_DEFINITION_NAMES_CONTRACT]\n- PURPOSE: List top-level code definition names (classes, functions, methods) in target directory for architecture mapping.",
 	parameters: [
 		{
 			name: "path",
 			required: true,
-			instruction: `The path of the directory (relative to the current working directory {{CWD}}){{MULTI_ROOT_HINT}} to list top level source code definitions for.`,
+			instruction: `Directory path (relative to {{CWD}}){{MULTI_ROOT_HINT}}.`,
 			usage: "Directory path here",
 		},
 		TASK_PROGRESS_PARAMETER,
@@ -26,13 +26,12 @@ const NATIVE_GPT_5: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_GPT_5,
 	id,
 	name: "list_code_definition_names",
-	description:
-		"Request to list definition names (classes, functions, methods, etc.) used in source code files at the top level of the specified directory. This tool provides insights into the codebase structure and important constructs, encapsulating high-level concepts and relationships that are crucial for understanding the overall architecture.",
+	description: "[LIST_CODE_DEFINITION_NAMES_CONTRACT]\n- PURPOSE: List top-level code definition names in directory.",
 	parameters: [
 		{
 			name: "path",
 			required: true,
-			instruction: `The path of the directory (relative to the current working directory {{CWD}}){{MULTI_ROOT_HINT}} to list top level source code definitions for.`,
+			instruction: `Directory path (relative to {{CWD}}){{MULTI_ROOT_HINT}}.`,
 		},
 		TASK_PROGRESS_PARAMETER,
 	],

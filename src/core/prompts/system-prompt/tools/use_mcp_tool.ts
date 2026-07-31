@@ -36,31 +36,26 @@ const generic: DietCodeToolSpec = {
 	id: DietCodeDefaultTool.MCP_USE,
 	name: "use_mcp_tool",
 	description:
-		"Request to use a tool provided by a connected MCP server. Each MCP server can provide multiple tools with different capabilities. Tools have defined input schemas that specify required and optional parameters.",
+		"[USE_MCP_TOOL_CONTRACT]\n- PURPOSE: Execute tool provided by connected MCP server using parameter arguments object.",
 	contextRequirements: (context) => context.mcpHub !== undefined && context.mcpHub !== null,
 	parameters: [
 		{
 			name: "server_name",
 			required: true,
-			instruction: "The name of the MCP server providing the tool",
-			usage: "server name here",
+			instruction: "Target MCP server name.",
+			usage: "server_name",
 		},
 		{
 			name: "tool_name",
 			required: true,
-			instruction: "The name of the tool to execute",
-			usage: "tool name here",
+			instruction: "Target tool name.",
+			usage: "tool_name",
 		},
 		{
 			name: "arguments",
 			required: true,
-			instruction: "A JSON object containing the tool's input parameters, following the tool's input schema",
-			usage: `
-{
-  "param1": "value1",
-  "param2": "value2"
-}
-`,
+			instruction: "JSON object arguments following tool input schema.",
+			usage: '{"param": "value"}',
 		},
 		TASK_PROGRESS_PARAMETER,
 	],

@@ -26,31 +26,31 @@ const generic: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "plan_mode_respond",
-	description: `Respond to the user's inquiry in an effort to plan a solution to the user's task. This tool should ONLY be used when you have already explored the relevant files and are ready to present a concrete plan. DO NOT use this tool to announce what files you're going to read - just read them first. This tool is only available in PLAN MODE. The environment_details will specify the current mode; if it is not PLAN_MODE then you should not use this tool.
-After presenting a finalized plan, the system automatically transitions to ACT MODE so you can implement it.
-However, if while writing your response you realize you actually need to do more exploration before providing a complete plan, you can add the optional needs_more_exploration parameter to indicate this. This allows you to acknowledge that you should have done more exploration first, and signals that your next message will use exploration tools instead.`,
+	description: `[PLAN_MODE_RESPOND_CONTRACT]
+- AVAILABILITY: PLAN_MODE ONLY. Transition to ACT_MODE occurs automatically upon submission.
+- PURPOSE: Deliver concrete plan after file exploration. Do NOT use to announce file reads before doing them.
+- EXPLORATION_RECOVERY: If response formulation reveals need for further research, set needs_more_exploration=true.`,
 	parameters: [
 		{
 			name: "response",
 			required: true,
-			instruction: `The response to provide to the user. Do not try to use tools in this parameter, this is simply a chat response. (You MUST use the response parameter, do not simply place the response text directly within <plan_mode_respond> tags.)`,
+			instruction: `The plan or response to provide to the user. Must be supplied within response parameter.`,
 			usage: "Your response here",
 		},
 		{
 			name: "needs_more_exploration",
 			required: false,
 			instruction:
-				"Set to true if while formulating your response that you found you need to do more exploration with tools, for example reading files. (You can explore the project with tools like read_file while remaining in PLAN MODE.) Defaults to false if not specified.",
-			usage: "true or false (optional, but you MUST set to true if in <response> you need to read files or use other exploration tools)",
+				"Set true if further exploration with tools (read_file/search) is required before finalizing plan. Defaults false.",
+			usage: "true or false",
 			type: "boolean",
 		},
 		// Different than the vanilla TASK_PROGRESS_PARAMETER
 		{
 			name: "task_progress",
 			required: false,
-			instruction:
-				" A checklist showing task progress after this tool use is completed. (See 'Updating Task Progress' section for more details)",
-			usage: "Checklist here (If you have presented the user with concrete steps or requirements, you can optionally include a todo list outlining these steps.)",
+			instruction: "Checklist showing task progress after tool use (see 'Updating Task Progress').",
+			usage: "Checklist here",
 			dependencies: [DietCodeDefaultTool.TODO],
 		},
 	],
@@ -60,19 +60,19 @@ const NATIVE_GPT_5: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_GPT_5,
 	id,
 	name: "plan_mode_respond",
-	description: `Respond to the user's inquiry in an effort to plan a solution to the user's task. This tool should ONLY be used when you have already explored the relevant files and are ready to present a concrete plan. DO NOT use this tool to announce what files you're going to read - just read them first. This tool is only available in PLAN MODE. The environment_details will specify the current mode; if it is not PLAN_MODE then you should not use this tool.
-After presenting a finalized plan, the system automatically transitions to ACT MODE so you can implement it.
-However, if while writing your response you realize you actually need to do more exploration before providing a complete plan, you can add the optional needs_more_exploration parameter to indicate this. This allows you to acknowledge that you should have done more exploration first, and signals that your next message will use exploration tools instead.`,
+	description: `[PLAN_MODE_RESPOND_CONTRACT]
+- AVAILABILITY: PLAN_MODE ONLY. Automatic transition to ACT_MODE upon submission.
+- PURPOSE: Deliver concrete plan after file exploration.`,
 	parameters: [
 		{
 			name: "response",
 			required: true,
-			instruction: `The response to provide to the user.`,
+			instruction: `The plan response to provide to the user.`,
 		},
 		{
 			name: "task_progress",
 			required: false,
-			instruction: "A checklist showing task progress with the latest status of each subtasks included previously if any.",
+			instruction: "Checklist showing task progress status.",
 		},
 	],
 }
@@ -81,29 +81,29 @@ const GEMINI_3: DietCodeToolSpec = {
 	variant: ModelFamily.GEMINI_3,
 	id,
 	name: "plan_mode_respond",
-	description: `Respond with a plan that outlines a solution to the user's request. This tool should ONLY be used when you have already explored the relevant files and are ready to present a concrete plan. Only use this tool after you have explored relevant files and collected sufficient context to create a detailed, accurate plan. This tool is only available in PLAN MODE, as indicated by the environment_details.
-After presenting a finalized plan, the system automatically transitions to ACT MODE so you can implement it.
-If it becomes apparent that additional exploration is required while the plan_mode_respond response is being generated, the optional needs_more_exploration parameter can be toggled to enable further research. This allows you to acknowledge that more exploration is required before the final plan_mode_respond is generated, and signals that your next message will use exploration tools instead.`,
+	description: `[PLAN_MODE_RESPOND_CONTRACT]
+- AVAILABILITY: PLAN_MODE ONLY. Automatic transition to ACT_MODE upon submission.
+- PURPOSE: Present concrete plan after exploring files.
+- EXPLORATION_RECOVERY: If further research is required, set needs_more_exploration=true.`,
 	parameters: [
 		{
 			name: "response",
 			required: true,
-			instruction: `A chat message response to the user.`,
+			instruction: `Plan response to provide to user.`,
 			usage: "Your response here",
 		},
 		{
 			name: "needs_more_exploration",
 			required: false,
-			instruction: `needs_more_exploration can be set to true if it is determined that further exploration with read_file/search tools is necessary to formulate a complete plan. This determination can be reached during the response generation process, but should not be acknowledged until this parameter is set to true if required.`,
-			usage: "true or false (optional, but you MUST set to true if in <response> you need to read files or use other exploration tools)",
+			instruction: `Set true if further exploration with tools is required before finalizing plan.`,
+			usage: "true or false",
 			type: "boolean",
 		},
 		{
 			name: "task_progress",
 			required: false,
-			instruction:
-				"A checklist showing task progress after this tool use is completed. If you are presenting a final implementation plan to the user with needs_more_exploration set to false, you should include a checklist of items to be completed during Act Mode when implementation is underway. (See 'Updating Task Progress' section for more details)",
-			usage: "Checklist here (If you have presented the user with concrete steps or requirements, you can optionally include a todo list outlining these steps.)",
+			instruction: "Checklist showing task progress after tool use (see 'Updating Task Progress').",
+			usage: "Checklist here",
 			dependencies: [DietCodeDefaultTool.TODO],
 		},
 	],

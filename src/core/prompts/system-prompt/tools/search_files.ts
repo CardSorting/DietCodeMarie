@@ -25,25 +25,24 @@ const generic: DietCodeToolSpec = {
 	id,
 	name: "search_files",
 	description:
-		"Request to perform a regex search across files in a specified directory, providing context-rich results. This tool searches for patterns or specific content across multiple files, displaying each match with encapsulating context.",
+		"[SEARCH_FILES_CONTRACT]\n- PURPOSE: Perform recursive Rust regex search across files in target directory with surrounding context.",
 	parameters: [
 		{
 			name: "path",
 			required: true,
-			instruction: `The path of the directory to search in (relative to the current working directory {{CWD}}){{MULTI_ROOT_HINT}}. This directory will be recursively searched.`,
+			instruction: `Directory path to search recursively (relative to {{CWD}}){{MULTI_ROOT_HINT}}.`,
 			usage: "Directory path here",
 		},
 		{
 			name: "regex",
 			required: true,
-			instruction: "The regular expression pattern to search for. Uses Rust regex syntax.",
+			instruction: "Rust regex search pattern.",
 			usage: "Your regex pattern here",
 		},
 		{
 			name: "file_pattern",
 			required: false,
-			instruction:
-				"Glob pattern to filter files (e.g., '*.ts' for TypeScript files). If not provided, it will search all files (*).",
+			instruction: "Optional glob filter (e.g. '*.ts'). Defaults to *.",
 			usage: "file pattern here (optional)",
 		},
 		TASK_PROGRESS_PARAMETER,
@@ -55,25 +54,24 @@ const NATIVE_NEXT_GEN: DietCodeToolSpec = {
 	id,
 	name: "search_files",
 	description:
-		"Request to perform a regex search across files in a specified directory, providing context-rich results. This tool searches for patterns or specific content across multiple files, displaying each match with encapsulating context.",
+		"[SEARCH_FILES_CONTRACT]\n- PURPOSE: Perform recursive Rust regex search across files in target directory with surrounding context.",
 	parameters: [
 		{
 			name: "path",
 			required: true,
-			instruction: `The path of the directory to search in (relative to the current working directory {{CWD}}){{MULTI_ROOT_HINT}}. This directory will be recursively searched.`,
+			instruction: `Directory path to search recursively (relative to {{CWD}}){{MULTI_ROOT_HINT}}.`,
 			usage: "Directory path here",
 		},
 		{
 			name: "regex",
 			required: true,
-			instruction: "The regular expression pattern to search for. Uses Rust regex syntax.",
+			instruction: "Rust regex search pattern.",
 			usage: "Your regex pattern here",
 		},
 		{
 			name: "file_pattern",
 			required: false,
-			instruction:
-				"Glob pattern to filter files (e.g., '*.ts' for TypeScript files). If not provided, it will search all files (*).",
+			instruction: "Optional glob filter (e.g. '*.ts'). Defaults to *.",
 			usage: "file pattern here (optional)",
 		},
 		TASK_PROGRESS_PARAMETER,

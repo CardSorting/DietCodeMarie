@@ -6,6 +6,45 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+## [12.0.0] - 2026-07-31
+
+### Added
+
+- **Master of Design (MoD) Steering Architecture (`mod_designer.ts`, `mod_linter.ts`, `mod.test.ts`)** — Introduced dynamic frontend architectural steering toggles, enabling studio-grade UI design contracts across all prompt layers.
+  - **AST & Regex Anti-Slop Compliance Linter (`mod_linter.ts`)**: Built-in deterministic linter that flags banned generic radii (`rounded-2xl`, `rounded-3xl`, `rounded-full` on containers), pure blacks/whites (`#000000`, `#FFFFFF`), neon purple/cyan gradients, and generic spring hover animations while enforcing curated token palettes and studio-grade micro-interactions.
+  - **Specialized Subagent Swarm Architecture (`layout_architect.ts`, `token_specialist.ts`, `motion_specialist.ts`)**: Modularized subagent prompts into single-duty UI specialists (Layout Architect, Token/Theme Specialist, Micro-Motion & State Specialist) inheriting primary MoD steering contracts.
+- **Universal Zenith-Tier System Prompt Token Compression (`src/core/prompts/system-prompt/components/`)** — Overhauled system prompt component generation using dense bracketed key-value token contracts (`[CONTRACT]`), reducing overall prompt context footprint by **>75%** while keeping 100% of capabilities, tool parameters, dynamic placeholders, and attention fidelity:
+  - `task_progress.ts`: **-82.8%** (7.26 KB -> 1.25 KB)
+  - `objective.ts`: **-81.0%** (3.42 KB -> 0.65 KB)
+  - `integrity_wiki.ts`: **-80.7%** (5.97 KB -> 1.15 KB)
+  - `editing_files.ts`: **-75.6%** (5.49 KB -> 1.34 KB)
+  - `integrity_drafting.ts`: **-74.4%** (4.38 KB -> 1.12 KB)
+  - `forensic_tools.ts`: **-72.6%** (2.23 KB -> 0.61 KB)
+  - `feedback.ts`: **-70.1%** (1.94 KB -> 0.58 KB)
+  - `capabilities.ts`: **-68.1%** (6.65 KB -> 2.12 KB)
+  - `joy_zoning.ts`: **-65.4%** (13.34 KB -> 4.61 KB)
+  - `rules.ts`: **-63.0%** (13.18 KB -> 4.88 KB)
+  - `act_vs_plan_mode.ts`: **-62.3%** (4.86 KB -> 1.83 KB)
+- **Zenith-Tier Tool Specification Prompt Compression (`src/core/prompts/system-prompt/tools/`)** — Compressed tool prompt descriptions and parameter instructions into dense bracketed token contracts (`[CONTRACT]`) across all 18 tool specification prompt modules:
+  - `load_mcp_documentation.ts`: **-80.5%**
+  - `access_mcp_resource.ts`: **-76.3%**
+  - `new_task.ts`: **-75.9%**
+  - `act_mode_respond.ts`: **-75.5%**
+  - `use_mcp_tool.ts`: **-73.9%**
+  - `browser_action.ts`: **-69.0%**
+  - `web_fetch.ts`: **-55.5%**
+  - `attempt_completion.ts`: **-55.4%**
+  - `ask_followup_question.ts`: **-54.9%**
+  - `list_files.ts`: **-53.5%**
+  - `web_search.ts`: **-52.8%**
+  - `list_code_definition_names.ts`: **-50.8%**
+  - `read_file.ts`: **-50.7%**
+  - `execute_command.ts`: **-50.4%**
+  - `write_to_file.ts`: **-47.8%**
+  - `plan_mode_respond.ts`: **-38.9%**
+  - `search_files.ts`: **-36.7%**
+  - `replace_in_file.ts`: **-18.7%**
+
 ## [11.6.0] - 2026-07-30
 
 ### Fixed

@@ -7,34 +7,28 @@ const GENERIC: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id: DietCodeDefaultTool.WEB_SEARCH,
 	name: "web_search",
-	description: `Performs a web search and returns relevant results
-- Takes a search query as input and returns search results with titles and URLs
-- Optionally filter results by allowed or blocked domains
-- Use this tool when you need to search the web for information
-- IMPORTANT: If an MCP-provided web search tool is available, prefer using that tool instead of this one, as it may have fewer restrictions.
-- The query must be at least 2 characters
-- You may provide either allowed_domains OR blocked_domains, but NOT both
-- Domains should be provided as a JSON array of strings
-- This tool is read-only and does not modify any files`,
+	description: `[WEB_SEARCH_CONTRACT]
+- PURPOSE: Perform web search returning titles and URLs. Read-only.
+- DOMAIN_FILTERING: Provide allowed_domains OR blocked_domains (JSON array of strings), never both.`,
 	contextRequirements: (context) => context.providerInfo.providerId === "dietcode" && context.dietcodeWebToolsEnabled === true,
 	parameters: [
 		{
 			name: "query",
 			required: true,
-			instruction: "The search query to use",
-			usage: "latest developments in AI",
+			instruction: "Search query string (min 2 chars).",
+			usage: "latest AI research",
 		},
 		{
 			name: "allowed_domains",
 			required: false,
-			instruction: "JSON array of domains to restrict results to",
-			usage: '["example.com", "github.com"]',
+			instruction: "JSON array of allowed domains.",
+			usage: '["example.com"]',
 		},
 		{
 			name: "blocked_domains",
 			required: false,
-			instruction: "JSON array of domains to exclude from results",
-			usage: '["ads.com", "spam.com"]',
+			instruction: "JSON array of blocked domains.",
+			usage: '["spam.com"]',
 		},
 		TASK_PROGRESS_PARAMETER,
 	],
@@ -44,24 +38,23 @@ const NATIVE_NEXT_GEN: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_NEXT_GEN,
 	id: DietCodeDefaultTool.WEB_SEARCH,
 	name: "web_search",
-	description:
-		"Performs a web search and returns relevant results with titles and URLs. IMPORTANT: If an MCP-provided web search tool is available, prefer using that tool instead of this one, as it may have fewer restrictions.",
+	description: "[WEB_SEARCH_CONTRACT]\n- PURPOSE: Perform web search returning titles and URLs.",
 	contextRequirements: (context) => context.providerInfo.providerId === "dietcode" && context.dietcodeWebToolsEnabled === true,
 	parameters: [
 		{
 			name: "query",
 			required: true,
-			instruction: "The search query to use",
+			instruction: "Search query.",
 		},
 		{
 			name: "allowed_domains",
 			required: false,
-			instruction: "JSON array of domains to restrict results to",
+			instruction: "Allowed domains JSON array.",
 		},
 		{
 			name: "blocked_domains",
 			required: false,
-			instruction: "JSON array of domains to exclude from results",
+			instruction: "Blocked domains JSON array.",
 		},
 		TASK_PROGRESS_PARAMETER,
 	],

@@ -8,22 +8,20 @@ const generic: DietCodeToolSpec = {
 	id: DietCodeDefaultTool.ASK,
 	name: "ask_followup_question",
 	description:
-		"Ask the user a question to gather additional information needed to complete the task. This tool should be used when you encounter ambiguities, need clarification, or require more details to proceed effectively. It allows for interactive problem-solving by enabling direct communication with the user. Use this tool judiciously to maintain a balance between gathering necessary information and avoiding excessive back-and-forth.",
+		"[ASK_FOLLOWUP_QUESTION_CONTRACT]\n- PURPOSE: Gather user clarification or decisions. BANNED: Options regarding mode switching.",
 	contextRequirements: (context) => !context.yoloModeToggled,
 	parameters: [
 		{
 			name: "question",
 			required: true,
-			instruction:
-				"The question to ask the user. This should be a clear, specific question that addresses the information you need.",
+			instruction: "Clear, specific question for user.",
 			usage: "Your question here",
 		},
 		{
 			name: "options",
 			required: false,
-			instruction:
-				"An array of 2-5 options for the user to choose from. Each option should be a string describing a possible answer. You may not always need to provide options, but it may be helpful in many cases where it can save the user from having to type out a response manually. IMPORTANT: NEVER include options about switching plan/act modes — the system manages those transitions automatically.",
-			usage: 'Array of options here (optional), e.g. ["Option 1", "Option 2", "Option 3"]',
+			instruction: "Optional array of 2-5 answer options. NEVER include mode switching options.",
+			usage: '["Option 1", "Option 2"]',
 		},
 		TASK_PROGRESS_PARAMETER,
 	],
@@ -33,20 +31,18 @@ const NATIVE_NEXT_GEN: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_NEXT_GEN,
 	id: DietCodeDefaultTool.ASK,
 	name: "ask_followup_question",
-	description:
-		"Ask user a question for clarifying or gathering information needed to complete the task. For example, ask the user clarifying questions about a key implementation decision. You should only ask one question.",
+	description: "[ASK_FOLLOWUP_QUESTION_CONTRACT]\n- PURPOSE: Single clarifying question with selectable answer options.",
 	contextRequirements: (context) => !context.yoloModeToggled,
 	parameters: [
 		{
 			name: "question",
 			required: true,
-			instruction: 'The single question to ask the user. E.g. "How can I help you?"',
+			instruction: "Single question string.",
 		},
 		{
 			name: "options",
 			required: true,
-			instruction:
-				'An array of 2-5 options (e.x: "["Option 1", "Option 2", "Option 3"]") for the user to choose from. Each option should be a string describing a possible answer to the single question. You may not always need to provide options, but it may be helpful in many cases where it can save the user from having to type out a response manually. IMPORTANT: NEVER include options about switching plan/act modes — the system manages those transitions automatically.',
+			instruction: "Array of 2-5 option strings. BANNED: Mode switching options.",
 		},
 		TASK_PROGRESS_PARAMETER,
 	],

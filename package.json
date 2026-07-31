@@ -2,7 +2,7 @@
 	"name": "lumi-vscode",
 	"displayName": "LUMI",
 	"description": "LUMI is your calm coding companion — comfort-first developer tooling for long sessions.",
-	"version": "11.6.0",
+	"version": "12.0.0",
 	"icon": "assets/icons/icon.png",
 	"workspaces": [
 		".",
@@ -477,7 +477,7 @@
 		"fix:all": "biome check --no-errors-on-unmatched --files-ignore-unknown=true --write --diagnostic-level=error --unsafe",
 		"audit:adr": "npx tsx scripts/audit-adr.ts",
 		"scaffold:adr": "npx tsx scripts/scaffold-adr.ts",
-		"link:adr": "npx tsx scripts/link-adr.ts",
+		"lint:mod": "npx tsx scripts/lint-mod-compliance.ts",
 		"export:adr": "npx tsx scripts/export-adr.ts",
 		"docs:check-repo": "npm-run-all -p docs:check-agent-links docs:check-agent-branding docs:check-root-readme docs:check-root-readme-links docs:check-docs-readme docs:check-readme-metrics audit:adr export:adr",
 		"ci:check-all": "npm-run-all -s check-types lint format -p docs:check-repo roadmap:audit doctor:ci test:doctor",

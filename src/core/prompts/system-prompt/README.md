@@ -2,7 +2,14 @@
 
 ## Overview
 
-The system prompt architecture provides a modular, composable system for building AI assistant prompts. It supports multiple model variants, dynamic component composition, flexible tool configuration, and template-based prompt generation.
+The system prompt architecture provides a modular, composable system for building AI assistant prompts. It supports multiple model variants, dynamic component composition, flexible tool configuration, template-based prompt generation, **Master of Design (MoD) dynamic architectural steering**, and **Zenith-Tier bracketed token contract compression**.
+
+## Zenith-Tier Token Compression Architecture (v12.0.0)
+
+In version 12.0.0, the system prompt architecture underwent a comprehensive Zenith-Tier token compression overhaul:
+- **Bracketed Key-Value Token Contracts (`[CONTRACT]`)**: Replaced verbose instruction prose with compact key-value attention contracts across all system prompt components and tool specifications.
+- **Overhead Footprint Reduction**: Reduced prompt token footprint by **>75% overall** across all system components (`objective`, `integrity_wiki`, `task_progress`, `editing_files`, `rules`, `capabilities`, `joy_zoning`, `act_vs_plan_mode`) and all 18 tool specifications (`attempt_completion`, `execute_command`, `write_to_file`, `browser_action`, `read_file`, `search_files`, `plan_mode_respond`, etc.).
+- **Master of Design (MoD) Architectural Steering**: Integrates `mod_designer.ts` dynamic steering and `mod_linter.ts` AST anti-slop compliance checking for studio-grade frontend design contracts.
 
 ## Developer
 

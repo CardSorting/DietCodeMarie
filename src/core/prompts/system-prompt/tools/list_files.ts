@@ -10,20 +10,19 @@ const generic: DietCodeToolSpec = {
 	id,
 	name: "list_files",
 	description:
-		"Request to list files and directories within the specified directory. If recursive is true, it will list all files and directories recursively. If recursive is false or not provided, it will only list the top-level contents. Do not use this tool to confirm the existence of files you may have created, as the user will let you know if the files were created successfully or not.",
+		"[LIST_FILES_CONTRACT]\n- PURPOSE: List directory contents (top-level or recursive). BANNED: Confirmation of created files.",
 	parameters: [
 		{
 			name: "path",
 			required: true,
-			instruction:
-				"The path of the directory to list contents for (relative to the current working directory {{CWD}}){{MULTI_ROOT_HINT}}",
+			instruction: "Directory path to list (relative to {{CWD}}){{MULTI_ROOT_HINT}}.",
 			usage: "Directory path here",
 		},
 		{
 			name: "recursive",
 			required: false,
-			instruction: "Whether to list files recursively. Use true for recursive listing, false or omit for top-level only.",
-			usage: "true or false (optional)",
+			instruction: "Boolean: true for recursive listing, false/omit for top-level only.",
+			usage: "true or false",
 			type: "boolean",
 		},
 		TASK_PROGRESS_PARAMETER,
@@ -34,18 +33,17 @@ const NATIVE_GPT_5: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_GPT_5,
 	id,
 	name: "list_files",
-	description:
-		"Request to list files and directories within the specified directory. If recursive is true, it will list all files and directories recursively. If recursive is false or not provided, it will only list the top-level contents. Do not use this tool to confirm the existence of files you may have created, as the user will let you know if the files were created successfully or not.",
+	description: "[LIST_FILES_CONTRACT]\n- PURPOSE: List directory contents. BANNED: Creation confirmation checks.",
 	parameters: [
 		{
 			name: "path",
 			required: true,
-			instruction: "The path of the directory to list contents for.",
+			instruction: "Directory path to list.",
 		},
 		{
 			name: "recursive",
 			required: false,
-			instruction: "Whether to list files recursively. Use true for recursive listing, false or omit for top-level only.",
+			instruction: "Boolean: true for recursive listing, false/omit for top-level only.",
 			type: "boolean",
 		},
 		TASK_PROGRESS_PARAMETER,

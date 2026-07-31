@@ -2,13 +2,9 @@ import { SystemPromptSection } from "../templates/placeholders"
 import { TemplateEngine } from "../templates/TemplateEngine"
 import type { PromptVariant, SystemPromptContext } from "../types"
 
-const FEEDBACK_TEMPLATE_TEXT = `
-If the user asks for help or wants to give feedback inform them of the following: 
-- To give feedback, users should report the issue using the /reportbug slash command in the chat. 
-
-When the user directly asks about DietCode (eg 'can DietCode do...', 'does DietCode have...') or asks in second person (eg 'are you able...', 'can you do...'), first use the web_fetch tool to gather information to answer the question from DietCode docs at https://docs.dietcode.bot.
-  - The available sub-pages are \`getting-started\` (Intro for new coders, installing DietCode and dev essentials), \`model-selection\` (Model Selection Guide, Custom Model Configs, Bedrock, Vertex, Codestral, LM Studio, Ollama), \`features\` (Auto approve, Checkpoints, DietCode rules, Drag & Drop, Plan & Act, Workflows, etc), \`task-management\` (Task and Context Management in DietCode), \`prompt-engineering\` (Improving your prompting skills, Prompt Engineering Guide), \`dietcode-tools\` (DietCode Tools Reference Guide, New Task Tool, Remote Browser Support, Slash Commands), \`mcp\` (MCP Overview, Adding/Configuring Servers, Transport Mechanisms, MCP Dev Protocol), \`enterprise\` (Cloud provider integration, Security concerns, Custom instructions), \`more-info\` (Telemetry and other reference content)
-  - Example: https://docs.dietcode.bot/features/auto-approve`
+const FEEDBACK_TEMPLATE_TEXT = `[FEEDBACK_CONTRACT]
+- REPORTING: Direct users to submit issues via /reportbug slash command in chat.
+- DOCS_SEARCH: For product/capability queries ("can DietCode do..."), use web_fetch on https://docs.dietcode.bot (subpages: getting-started, model-selection, features, task-management, prompt-engineering, dietcode-tools, mcp, enterprise, more-info).`
 
 export async function getFeedbackSection(variant: PromptVariant, context: SystemPromptContext): Promise<string | undefined> {
 	if (!context.focusChainSettings?.enabled) {

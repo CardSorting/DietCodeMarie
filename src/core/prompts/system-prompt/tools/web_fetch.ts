@@ -7,28 +7,22 @@ const GENERIC: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id: DietCodeDefaultTool.WEB_FETCH,
 	name: "web_fetch",
-	description: `Fetches content from a specified URL and analyzes it using your prompt
-- Takes a URL and analysis prompt as input
-- Fetches the URL content and processes based on your prompt
-- Use this tool when you need to retrieve and analyze web content
-- IMPORTANT: If an MCP-provided web fetch tool is available, prefer using that tool instead of this one, as it may have fewer restrictions.
-- The URL must be a fully-formed valid URL
-- The prompt must be at least 2 characters
-- HTTP URLs will be automatically upgraded to HTTPS
-- This tool is read-only and does not modify any files`,
+	description: `[WEB_FETCH_CONTRACT]
+- PURPOSE: Fetch & analyze webpage content. HTTP upgraded to HTTPS. Read-only.
+- MCP_PREFERENCE: Prefer MCP web fetch tool if available.`,
 	contextRequirements: (context) => context.providerInfo.providerId === "dietcode" && context.dietcodeWebToolsEnabled === true,
 	parameters: [
 		{
 			name: "url",
 			required: true,
-			instruction: "The URL to fetch content from",
+			instruction: "Target URL to fetch.",
 			usage: "https://example.com/docs",
 		},
 		{
 			name: "prompt",
 			required: true,
-			instruction: "The prompt to use for analyzing the webpage content",
-			usage: "Summarize the main points and key takeaways",
+			instruction: "Analysis prompt for webpage content.",
+			usage: "Summarize key points",
 		},
 		TASK_PROGRESS_PARAMETER,
 	],
@@ -38,19 +32,18 @@ const NATIVE_NEXT_GEN: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_NEXT_GEN,
 	id: DietCodeDefaultTool.WEB_FETCH,
 	name: "web_fetch",
-	description:
-		"Fetches and analyzes content from a specified URL. IMPORTANT: If an MCP-provided web fetch tool is available, prefer using that tool instead of this one, as it may have fewer restrictions.",
+	description: "[WEB_FETCH_CONTRACT]\n- PURPOSE: Fetch and analyze URL content.",
 	contextRequirements: (context) => context.providerInfo.providerId === "dietcode" && context.dietcodeWebToolsEnabled === true,
 	parameters: [
 		{
 			name: "url",
 			required: true,
-			instruction: "The URL to fetch content from",
+			instruction: "Target URL.",
 		},
 		{
 			name: "prompt",
 			required: true,
-			instruction: "Prompt for analyzing the webpage content",
+			instruction: "Analysis prompt.",
 		},
 		TASK_PROGRESS_PARAMETER,
 	],

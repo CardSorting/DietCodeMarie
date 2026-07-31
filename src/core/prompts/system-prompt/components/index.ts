@@ -11,6 +11,9 @@ import { getIntegrityWikiSection } from "./integrity_wiki"
 import { getJoyZoningSection } from "./joy_zoning"
 import { getMcp } from "./mcp"
 import { getModDesignerSteeringSection } from "./mod_designer_steering"
+import { getModLayoutSpecialistSection } from "./mod_layout_specialist"
+import { getModMotionSpecialistSection } from "./mod_motion_specialist"
+import { getModTokensSpecialistSection } from "./mod_tokens_specialist"
 import { getObjectiveSection } from "./objective"
 import { getRoadmapSteeringSection } from "./roadmap_steering"
 import { getRulesSection } from "./rules"
@@ -43,6 +46,9 @@ export function getSystemPromptComponents() {
 		{ id: SystemPromptSection.INTEGRITY_WIKI, fn: getIntegrityWikiSection },
 		{ id: SystemPromptSection.FORENSIC_TOOLS, fn: getForensicToolsSection },
 		{ id: SystemPromptSection.MOD_DESIGNER_STEERING, fn: getModDesignerSteeringSection },
+		{ id: SystemPromptSection.MOD_LAYOUT_SPECIALIST, fn: getModLayoutSpecialistSection },
+		{ id: SystemPromptSection.MOD_TOKENS_SPECIALIST, fn: getModTokensSpecialistSection },
+		{ id: SystemPromptSection.MOD_MOTION_SPECIALIST, fn: getModMotionSpecialistSection },
 		{ id: SystemPromptSection.SYSTEM_INFO, fn: getSystemInfo },
 		{ id: SystemPromptSection.TASK_PROGRESS, fn: getUpdatingTaskProgress },
 		{ id: SystemPromptSection.TOOL_USE, fn: getToolUseSection },
