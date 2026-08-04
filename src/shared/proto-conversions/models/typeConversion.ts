@@ -1,4 +1,4 @@
-import { LiteLLMModelInfo, ModelInfo, OcaModelInfo, OpenAiCompatibleModelInfo } from "@shared/api"
+import type { LiteLLMModelInfo, ModelInfo, OcaModelInfo, OpenAiCompatibleModelInfo } from "@shared/api"
 import {
 	OpenRouterModelInfo,
 	LiteLLMModelInfo as ProtoLiteLLMModelInfo,

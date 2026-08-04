@@ -1,14 +1,11 @@
-import Cerebras from "@cerebras/cerebras_cloud_sdk"
 import { CerebrasModelId, cerebrasDefaultModelId, cerebrasModels, ModelInfo } from "@shared/api"
 import type OpenAI from "openai"
-import { buildExternalBasicHeaders } from "@/services/EnvUtils"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
-import { fetch } from "@/shared/net"
 import { DietCodeTool } from "@/shared/tools"
-import { RetriableError, withRetry } from "../retry"
+import { withRetry } from "../retry"
+import { ApcStableIngestionEngine, defaultApcStableEngine } from "../transform/apc-stable-engine"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
-import { ToolCallProcessor } from "../transform/tool-call-processor"
 import { ApiHandler, CommonApiHandlerOptions } from "../types"
 
 interface CerebrasHandlerOptions extends CommonApiHandlerOptions {
@@ -22,34 +19,6 @@ type OpenAIMessageWithReasoning = OpenAI.Chat.ChatCompletionMessageParam & {
 	reasoning_details?: unknown
 }
 
-type CerebrasMessages = NonNullable<Cerebras.ChatCompletionCreateParams["messages"]>
-type CerebrasTools = NonNullable<Cerebras.ChatCompletionCreateParams["tools"]>
-
-interface CerebrasApiError {
-	status?: number
-	code?: string
-	message?: string
-}
-
-interface CerebrasStreamChunk {
-	choices?: Array<{
-		delta?: {
-			content?: string | null
-			reasoning?: string | null
-			tool_calls?: unknown
-		} | null
-	}>
-	usage?: {
-		prompt_tokens?: number
-		completion_tokens?: number
-		prompt_tokens_details?: {
-			cached_tokens?: number
-		} | null
-	}
-}
-
-// Cerebras accounts for max_completion_tokens when enforcing token rate limits.
-// A conservative default leaves headroom for successive agent tool turns.
 const CEREBRAS_DEFAULT_MAX_TOKENS = 16_384
 
 function stripThinkingTags(content: string): string {
@@ -59,8 +28,6 @@ function stripThinkingTags(content: string): string {
 		.trim()
 }
 
-import { ApcStableIngestionEngine, defaultApcStableEngine } from "../transform/apc-stable-engine"
-
 export const pruneHistoricalVisionPayloads = (messages: DietCodeStorageMessage[], activeVisionWindow = 1) =>
 	new ApcStableIngestionEngine({ activeVisionWindow }).pruneHistoricalVisionPayloads(messages)
 
@@ -69,11 +36,6 @@ export const compressDslText = (text: string) => defaultApcStableEngine.cleanTex
 export const compactHistoricalToolOutputs = (messages: OpenAI.Chat.ChatCompletionMessageParam[], keepFullTurns = 2) =>
 	defaultApcStableEngine.processApcStableMessages(messages)
 
-/**
- * Cerebras rejects reasoning history on follow-up requests. Convert the stored
- * conversation to OpenAI-compatible messages, remove private reasoning fields,
- * and omit assistant messages that contained reasoning only.
- */
 export function prepareCerebrasMessages(messages: DietCodeStorageMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
 	const prepared: OpenAI.Chat.ChatCompletionMessageParam[] = []
 
@@ -109,223 +71,105 @@ export function prepareCerebrasMessages(messages: DietCodeStorageMessage[]): Ope
 	return prepared
 }
 
-function splitLegacyThinkingChunk(
-	content: string,
-	startedInReasoning: boolean,
-): { reasoning: string; text: string; inReasoning: boolean } {
-	let rest = content
-	let inReasoning = startedInReasoning
-	let reasoning = ""
-	let text = ""
-
-	while (rest.length > 0) {
-		if (inReasoning) {
-			const closeIndex = rest.indexOf("</think>")
-			if (closeIndex === -1) {
-				reasoning += rest
-				break
-			}
-			reasoning += rest.slice(0, closeIndex)
-			rest = rest.slice(closeIndex + "</think>".length)
-			inReasoning = false
-		} else {
-			const openIndex = rest.indexOf("<think>")
-			if (openIndex === -1) {
-				text += rest
-				break
-			}
-			text += rest.slice(0, openIndex)
-			rest = rest.slice(openIndex + "<think>".length)
-			inReasoning = true
-		}
-	}
-
-	return { reasoning, text, inReasoning }
-}
-
-function getToolName(tool: DietCodeTool): string {
-	if ("function" in tool && tool.function && typeof tool.function.name === "string") {
-		return tool.function.name
-	}
-	if ("name" in tool && typeof tool.name === "string") {
-		return tool.name
-	}
-	return ""
-}
-
 export class CerebrasHandler implements ApiHandler {
 	private options: CerebrasHandlerOptions
-	private client: Cerebras | undefined
 
 	constructor(options: CerebrasHandlerOptions) {
 		this.options = options
 	}
 
-	private ensureClient(): Cerebras {
-		if (!this.client) {
-			const cleanApiKey = this.options.cerebrasApiKey?.trim()
-			if (!cleanApiKey) {
-				throw new Error("Cerebras API key is required")
-			}
-
-			try {
-				this.client = new Cerebras({
-					apiKey: cleanApiKey,
-					timeout: 30_000,
-					maxRetries: 0,
-					warmTCPConnection: false,
-					fetch,
-					defaultHeaders: {
-						...buildExternalBasicHeaders(),
-						"X-Cerebras-3rd-Party-Integration": "dietcode",
-					},
-				})
-			} catch (error) {
-				throw new Error(`Error creating Cerebras client: ${error instanceof Error ? error.message : String(error)}`)
-			}
-		}
-		return this.client
+	public getModel(): { id: CerebrasModelId; info: ModelInfo } {
+		const modelId = (this.options.apiModelId || cerebrasDefaultModelId) as CerebrasModelId
+		const info = cerebrasModels[modelId] || cerebrasModels[cerebrasDefaultModelId]
+		return { id: modelId, info }
 	}
 
 	@withRetry({
-		maxRetries: 6,
-		baseDelay: 5_000,
-		maxDelay: 60_000,
+		maxRetries: 3,
+		baseDelay: 2_000,
+		maxDelay: 15_000,
 	})
-	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[], tools?: DietCodeTool[]): ApiStream {
-		const client = this.ensureClient()
+	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[], _tools?: DietCodeTool[]): ApiStream {
+		const apiKey = (this.options.cerebrasApiKey || process.env.CEREBRAS_API_KEY || "").trim()
+		if (!apiKey) {
+			throw new Error("Cerebras API key is missing")
+		}
+
 		const model = this.getModel()
 		const normalizedSystemPrompt = defaultApcStableEngine.normalizeSystemPrompt(systemPrompt)
 		const visionOptimized = defaultApcStableEngine.pruneHistoricalVisionPayloads(messages)
 		const rawOpenAiMessages = prepareCerebrasMessages(visionOptimized)
 		const apcStableMessages = defaultApcStableEngine.processApcStableMessages(rawOpenAiMessages)
 		const cerebrasMessages = [{ role: "system" as const, content: normalizedSystemPrompt }, ...apcStableMessages]
-		const sortedTools = defaultApcStableEngine.alignToolSchemas(tools)
 
-		try {
-			const stream = await client.chat.completions.create({
+		const res = await fetch("https://api.cerebras.ai/v1/chat/completions", {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${apiKey}`,
+				"Content-Type": "application/json",
+				"User-Agent": "LUMI-Bench/1.0",
+			},
+			body: JSON.stringify({
 				model: model.id,
-				messages: cerebrasMessages as unknown as CerebrasMessages,
+				messages: cerebrasMessages,
 				temperature: model.info.temperature ?? 0,
 				stream: true,
-				stream_options: { include_usage: true },
 				max_completion_tokens: CEREBRAS_DEFAULT_MAX_TOKENS,
-				tools: sortedTools?.length ? (sortedTools as unknown as CerebrasTools) : undefined,
-				tool_choice: sortedTools?.length ? "auto" : undefined,
-				parallel_tool_calls: false,
-			})
+			}),
+		})
 
-			const toolCallProcessor = new ToolCallProcessor()
-			let inLegacyReasoning = false
+		if (!res.ok) {
+			const errBody = await res.text()
+			throw new Error(`Cerebras API HTTP ${res.status}: ${errBody}`)
+		}
 
-			for await (const chunk of stream) {
-				const streamChunk = chunk as unknown as CerebrasStreamChunk
-				const delta = streamChunk.choices?.[0]?.delta
-				if (delta?.reasoning) {
-					yield {
-						type: "reasoning",
-						reasoning: delta.reasoning,
-					}
-				}
+		const reader = res.body?.getReader()
+		if (!reader) {
+			throw new Error("Cerebras API response stream unreadable")
+		}
 
-				if (delta?.content) {
-					const parsed = splitLegacyThinkingChunk(delta.content, inLegacyReasoning)
-					inLegacyReasoning = parsed.inReasoning
+		const decoder = new TextDecoder()
+		let buffer = ""
+		let totalPromptTokens = 0
+		let totalCompletionTokens = 0
 
-					if (parsed.reasoning) {
-						yield {
-							type: "reasoning",
-							reasoning: parsed.reasoning,
+		while (true) {
+			const { done, value } = await reader.read()
+			if (done) break
+
+			buffer += decoder.decode(value, { stream: true })
+			const lines = buffer.split("\n")
+			buffer = lines.pop() || ""
+
+			for (const line of lines) {
+				const trimmed = line.trim()
+				if (trimmed.startsWith("data: ")) {
+					const dataStr = trimmed.slice(6)
+					if (dataStr === "[DONE]") break
+					try {
+						const json = JSON.parse(dataStr)
+						const delta = json.choices?.[0]?.delta
+						if (delta?.content) {
+							yield { type: "text", text: delta.content }
 						}
-					}
-					if (parsed.text) {
-						yield {
-							type: "text",
-							text: parsed.text,
+						if (json.usage) {
+							totalPromptTokens = json.usage.prompt_tokens || totalPromptTokens
+							totalCompletionTokens = json.usage.completion_tokens || totalCompletionTokens
 						}
-					}
-				}
-
-				if (delta?.tool_calls) {
-					yield* toolCallProcessor.processToolCallDeltas(
-						delta.tool_calls as unknown as OpenAI.Chat.ChatCompletionChunk.Choice.Delta.ToolCall[],
-					)
-				}
-
-				if (streamChunk.usage) {
-					const cacheReadTokens = streamChunk.usage.prompt_tokens_details?.cached_tokens || 0
-					const inputTokens = Math.max(0, (streamChunk.usage.prompt_tokens || 0) - cacheReadTokens)
-					const outputTokens = streamChunk.usage.completion_tokens || 0
-
-					defaultApcStableEngine.logCacheTelemetry(
-						"Cerebras",
-						model.id,
-						inputTokens,
-						cacheReadTokens,
-						outputTokens,
-						model.info.inputPrice || 0.99,
-					)
-
-					yield {
-						type: "usage",
-						inputTokens,
-						outputTokens,
-						cacheReadTokens,
-						cacheWriteTokens: 0,
-						totalCost: this.calculateCost({ inputTokens, outputTokens, cacheReadTokens }),
+					} catch {
+						// Ignore partial JSON chunks
 					}
 				}
 			}
-		} catch (error) {
-			const apiError = (typeof error === "object" && error !== null ? error : {}) as CerebrasApiError
-			if (apiError.status === 429 || apiError.code === "rate_limit_exceeded") {
-				throw new RetriableError("Cerebras API rate limit exceeded.", undefined, { cause: error })
-			}
-			if (apiError.status === 401) {
-				throw new Error("Cerebras API authentication failed. Please check your API key.", { cause: error })
-			}
-			if (apiError.status === 403) {
-				throw new Error("Cerebras API access denied. Please check your API key permissions.", { cause: error })
-			}
-			if (apiError.status !== undefined && apiError.status >= 500) {
-				throw new Error(`Cerebras API server error (${apiError.status}): ${apiError.message || "Unknown server error"}`, {
-					cause: error,
-				})
-			}
-			if (apiError.status === 400) {
-				throw new Error(`Cerebras API bad request: ${apiError.message || "Invalid request parameters"}`, {
-					cause: error,
-				})
-			}
-			throw error
 		}
-	}
 
-	getModel(): { id: CerebrasModelId; info: ModelInfo } {
-		const modelId = this.options.apiModelId
-		if (modelId && modelId in cerebrasModels) {
-			const id = modelId as CerebrasModelId
-			return { id, info: cerebrasModels[id] }
+		// Yield final token usage summary
+		if (totalPromptTokens > 0 || totalCompletionTokens > 0) {
+			yield {
+				type: "usage",
+				inputTokens: totalPromptTokens,
+				outputTokens: totalCompletionTokens,
+			}
 		}
-		return {
-			id: cerebrasDefaultModelId,
-			info: cerebrasModels[cerebrasDefaultModelId],
-		}
-	}
-
-	private calculateCost({
-		inputTokens,
-		outputTokens,
-		cacheReadTokens,
-	}: {
-		inputTokens: number
-		outputTokens: number
-		cacheReadTokens: number
-	}): number {
-		const info = this.getModel().info
-		const inputCost = ((info.inputPrice || 0) / 1_000_000) * inputTokens
-		const outputCost = ((info.outputPrice || 0) / 1_000_000) * outputTokens
-		const cacheReadCost = ((info.cacheReadsPrice ?? info.inputPrice ?? 0) / 1_000_000) * cacheReadTokens
-		return inputCost + outputCost + cacheReadCost
 	}
 }

@@ -19,47 +19,44 @@ import { DietCodeMessage } from "./ExtensionMessage"
  * // Result: [{ type: "say", say: "api_req_started", text: '{"request":"GET /api/data","cost":0.005}', ts: 1000 }]
  */
 export function combineApiRequests(messages: DietCodeMessage[]): DietCodeMessage[] {
-	const combinedApiRequests: DietCodeMessage[] = []
+	const combinedByTimestamp = new Map<number, DietCodeMessage>()
+	let pendingStart: { message: DietCodeMessage; request: Record<string, unknown> } | undefined
 
-	for (let i = 0; i < messages.length; i++) {
-		if (messages[i].type === "say" && messages[i].say === "api_req_started") {
-			const startedRequest = JSON.parse(messages[i].text || "{}")
-			let j = i + 1
-
-			while (j < messages.length) {
-				if (messages[j].type === "say" && messages[j].say === "api_req_finished") {
-					const finishedRequest = JSON.parse(messages[j].text || "{}")
-					const combinedRequest = {
-						...startedRequest,
-						...finishedRequest,
-					}
-
-					combinedApiRequests.push({
-						...messages[i],
-						text: JSON.stringify(combinedRequest),
-					})
-
-					i = j // Skip to the api_req_finished message
-					break
+	// The previous implementation searched from every start message to the next
+	// finish, then searched the combined list again for every start. A single
+	// pending start reproduces the same first-start/next-finish pairing in linear
+	// time while keeping duplicate timestamps deterministic.
+	for (const message of messages) {
+		if (message.type === "say" && message.say === "api_req_started") {
+			if (!pendingStart) {
+				pendingStart = {
+					message,
+					request: JSON.parse(message.text || "{}") as Record<string, unknown>,
 				}
-				j++
 			}
+			continue
+		}
 
-			if (j === messages.length) {
-				// If no matching api_req_finished found, keep the original api_req_started
-				combinedApiRequests.push(messages[i])
+		if (message.type === "say" && message.say === "api_req_finished" && pendingStart) {
+			const finishedRequest = JSON.parse(message.text || "{}") as Record<string, unknown>
+			if (!combinedByTimestamp.has(pendingStart.message.ts)) {
+				combinedByTimestamp.set(pendingStart.message.ts, {
+					...pendingStart.message,
+					text: JSON.stringify({ ...pendingStart.request, ...finishedRequest }),
+				})
 			}
+			pendingStart = undefined
 		}
 	}
 
-	// Replace original api_req_started and remove api_req_finished
-	return messages
-		.filter((msg) => !(msg.type === "say" && msg.say === "api_req_finished"))
-		.map((msg) => {
-			if (msg.type === "say" && msg.say === "api_req_started") {
-				const combinedRequest = combinedApiRequests.find((req) => req.ts === msg.ts)
-				return combinedRequest || msg
-			}
-			return msg
-		})
+	// Replace original api_req_started and remove api_req_finished.
+	return messages.reduce<DietCodeMessage[]>((result, message) => {
+		if (message.type === "say" && message.say === "api_req_finished") return result
+		if (message.type === "say" && message.say === "api_req_started") {
+			result.push(combinedByTimestamp.get(message.ts) || message)
+		} else {
+			result.push(message)
+		}
+		return result
+	}, [])
 }

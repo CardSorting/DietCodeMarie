@@ -6,6 +6,36 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+### Added
+
+- **Architectural Decision Record (ADR-002)** — Documented the webview state decoupling, WeakMap projection and metrics caching, `ChatView` modular architecture, and zero-dependency native fetch Cerebras streaming integration ([ADR-002](docs/architecture/adr-002-webview-state-decoupling-and-streaming-optimization.md)).
+- **Standalone Chat Messages Context (`ChatMessagesContext`)** — Introduced `ChatMessagesContext` and `useChatMessages()` hook in `ExtensionStateContext.tsx` to provide a dedicated, isolated React context channel for high-frequency chat message streaming.
+- **Comprehensive Documentation Suite Updates** — Updated `docs/README.md`, `docs/DOCS_GUIDE.md`, `docs/CODE_TO_DOC_MAP.md`, `docs/SYSTEM_COMMUNICATION.md`, `docs/USER_INTERFACE_DESIGN.md`, `docs/MIRA_UX_IMPLEMENTATION.md`, `docs/architecture/current.md`, `docs/diagnostic-webview-audit.md`, `docs/features/subagents.mdx`, `docs/governed-subagent-execution.md`, and `docs/provider-config/cerebras.mdx`.
+
+### Changed
+
+- **Webview UI State Decoupling & Streaming Optimization (`ExtensionStateContext.tsx`, `webviewDiagnostics.ts`, `getApiMetrics.ts`)**:
+  - Decoupled `dietcodeMessages` streaming state into `ChatMessagesContext`, preventing full webview component tree re-renders across non-chat UI panels during active message streaming events.
+  - Implemented `WeakMap` projection caching (`projectionCache` in `webviewDiagnostics.ts`) and API usage metrics caching (`apiUsageCache` in `getApiMetrics.ts`) by immutable message reference, eliminating redundant JSON string parsing and text sanitization per streaming frame.
+  - Refactored monolithic `ChatView.tsx` into modular layout components (`MessagesArea.tsx`, `TaskSection.tsx`, `ChatFooter.tsx`), custom hooks (`useChatState.ts`, `useMessageHandlers.ts`, `useScrollBehavior.ts`), and utility helpers (`messageUtils.ts`, `scrollUtils.ts`).
+
+- **Zero-Dependency Native Fetch Streaming for Cerebras (`src/core/api/providers/cerebras.ts`)**:
+  - Replaced `@cerebras/cerebras_cloud_sdk` dependency wrapper with lightweight, direct `fetch` SSE streaming against `https://api.cerebras.ai/v1/chat/completions`.
+  - Retained full hardware Automatic Prompt Caching (APC) stabilization (`normalizeSystemPrompt`, `pruneHistoricalVisionPayloads`, `processApcStableMessages`) while eliminating external SDK bundle weight (~1.4 MB reduction) and setup overhead.
+
+- **Modular Webview gRPC Service Loaders & Shared API Defaults (`webview-ui/src/services/`, `src/shared/`)**:
+  - Extracted gRPC client loader services (`account-grpc-client.ts`, `core-grpc-client.ts`, `mcp-grpc-client.ts`, `model-grpc-client.ts`, `mcp-grpc-loader.ts`, `model-grpc-loader.ts`) for clean, lazily-loaded webview IPC communication.
+  - Isolated default configuration constants into `src/shared/api-defaults.ts` and `src/shared/platform-default.ts`, and converted shared imports to `type` imports across shared storage key definitions (`state-keys.ts`, `typeConversion.ts`).
+  - Optimized sequence combination utilities (`combineApiRequests.ts`, `combineCommandSequences.ts`, `combineErrorRetryMessages.ts`, `combineHookSequences.ts`) with Map-based timestamp lookups (`hookToToolTimestamp`), replacing $O(N^2)$ array iterations.
+
+- **VSIX Packaging Scripts (`scripts/package-openvsx-vsix.mjs`, `scripts/package-vscode-vsix.mjs`)**:
+  - Updated build and packaging scripts to optimize asset bundling and VSIX distribution outputs.
+
+### Performance & Security
+
+- **60 FPS High-Throughput Swarm Streaming**: Subagent swarm progress streams and tool execution events update at smooth 60 FPS without UI thread locking or non-chat webview component re-evaluations.
+- **Zero-Leak Garbage-Collector Memory Lifecycle**: `WeakMap` message keys ensure zero memory retention or leaks when task sessions clear or messages drop out of context.
+
 ## [12.0.0] - 2026-07-31
 
 ### Added

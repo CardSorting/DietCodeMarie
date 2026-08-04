@@ -1,30 +1,25 @@
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import { DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
-import { DEFAULT_PLATFORM, type ExtensionState } from "@shared/ExtensionMessage"
+import type { DietCodeMessage, ExtensionState } from "@shared/ExtensionMessage"
 import { DEFAULT_FOCUS_CHAIN_SETTINGS } from "@shared/FocusChainSettings"
 import { DEFAULT_MCP_DISPLAY_MODE } from "@shared/McpDisplayMode"
 import type { UserInfo } from "@shared/proto/dietcode/account"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import type { OpenRouterCompatibleModelInfo } from "@shared/proto/dietcode/models"
 import { type TerminalProfile } from "@shared/proto/dietcode/state"
-import { fromProtobufModels } from "@shared/proto-conversions/models/typeConversion"
 import type React from "react"
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
+import type { ModelInfo } from "../../../src/shared/api"
 import {
-	basetenDefaultModelId,
-	basetenModels,
-	groqDefaultModelId,
-	groqModels,
-	type ModelInfo,
-	nousResearchModels,
 	openRouterDefaultModelId,
 	openRouterDefaultModelInfo,
 	requestyDefaultModelId,
 	requestyDefaultModelInfo,
-} from "../../../src/shared/api"
+} from "../../../src/shared/api-defaults"
 import { Environment } from "../../../src/shared/config-types"
 import type { McpMarketplaceCatalog, McpServer, McpViewTab } from "../../../src/shared/mcp"
-import { ModelsServiceClient } from "../services/grpc-client"
+import { DEFAULT_PLATFORM } from "../../../src/shared/platform-default"
+import { convertModelResponse, loadModelsServiceClient } from "../services/model-grpc-loader"
 import { useExtensionGrpcSubscriptions } from "./useExtensionGrpcSubscriptions"
 
 export interface ExtensionStateContextType extends ExtensionState {
@@ -119,6 +114,11 @@ export interface ExtensionStateContextType extends ExtensionState {
 }
 
 export const ExtensionStateContext = createContext<ExtensionStateContextType | undefined>(undefined)
+
+// Streaming messages change far more frequently than the rest of the extension
+// state. Keeping them on their own context prevents composer, navigation, and
+// settings consumers from invalidating on every streamed token.
+export const ChatMessagesContext = createContext<DietCodeMessage[] | undefined>(undefined)
 
 export const ExtensionStateContextProvider: React.FC<{
 	children: React.ReactNode
@@ -283,15 +283,11 @@ export const ExtensionStateContextProvider: React.FC<{
 		nativeToolCallSetting: false,
 		enableParallelToolCalling: false,
 	})
+	const [dietcodeMessages, setDietcodeMessages] = useState<DietCodeMessage[]>([])
+	const dietcodeMessagesRef = useRef(dietcodeMessages)
+	dietcodeMessagesRef.current = dietcodeMessages
 	const [expandTaskHeader, setExpandTaskHeader] = useState(false)
 	const [didHydrateState, setDidHydrateState] = useState(false)
-
-	useEffect(() => {
-		const timer = setTimeout(() => {
-			setDidHydrateState(true)
-		}, 1000)
-		return () => clearTimeout(timer)
-	}, [])
 
 	const [showWelcome, setShowWelcome] = useState(false)
 
@@ -309,17 +305,18 @@ export const ExtensionStateContextProvider: React.FC<{
 	const [requestyModels, setRequestyModels] = useState<Record<string, ModelInfo>>({
 		[requestyDefaultModelId]: requestyDefaultModelInfo,
 	})
-	const [groqModelsState, setGroqModels] = useState<Record<string, ModelInfo>>({
-		[groqDefaultModelId]: groqModels[groqDefaultModelId],
-	})
-	const [basetenModelsState, setBasetenModels] = useState<Record<string, ModelInfo>>({
-		...basetenModels,
-		[basetenDefaultModelId]: basetenModels[basetenDefaultModelId],
-	})
+	// Provider catalogs are populated by the settings surface. Empty maps keep
+	// the chat-critical bundle from carrying every provider's static catalog.
+	const [groqModelsState, setGroqModels] = useState<Record<string, ModelInfo>>({})
+	const [basetenModelsState, setBasetenModels] = useState<Record<string, ModelInfo>>({})
 	const [huggingFaceModels, setHuggingFaceModels] = useState<Record<string, ModelInfo>>({})
-	const [nousResearchModelsState, setNousResearchModels] = useState<Record<string, ModelInfo>>(nousResearchModels)
+	const [nousResearchModelsState, setNousResearchModels] = useState<Record<string, ModelInfo>>({})
 	const [mcpServers, setMcpServers] = useState<McpServer[]>([])
 	const [mcpMarketplaceCatalog, setMcpMarketplaceCatalog] = useState<McpMarketplaceCatalog>({ items: [] })
+	const autoRefreshOpenRouterRequested = useRef(false)
+	const autoRefreshVercelRequested = useRef(false)
+	const autoRefreshBasetenRequested = useRef(false)
+	const autoRefreshLiteLlmRequested = useRef(false)
 
 	const relinquishControlCallbacks = useRef<Set<() => void>>(new Set())
 
@@ -332,6 +329,7 @@ export const ExtensionStateContextProvider: React.FC<{
 
 	useExtensionGrpcSubscriptions({
 		setState,
+		setDietcodeMessages,
 		setDidHydrateState,
 		setShowWelcome,
 		setMcpServers,
@@ -339,6 +337,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		setOpenRouterModels,
 		setLiteLlmModels,
 		setAvailableTerminalProfiles,
+		isStateHydrated: didHydrateState,
 		relinquishControlCallbacks,
 		navigateToMcp,
 		navigateToHistory,
@@ -348,9 +347,10 @@ export const ExtensionStateContextProvider: React.FC<{
 	})
 
 	const refreshOpenRouterModels = useCallback(() => {
-		ModelsServiceClient.refreshOpenRouterModelsRpc(EmptyRequest.create({}))
-			.then((response: OpenRouterCompatibleModelInfo) => {
-				const models = fromProtobufModels(response.models)
+		loadModelsServiceClient()
+			.then((client) => client.refreshOpenRouterModelsRpc(EmptyRequest.create({})))
+			.then((response: OpenRouterCompatibleModelInfo) => convertModelResponse(response))
+			.then((models) => {
 				setOpenRouterModels({
 					[openRouterDefaultModelId]: openRouterDefaultModelInfo, // in case the extension sent a model list without the default model
 					...models,
@@ -360,7 +360,8 @@ export const ExtensionStateContextProvider: React.FC<{
 	}, [])
 
 	const refreshHicapModels = useCallback(() => {
-		ModelsServiceClient.refreshHicapModels(EmptyRequest.create({}))
+		loadModelsServiceClient()
+			.then((client) => client.refreshHicapModels(EmptyRequest.create({})))
 			.then((response: OpenRouterCompatibleModelInfo) => {
 				const models = response.models
 				setHicapModels({
@@ -371,38 +372,40 @@ export const ExtensionStateContextProvider: React.FC<{
 	}, [])
 
 	const refreshLiteLlmModels = useCallback(() => {
-		return ModelsServiceClient.refreshLiteLlmModelsRpc(EmptyRequest.create({}))
-			.then((response: OpenRouterCompatibleModelInfo) => {
-				const models = fromProtobufModels(response.models)
+		return loadModelsServiceClient()
+			.then((client) => client.refreshLiteLlmModelsRpc(EmptyRequest.create({})))
+			.then((response: OpenRouterCompatibleModelInfo) => convertModelResponse(response))
+			.then((models) => {
 				setLiteLlmModels(models)
 			})
 			.catch((error: Error) => console.error("Failed to refresh LiteLLM models:", error))
 	}, [])
 
 	const refreshBasetenModels = useCallback(() => {
-		ModelsServiceClient.refreshBasetenModelsRpc(EmptyRequest.create({}))
-			.then((response) => {
-				setBasetenModels({
-					[basetenDefaultModelId]: basetenModels[basetenDefaultModelId],
-					...fromProtobufModels(response.models),
-				})
+		loadModelsServiceClient()
+			.then((client) => client.refreshBasetenModelsRpc(EmptyRequest.create({})))
+			.then((response) => convertModelResponse(response))
+			.then((models) => {
+				setBasetenModels(models)
 			})
 			.catch((err) => console.error("Failed to refresh Baseten models:", err))
 	}, [])
 
 	const refreshVercelAiGatewayModels = useCallback(() => {
-		ModelsServiceClient.refreshVercelAiGatewayModelsRpc(EmptyRequest.create({}))
-			.then((response: OpenRouterCompatibleModelInfo) => {
-				const models = fromProtobufModels(response.models)
+		loadModelsServiceClient()
+			.then((client) => client.refreshVercelAiGatewayModelsRpc(EmptyRequest.create({})))
+			.then((response: OpenRouterCompatibleModelInfo) => convertModelResponse(response))
+			.then((models) => {
 				setVercelAiGatewayModels(models)
 			})
 			.catch((error: Error) => console.error("Failed to refresh Vercel AI Gateway models:", error))
 	}, [])
 
 	const refreshNousResearchModels = useCallback(() => {
-		ModelsServiceClient.refreshNousResearchModelsRpc(EmptyRequest.create({}))
-			.then((response: OpenRouterCompatibleModelInfo) => {
-				const models = fromProtobufModels(response.models)
+		loadModelsServiceClient()
+			.then((client) => client.refreshNousResearchModelsRpc(EmptyRequest.create({})))
+			.then((response: OpenRouterCompatibleModelInfo) => convertModelResponse(response))
+			.then((models) => {
 				if (models && Object.keys(models).length > 0) {
 					setNousResearchModels(models)
 				}
@@ -412,34 +415,61 @@ export const ExtensionStateContextProvider: React.FC<{
 
 	// Auto-refresh model lists on API key availability
 	useEffect(() => {
-		if (!openRouterModels || Object.keys(openRouterModels).length <= 1) {
-			refreshOpenRouterModels()
+		if (!didHydrateState) return
+
+		// Give the hydrated shell an idle window before optional model catalogs compete
+		// for the extension bridge and main-thread work.
+		const refreshOptionalModels = () => {
+			if (!autoRefreshOpenRouterRequested.current) {
+				autoRefreshOpenRouterRequested.current = true
+				refreshOpenRouterModels()
+			}
+			if (!autoRefreshVercelRequested.current) {
+				autoRefreshVercelRequested.current = true
+				refreshVercelAiGatewayModels()
+			}
+			if (state.apiConfiguration?.basetenApiKey && !autoRefreshBasetenRequested.current) {
+				autoRefreshBasetenRequested.current = true
+				refreshBasetenModels()
+			}
+			if (state.apiConfiguration?.liteLlmApiKey && !autoRefreshLiteLlmRequested.current) {
+				autoRefreshLiteLlmRequested.current = true
+				refreshLiteLlmModels()
+			}
 		}
-		if (!vercelAiGatewayModels || Object.keys(vercelAiGatewayModels).length === 0) {
-			refreshVercelAiGatewayModels()
+
+		let idleCallbackId: number | undefined
+		let fallbackTimer: ReturnType<typeof setTimeout> | undefined
+		if ("requestIdleCallback" in window) {
+			idleCallbackId = window.requestIdleCallback(refreshOptionalModels, { timeout: 1_000 })
+		} else {
+			fallbackTimer = setTimeout(refreshOptionalModels, 250)
 		}
-		if (state.apiConfiguration?.basetenApiKey) {
-			refreshBasetenModels()
-		}
-		if (state.apiConfiguration?.liteLlmApiKey) {
-			refreshLiteLlmModels()
+
+		return () => {
+			if (idleCallbackId !== undefined) {
+				window.cancelIdleCallback(idleCallbackId)
+			}
+			if (fallbackTimer) {
+				clearTimeout(fallbackTimer)
+			}
 		}
 	}, [
+		didHydrateState,
 		refreshOpenRouterModels,
 		refreshVercelAiGatewayModels,
 		state?.apiConfiguration?.basetenApiKey,
 		refreshBasetenModels,
 		state?.apiConfiguration?.liteLlmApiKey,
 		refreshLiteLlmModels,
-		openRouterModels,
-		vercelAiGatewayModels,
 	])
 
 	// Refresh LUMI models function
 	const refreshDietCodeModels = useCallback(() => {
-		ModelsServiceClient.refreshDietCodeModelsRpc(EmptyRequest.create({}))
-			.then((response: OpenRouterCompatibleModelInfo) => {
-				const models = fromProtobufModels(response.models)
+		loadModelsServiceClient()
+			.then((client) => client.refreshDietCodeModelsRpc(EmptyRequest.create({})))
+			.then((response: OpenRouterCompatibleModelInfo) => convertModelResponse(response))
+			.then((models) => {
 				setDietCodeModels((prev) => (Object.keys(models).length > 0 ? models : (prev ?? null)))
 			})
 			.catch((error: Error) => console.error("Failed to refresh LUMI models:", error))
@@ -460,145 +490,204 @@ export const ExtensionStateContextProvider: React.FC<{
 		refreshDietCodeModels,
 	])
 
-	const contextValue: ExtensionStateContextType = {
-		...state,
-		didHydrateState,
-		showWelcome,
-		dietcodeModels,
-		openRouterModels,
-		vercelAiGatewayModels,
-		hicapModels,
-		liteLlmModels,
-		openAiModels,
-		requestyModels,
-		groqModels: groqModelsState,
-		basetenModels: basetenModelsState,
-		huggingFaceModels,
-		nousResearchModels: nousResearchModelsState,
-		mcpServers,
-		mcpMarketplaceCatalog,
-		totalTasksSize,
-		availableTerminalProfiles,
-		showMcp,
-		mcpTab,
-		showSettings,
-		settingsTargetSection,
-		settingsInitialModelTab,
-		showHistory,
-		showWorktrees,
-		showAnnouncement,
-		showNewChatConfirm,
-		globalDietCodeRulesToggles: state.globalDietCodeRulesToggles || {},
-		localDietCodeRulesToggles: state.localDietCodeRulesToggles || {},
-		localCursorRulesToggles: state.localCursorRulesToggles || {},
-		localWindsurfRulesToggles: state.localWindsurfRulesToggles || {},
-		localAgentsRulesToggles: state.localAgentsRulesToggles || {},
-		localWorkflowToggles: state.localWorkflowToggles || {},
-		globalWorkflowToggles: state.globalWorkflowToggles || {},
-		remoteRulesToggles: state.remoteRulesToggles || {},
-		remoteWorkflowToggles: state.remoteWorkflowToggles || {},
-		enableCheckpointsSetting: state.enableCheckpointsSetting,
-		currentFocusChainChecklist: state.currentFocusChainChecklist,
+	const contextValue = useMemo<ExtensionStateContextType>(
+		() => ({
+			...state,
+			// Keep legacy consumers source-compatible while the dedicated message
+			// context owns the live array and updates independently.
+			get dietcodeMessages() {
+				return dietcodeMessagesRef.current
+			},
+			didHydrateState,
+			showWelcome,
+			dietcodeModels,
+			openRouterModels,
+			vercelAiGatewayModels,
+			hicapModels,
+			liteLlmModels,
+			openAiModels,
+			requestyModels,
+			groqModels: groqModelsState,
+			basetenModels: basetenModelsState,
+			huggingFaceModels,
+			nousResearchModels: nousResearchModelsState,
+			mcpServers,
+			mcpMarketplaceCatalog,
+			totalTasksSize,
+			availableTerminalProfiles,
+			showMcp,
+			mcpTab,
+			showSettings,
+			settingsTargetSection,
+			settingsInitialModelTab,
+			showHistory,
+			showWorktrees,
+			showAnnouncement,
+			showNewChatConfirm,
+			globalDietCodeRulesToggles: state.globalDietCodeRulesToggles || {},
+			localDietCodeRulesToggles: state.localDietCodeRulesToggles || {},
+			localCursorRulesToggles: state.localCursorRulesToggles || {},
+			localWindsurfRulesToggles: state.localWindsurfRulesToggles || {},
+			localAgentsRulesToggles: state.localAgentsRulesToggles || {},
+			localWorkflowToggles: state.localWorkflowToggles || {},
+			globalWorkflowToggles: state.globalWorkflowToggles || {},
+			remoteRulesToggles: state.remoteRulesToggles || {},
+			remoteWorkflowToggles: state.remoteWorkflowToggles || {},
+			enableCheckpointsSetting: state.enableCheckpointsSetting,
+			currentFocusChainChecklist: state.currentFocusChainChecklist,
 
-		// Navigation functions
-		navigateToMcp,
-		navigateToSettings,
-		navigateToSettingsModelPicker,
-		navigateToHistory,
-		navigateToWorktrees,
-		navigateToChat,
+			// Navigation functions
+			navigateToMcp,
+			navigateToSettings,
+			navigateToSettingsModelPicker,
+			navigateToHistory,
+			navigateToWorktrees,
+			navigateToChat,
 
-		// Hide functions
-		hideSettings,
-		hideHistory,
-		hideWorktrees,
-		hideAnnouncement,
-		setShowAnnouncement,
-		setShowNewChatConfirm,
-		setShowWelcome,
-		setShouldShowAnnouncement: (value) =>
-			setState((prevState) => ({
-				...prevState,
-				shouldShowAnnouncement: value,
-			})),
-		setMcpServers: (mcpServers: McpServer[]) => setMcpServers(mcpServers),
-		setRequestyModels: (models: Record<string, ModelInfo>) => setRequestyModels(models),
-		setGroqModels: (models: Record<string, ModelInfo>) => setGroqModels(models),
-		setBasetenModels: (models: Record<string, ModelInfo>) => setBasetenModels(models),
-		setHuggingFaceModels: (models: Record<string, ModelInfo>) => setHuggingFaceModels(models),
-		setMcpMarketplaceCatalog: (catalog: McpMarketplaceCatalog) => setMcpMarketplaceCatalog(catalog),
-		setShowMcp,
-		closeMcpView,
-		setGlobalDietCodeRulesToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				globalDietCodeRulesToggles: toggles,
-			})),
-		setLocalDietCodeRulesToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				localDietCodeRulesToggles: toggles,
-			})),
-		setLocalCursorRulesToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				localCursorRulesToggles: toggles,
-			})),
-		setLocalWindsurfRulesToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				localWindsurfRulesToggles: toggles,
-			})),
-		setLocalAgentsRulesToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				localAgentsRulesToggles: toggles,
-			})),
-		setLocalWorkflowToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				localWorkflowToggles: toggles,
-			})),
-		setGlobalWorkflowToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				globalWorkflowToggles: toggles,
-			})),
-		setGlobalSkillsToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				globalSkillsToggles: toggles,
-			})),
-		setLocalSkillsToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				localSkillsToggles: toggles,
-			})),
-		setRemoteRulesToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				remoteRulesToggles: toggles,
-			})),
-		setRemoteWorkflowToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				remoteWorkflowToggles: toggles,
-			})),
-		setMcpTab,
-		setTotalTasksSize,
-		refreshDietCodeModels,
-		refreshOpenRouterModels,
-		refreshVercelAiGatewayModels,
-		refreshHicapModels,
-		refreshLiteLlmModels,
-		refreshNousResearchModels,
-		onRelinquishControl,
-		setUserInfo: (userInfo?: UserInfo) => setState((prevState) => ({ ...prevState, userInfo })),
-		expandTaskHeader,
-		setExpandTaskHeader,
-	}
+			// Hide functions
+			hideSettings,
+			hideHistory,
+			hideWorktrees,
+			hideAnnouncement,
+			setShowAnnouncement,
+			setShowNewChatConfirm,
+			setShowWelcome,
+			setShouldShowAnnouncement: (value) =>
+				setState((prevState) => ({
+					...prevState,
+					shouldShowAnnouncement: value,
+				})),
+			setMcpServers: (mcpServers: McpServer[]) => setMcpServers(mcpServers),
+			setRequestyModels: (models: Record<string, ModelInfo>) => setRequestyModels(models),
+			setGroqModels: (models: Record<string, ModelInfo>) => setGroqModels(models),
+			setBasetenModels: (models: Record<string, ModelInfo>) => setBasetenModels(models),
+			setHuggingFaceModels: (models: Record<string, ModelInfo>) => setHuggingFaceModels(models),
+			setMcpMarketplaceCatalog: (catalog: McpMarketplaceCatalog) => setMcpMarketplaceCatalog(catalog),
+			setShowMcp,
+			closeMcpView,
+			setGlobalDietCodeRulesToggles: (toggles) =>
+				setState((prevState) => ({
+					...prevState,
+					globalDietCodeRulesToggles: toggles,
+				})),
+			setLocalDietCodeRulesToggles: (toggles) =>
+				setState((prevState) => ({
+					...prevState,
+					localDietCodeRulesToggles: toggles,
+				})),
+			setLocalCursorRulesToggles: (toggles) =>
+				setState((prevState) => ({
+					...prevState,
+					localCursorRulesToggles: toggles,
+				})),
+			setLocalWindsurfRulesToggles: (toggles) =>
+				setState((prevState) => ({
+					...prevState,
+					localWindsurfRulesToggles: toggles,
+				})),
+			setLocalAgentsRulesToggles: (toggles) =>
+				setState((prevState) => ({
+					...prevState,
+					localAgentsRulesToggles: toggles,
+				})),
+			setLocalWorkflowToggles: (toggles) =>
+				setState((prevState) => ({
+					...prevState,
+					localWorkflowToggles: toggles,
+				})),
+			setGlobalWorkflowToggles: (toggles) =>
+				setState((prevState) => ({
+					...prevState,
+					globalWorkflowToggles: toggles,
+				})),
+			setGlobalSkillsToggles: (toggles) =>
+				setState((prevState) => ({
+					...prevState,
+					globalSkillsToggles: toggles,
+				})),
+			setLocalSkillsToggles: (toggles) =>
+				setState((prevState) => ({
+					...prevState,
+					localSkillsToggles: toggles,
+				})),
+			setRemoteRulesToggles: (toggles) =>
+				setState((prevState) => ({
+					...prevState,
+					remoteRulesToggles: toggles,
+				})),
+			setRemoteWorkflowToggles: (toggles) =>
+				setState((prevState) => ({
+					...prevState,
+					remoteWorkflowToggles: toggles,
+				})),
+			setMcpTab,
+			setTotalTasksSize,
+			refreshDietCodeModels,
+			refreshOpenRouterModels,
+			refreshVercelAiGatewayModels,
+			refreshHicapModels,
+			refreshLiteLlmModels,
+			refreshNousResearchModels,
+			onRelinquishControl,
+			setUserInfo: (userInfo?: UserInfo) => setState((prevState) => ({ ...prevState, userInfo })),
+			expandTaskHeader,
+			setExpandTaskHeader,
+		}),
+		[
+			state,
+			didHydrateState,
+			showWelcome,
+			dietcodeModels,
+			openRouterModels,
+			vercelAiGatewayModels,
+			hicapModels,
+			liteLlmModels,
+			openAiModels,
+			requestyModels,
+			groqModelsState,
+			basetenModelsState,
+			huggingFaceModels,
+			nousResearchModelsState,
+			mcpServers,
+			mcpMarketplaceCatalog,
+			totalTasksSize,
+			availableTerminalProfiles,
+			showMcp,
+			mcpTab,
+			showSettings,
+			settingsTargetSection,
+			settingsInitialModelTab,
+			showHistory,
+			showWorktrees,
+			showAnnouncement,
+			showNewChatConfirm,
+			navigateToMcp,
+			navigateToSettings,
+			navigateToSettingsModelPicker,
+			navigateToHistory,
+			navigateToWorktrees,
+			navigateToChat,
+			hideSettings,
+			hideHistory,
+			hideWorktrees,
+			hideAnnouncement,
+			closeMcpView,
+			refreshDietCodeModels,
+			refreshOpenRouterModels,
+			refreshVercelAiGatewayModels,
+			refreshHicapModels,
+			refreshLiteLlmModels,
+			refreshNousResearchModels,
+			onRelinquishControl,
+			expandTaskHeader,
+		],
+	)
 
-	return <ExtensionStateContext.Provider value={contextValue}>{children}</ExtensionStateContext.Provider>
+	return (
+		<ExtensionStateContext.Provider value={contextValue}>
+			<ChatMessagesContext.Provider value={dietcodeMessages}>{children}</ChatMessagesContext.Provider>
+		</ExtensionStateContext.Provider>
+	)
 }
 
 export const useExtensionState = () => {
@@ -607,4 +696,12 @@ export const useExtensionState = () => {
 		throw new Error("useExtensionState must be used within an ExtensionStateContextProvider")
 	}
 	return context
+}
+
+export const useChatMessages = () => {
+	const messages = useContext(ChatMessagesContext)
+	if (messages === undefined) {
+		throw new Error("useChatMessages must be used within a ChatMessagesContext provider")
+	}
+	return messages
 }

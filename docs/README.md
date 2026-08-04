@@ -226,6 +226,7 @@ When in doubt: session behavior → `docs/`; durable substrate → `broccolidb/d
 | [Completion authority migration](completion-gate-lifecycle-migration.md) | Historical split-authority migration |
 | [Completion funnel](completion-lifecycle-decision-engine.md) | Semantic completion and durable handoff to lifecycle |
 | [ADR-001 Token Buffer Engine](architecture/adr-001-token-ingestion-buffer-engine.md) | Centralized context optimization, 10-stage DSL compression, vision eviction, and APC prompt cache alignment |
+| [ADR-002 Webview State Decoupling](architecture/adr-002-webview-state-decoupling-and-streaming-optimization.md) | Decoupled ChatMessagesContext, WeakMap projection & metrics caching, ChatView modularization, and Cerebras native fetch refactoring |
 | [Spider forensic engine](architecture/spider-v20-forensic-engine.md) | Policy/audit layer (BroccoliDB) |
 | [User interface design](USER_INTERFACE_DESIGN.md) | Webview UX patterns |
 

@@ -14,6 +14,13 @@ export interface AuditMessageSnapshot {
 	auditMetadata: TaskAuditMetadata
 }
 
+export interface AuditMessageIndex {
+	latestGateAudit?: TaskAuditMetadata
+	previousGateAudit?: TaskAuditMetadata
+	latestPlanAudit?: TaskAuditMetadata
+	displaySnapshots: AuditMessageSnapshot[]
+}
+
 /** Info messages carrying act-mode advisory audit metadata (non-blocking). */
 export function isAdvisoryAuditInfoMessage(message: DietCodeMessage): boolean {
 	if (message.type !== "say" || message.say !== "info" || !message.auditMetadata) {
@@ -166,6 +173,36 @@ export function getAuditSnapshotsFromMessages(messages: DietCodeMessage[]): Audi
 /** Returns deduplicated audit snapshots for UI — suppresses repeated act-mode advisories. */
 export function getDisplayAuditSnapshotsFromMessages(messages: DietCodeMessage[]): AuditMessageSnapshot[] {
 	return dedupeConsecutiveAdvisorySnapshots(getAuditSnapshotsFromMessages(messages))
+}
+
+/** Consolidates the audit-derived header inputs into one transcript scan. */
+export function buildAuditMessageIndex(messages: DietCodeMessage[]): AuditMessageIndex {
+	const snapshots: AuditMessageSnapshot[] = []
+	let latestGateAudit: TaskAuditMetadata | undefined
+	let previousGateAudit: TaskAuditMetadata | undefined
+	let latestPlanAudit: TaskAuditMetadata | undefined
+
+	for (const message of messages) {
+		if (!message.auditMetadata || !messageCarriesAuditMetadata(message)) continue
+		const source = resolveAuditSource(message)
+		if (!source) continue
+
+		snapshots.push({ ts: message.ts, source, auditMetadata: message.auditMetadata })
+		if (source !== "advisory") {
+			previousGateAudit = latestGateAudit
+			latestGateAudit = message.auditMetadata
+		}
+		if (source === "plan") {
+			latestPlanAudit = message.auditMetadata
+		}
+	}
+
+	return {
+		latestGateAudit,
+		previousGateAudit,
+		latestPlanAudit,
+		displaySnapshots: dedupeConsecutiveAdvisorySnapshots(snapshots),
+	}
 }
 
 /** Returns all audit snapshots in chronological order (oldest first). */

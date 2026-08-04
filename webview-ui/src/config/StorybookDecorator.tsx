@@ -10,6 +10,7 @@ import {
 	useDietCodeAuth,
 } from "@/context/DietCodeAuthContext"
 import {
+	ChatMessagesContext,
 	ExtensionStateContext,
 	ExtensionStateContextProvider,
 	ExtensionStateContextType,
@@ -63,7 +64,12 @@ const ExtensionStateProviderWithOverrides: React.FC<{
 	children: React.ReactNode
 }> = ({ overrides, children }) => {
 	const extensionState = useExtensionState()
-	return <ExtensionStateContext.Provider value={{ ...extensionState, ...overrides }}>{children}</ExtensionStateContext.Provider>
+	const value = { ...extensionState, ...overrides }
+	return (
+		<ExtensionStateContext.Provider value={value}>
+			<ChatMessagesContext.Provider value={value.dietcodeMessages}>{children}</ChatMessagesContext.Provider>
+		</ExtensionStateContext.Provider>
+	)
 }
 
 const DietCodeAuthProviderWithOverrides: React.FC<{

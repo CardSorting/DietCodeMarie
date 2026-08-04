@@ -19,7 +19,7 @@ import {
 	Sparkles,
 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { useExtensionState } from "@/context/ExtensionStateContext"
+import { useChatMessages } from "@/context/ExtensionStateContext"
 import MarkdownBlock from "../common/MarkdownBlock"
 import ExpandHandle from "./ExpandHandle"
 import { ParentAuditGateBadge } from "./ParentAuditGateBadge"
@@ -339,7 +339,7 @@ function SubagentPromptText({ prompt, isExpanded, onToggle }: SubagentPromptText
 export default function SubagentStatusRow({ message, isLast, lastModifiedMessage }: SubagentStatusRowProps) {
 	const [expandedItems, setExpandedItems] = useState<Record<number, boolean>>({})
 	const [expandedPrompts, setExpandedPrompts] = useState<Record<number, boolean>>({})
-	const { dietcodeMessages } = useExtensionState()
+	const dietcodeMessages = useChatMessages()
 	const data = useMemo(() => parseSubagentRowData(message), [message])
 	const executionDiff = useMemo(() => buildLatestExecutionDiff(dietcodeMessages), [dietcodeMessages])
 

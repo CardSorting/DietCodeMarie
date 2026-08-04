@@ -180,25 +180,32 @@ function combineAllHooks(messages: DietCodeMessage[]): DietCodeMessage[] {
  * @param messages The original messages array (may include partial tools)
  * @returns The timestamp of the immediate next tool, or null if none found
  */
-function findImmediateNextToolTimestamp(hookIndex: number, messages: DietCodeMessage[]): number | null {
-	for (let i = hookIndex + 1; i < messages.length; i++) {
-		const msg = messages[i]
+function buildImmediateNextToolByHookTimestamp(messages: DietCodeMessage[]): Map<number, number | null> {
+	const nextToolByHookTimestamp = new Map<number, number | null>()
+	let nextToolTimestamp: number | null = null
+	let blockedByLaterPreToolUse = false
 
-		// If we hit a tool, this is the immediate next tool
-		if (isToolOrCommandMessage(msg)) {
-			return msg.ts
+	// A reverse pass turns each forward search into O(1). A tool resets the
+	// boundary for hooks before it; a later PreToolUse hook blocks earlier hooks
+	// from reaching that tool, matching findImmediateNextToolTimestamp exactly.
+	for (let index = messages.length - 1; index >= 0; index--) {
+		const message = messages[index]
+		if (isToolOrCommandMessage(message)) {
+			nextToolTimestamp = message.ts
+			blockedByLaterPreToolUse = false
+			continue
 		}
 
-		// If we hit another PreToolUse hook before finding a tool, stop searching
-		// This prevents matching a hook to a tool that has its own PreToolUse hook
-		if (isHookStatusSay(getSay(msg))) {
-			const metadata = parseHookMetadata(msg)
-			if (metadata?.hookName === "PreToolUse") {
-				return null
+		const metadata = parseHookMetadata(message)
+		if (metadata?.hookName === "PreToolUse") {
+			if (!nextToolByHookTimestamp.has(message.ts)) {
+				nextToolByHookTimestamp.set(message.ts, blockedByLaterPreToolUse ? null : nextToolTimestamp)
 			}
+			blockedByLaterPreToolUse = true
 		}
 	}
-	return null
+
+	return nextToolByHookTimestamp
 }
 
 /**
@@ -221,12 +228,7 @@ function buildPreToolUseMap(
 	originalMessages: DietCodeMessage[],
 ): Map<number, DietCodeMessage[]> {
 	const map = new Map<number, DietCodeMessage[]>()
-
-	// Build timestamp-to-index map once to avoid O(n) findIndex calls
-	const timestampToIndex = new Map<number, number>()
-	for (let i = 0; i < originalMessages.length; i++) {
-		timestampToIndex.set(originalMessages[i].ts, i)
-	}
+	const immediateNextToolByHookTimestamp = buildImmediateNextToolByHookTimestamp(originalMessages)
 
 	for (const msg of processedMessages) {
 		// Only process PreToolUse hooks
@@ -235,15 +237,9 @@ function buildPreToolUseMap(
 			continue
 		}
 
-		// Find this hook's position in the original array using the index map
-		const hookIndexInOriginal = timestampToIndex.get(msg.ts)
-		if (hookIndexInOriginal === undefined) {
-			continue // Shouldn't happen, but be safe
-		}
-
-		// Find the immediate next tool after this hook in the original array
-		const toolTimestamp = findImmediateNextToolTimestamp(hookIndexInOriginal, originalMessages)
-		if (toolTimestamp === null) {
+		// Find the immediate next tool after this hook from the reverse index.
+		const toolTimestamp = immediateNextToolByHookTimestamp.get(msg.ts)
+		if (toolTimestamp == null) {
 			// No tool found - hook will stay in original position
 			continue
 		}
@@ -287,6 +283,16 @@ function reorderWithPreToolUseHooks(
 	const result: DietCodeMessage[] = []
 	const addedHooks = new Set<number>()
 	const addedTools = new Set<number>()
+	const hookToToolTimestamp = new Map<number, number>()
+	for (const [toolTimestamp, hooks] of preToolUseMap) {
+		for (const hook of hooks) {
+			// The old implementation searched map entries in insertion order;
+			// retain the first mapping for duplicate timestamps.
+			if (!hookToToolTimestamp.has(hook.ts)) {
+				hookToToolTimestamp.set(hook.ts, toolTimestamp)
+			}
+		}
+	}
 
 	// Build set of available tool timestamps for quick lookup
 	const availableTools = new Set<number>()
@@ -320,14 +326,7 @@ function reorderWithPreToolUseHooks(
 		// Case 3: This is a PreToolUse hook in its original position
 		const metadata = parseHookMetadata(msg)
 		if (metadata?.hookName === "PreToolUse") {
-			// Find which tool (if any) this hook is mapped to
-			let mappedToolTs: number | undefined
-			for (const [toolTs, hooks] of preToolUseMap) {
-				if (hooks.some((h) => h.ts === msg.ts)) {
-					mappedToolTs = toolTs
-					break
-				}
-			}
+			const mappedToolTs = hookToToolTimestamp.get(msg.ts)
 
 			// If this hook's tool is available and we'll insert it before that tool, skip it here
 			if (mappedToolTs !== undefined && availableTools.has(mappedToolTs)) {

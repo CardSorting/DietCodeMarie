@@ -55,43 +55,69 @@ export function useChatState(messages: DietCodeMessage[]): ChatState {
 		clearExpandedRows()
 	}, [clearExpandedRows])
 
-	return {
-		// State values
-		inputValue,
-		setInputValue,
-		activeQuote,
-		setActiveQuote,
-		pendingQuote,
-		setPendingQuote,
-		isTextAreaFocused,
-		setIsTextAreaFocused,
-		selectedImages,
-		setSelectedImages,
-		selectedFiles,
-		setSelectedFiles,
-		sendingDisabled,
-		setSendingDisabled,
-		enableButtons,
-		setEnableButtons,
-		primaryButtonText,
-		setPrimaryButtonText,
-		secondaryButtonText,
-		setSecondaryButtonText,
-		expandedRows,
-		setExpandedRows,
+	// Keep the aggregate object stable when the parent rerenders for unrelated
+	// extension state. This is important because ChatView passes it into the
+	// deferred timeline and composer; returning a fresh object here would make
+	// both lanes appear dirty on every parent render.
+	return useMemo(
+		() => ({
+			// State values
+			inputValue,
+			setInputValue,
+			activeQuote,
+			setActiveQuote,
+			pendingQuote,
+			setPendingQuote,
+			isTextAreaFocused,
+			setIsTextAreaFocused,
+			selectedImages,
+			setSelectedImages,
+			selectedFiles,
+			setSelectedFiles,
+			sendingDisabled,
+			setSendingDisabled,
+			enableButtons,
+			setEnableButtons,
+			primaryButtonText,
+			setPrimaryButtonText,
+			secondaryButtonText,
+			setSecondaryButtonText,
+			expandedRows,
+			setExpandedRows,
 
-		// Refs
-		textAreaRef,
+			// Refs
+			textAreaRef,
 
-		// Derived values
-		lastMessage,
-		secondLastMessage,
-		dietcodeAsk,
-		task,
+			// Derived values
+			lastMessage,
+			secondLastMessage,
+			dietcodeAsk,
+			task,
 
-		// Handlers
-		handleFocusChange,
-		clearExpandedRows,
-		resetState,
-	}
+			// Handlers
+			handleFocusChange,
+			clearExpandedRows,
+			resetState,
+		}),
+		[
+			inputValue,
+			activeQuote,
+			pendingQuote,
+			isTextAreaFocused,
+			selectedImages,
+			selectedFiles,
+			sendingDisabled,
+			enableButtons,
+			primaryButtonText,
+			secondaryButtonText,
+			expandedRows,
+			lastMessage,
+			secondLastMessage,
+			dietcodeAsk,
+			task,
+			handleFocusChange,
+			clearExpandedRows,
+			resetState,
+		],
+	)
 }

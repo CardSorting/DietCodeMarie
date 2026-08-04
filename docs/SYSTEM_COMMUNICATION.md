@@ -30,10 +30,11 @@ Parallel paths:
 
 The sidebar webview does not call Node APIs directly. Instead:
 
-1. UI sends messages through the VS Code webview API.
+1. UI sends messages through the VS Code webview API via modular gRPC service loaders in `webview-ui/src/services/` (`account-grpc-client.ts`, `core-grpc-client.ts`, `mcp-grpc-client.ts`, `model-grpc-client.ts`).
 2. `src/core/controller/grpc-handler.ts` and related `subscribeTo*` modules deserialize **protobuf** payloads.
 3. `Controller` updates state or forwards to the active `Task`.
 4. State and partial streams push back through the same channel (`sendStateUpdate`, `sendPartialMessageEvent`, etc.).
+5. Live streaming chat messages update through `ChatMessagesContext`, which is decoupled from global extension settings (`ExtensionStateContext`) to prevent webview re-render cascades during streaming (see [ADR-002](architecture/adr-002-webview-state-decoupling-and-streaming-optimization.md)).
 
 Generated types live in `src/generated/` and `src/shared/proto/`.
 

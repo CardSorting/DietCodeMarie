@@ -1,16 +1,27 @@
 import type { Boolean, EmptyRequest } from "@shared/proto/dietcode/common"
-import { useCallback, useEffect, useMemo, useState } from "react"
-import ChatView from "./components/chat/ChatView"
+import { lazy, Suspense, useCallback, useEffect, useState } from "react"
 import { NewChatConfirmModal } from "./components/common/NewChatConfirmModal"
 import { AppShell } from "./components/layout/AppShell"
-import McpView from "./components/mcp/configuration/McpConfigurationView"
-import SettingsView from "./components/settings/SettingsView"
-import WelcomeView from "./components/welcome/WelcomeView"
-import WorktreesView from "./components/worktrees/WorktreesView"
-import { useDietCodeAuth } from "./context/DietCodeAuthContext"
 import { useExtensionState } from "./context/ExtensionStateContext"
 import { Providers } from "./Providers"
-import { TaskServiceClient, UiServiceClient } from "./services/grpc-client"
+import { TaskServiceClient, UiServiceClient } from "./services/core-grpc-client"
+
+// Keep the first paint small. Secondary surfaces and their dependencies are fetched
+// only when needed instead of being parsed on every webview launch.
+const ChatView = lazy(() => import("./components/chat/ChatView"))
+const McpView = lazy(() => import("./components/mcp/configuration/McpConfigurationView"))
+const SettingsView = lazy(() => import("./components/settings/SettingsView"))
+const WelcomeView = lazy(() => import("./components/welcome/WelcomeView"))
+const WorktreesView = lazy(() => import("./components/worktrees/WorktreesView"))
+
+const AppLoadingState = ({ label = "Starting LUMI…" }: { label?: string }) => (
+	<div aria-busy="true" aria-live="polite" className="flex h-full w-full items-center justify-center bg-background">
+		<div className="flex items-center gap-2 text-xs text-description">
+			<span aria-hidden="true" className="size-2 animate-pulse rounded-full bg-lumi" />
+			{label}
+		</div>
+	</div>
+)
 
 const isEditableTarget = (target: EventTarget | null) => {
 	if (!(target instanceof HTMLElement)) return false
@@ -37,7 +48,7 @@ const AppContent = () => {
 		showWorktrees,
 		showAnnouncement,
 		showNewChatConfirm,
-		dietcodeMessages,
+		currentTaskItem,
 		setShowAnnouncement,
 		setShowNewChatConfirm,
 		setShouldShowAnnouncement,
@@ -52,19 +63,10 @@ const AppContent = () => {
 		navigateToWorktrees,
 	} = useExtensionState()
 
-	const { dietcodeUser, organizations, activeOrganization } = useDietCodeAuth()
 	const [isStartingNewChat, setIsStartingNewChat] = useState(false)
 	const [newChatError, setNewChatError] = useState<string | null>(null)
 
-	const task = useMemo(() => dietcodeMessages.at(0), [dietcodeMessages])
-	const hasActiveConversation = !!task
-	const conversationTitle = useMemo(() => {
-		if (!task?.text) {
-			return undefined
-		}
-		const singleLine = task.text.replace(/\s+/g, " ").trim()
-		return singleLine.length > 36 ? `${singleLine.slice(0, 36)}…` : singleLine
-	}, [task?.text])
+	const hasActiveConversation = !!currentTaskItem?.id
 
 	const handleRequestNewChat = useCallback(() => {
 		setNewChatError(null)
@@ -174,7 +176,7 @@ const AppContent = () => {
 	}, [shouldShowAnnouncement, setShouldShowAnnouncement, setShowAnnouncement])
 
 	if (!didHydrateState) {
-		return null
+		return <AppLoadingState />
 	}
 
 	return (
@@ -185,23 +187,23 @@ const AppContent = () => {
 				Skip to content
 			</a>
 			{showWelcome ? (
-				<WelcomeView />
+				<Suspense fallback={<AppLoadingState label="Loading welcome…" />}>
+					<WelcomeView />
+				</Suspense>
 			) : (
 				<AppShell onRequestNewChat={handleRequestNewChat}>
-					<div
-						aria-labelledby="lumi-view-title"
-						className="relative min-h-0 w-full flex-1 overflow-hidden"
-						id="lumi-main-content"
-						tabIndex={-1}>
-						{showSettings && <SettingsView onDone={hideSettings} targetSection={settingsTargetSection} />}
-						{showMcp && <McpView initialTab={mcpTab} onDone={closeMcpView} />}
-						{showWorktrees && <WorktreesView onDone={hideWorktrees} />}
-						<ChatView
-							hideAnnouncement={hideAnnouncement}
-							isHidden={showSettings || showMcp || showWorktrees}
-							showAnnouncement={showAnnouncement}
-							showHistoryView={navigateToHistory}
-						/>
+					<div className="relative min-h-0 w-full flex-1 overflow-hidden" id="lumi-main-content" tabIndex={-1}>
+						<Suspense fallback={<AppLoadingState label="Loading view…" />}>
+							{showSettings && <SettingsView onDone={hideSettings} targetSection={settingsTargetSection} />}
+							{showMcp && <McpView initialTab={mcpTab} onDone={closeMcpView} />}
+							{showWorktrees && <WorktreesView onDone={hideWorktrees} />}
+							<ChatView
+								hideAnnouncement={hideAnnouncement}
+								isHidden={showSettings || showMcp || showWorktrees}
+								showAnnouncement={showAnnouncement}
+								showHistoryView={navigateToHistory}
+							/>
+						</Suspense>
 					</div>
 				</AppShell>
 			)}

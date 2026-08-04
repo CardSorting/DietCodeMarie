@@ -38,50 +38,34 @@ import { DietCodeMessage } from "./ExtensionMessage"
  */
 export function combineErrorRetryMessages(messages: DietCodeMessage[]): DietCodeMessage[] {
 	const result: DietCodeMessage[] = []
+	let nextRetryOrApi: "error_retry" | "api_req_started" | undefined
 
-	for (let i = 0; i < messages.length; i++) {
+	// Walking backwards makes the first retry/API boundary after each retry
+	// available in O(1), instead of rescanning the remainder of the conversation.
+	for (let i = messages.length - 1; i >= 0; i--) {
 		const message = messages[i]
+		let keep = true
 
 		if (message.say === "error_retry") {
-			// Look ahead to find if there's another error_retry before the next api_req_started
-			let hasLaterErrorRetry = false
-			let hasApiReqStartedBefore = false
-
-			for (let j = i + 1; j < messages.length; j++) {
-				const laterMessage = messages[j]
-				if (laterMessage.say === "api_req_started") {
-					hasApiReqStartedBefore = true
-					break
-				}
-				if (laterMessage.say === "error_retry") {
-					hasLaterErrorRetry = true
-					break
-				}
-			}
-
-			// Case 1: Another error_retry follows before api_req_started - skip this one
-			if (hasLaterErrorRetry) {
-				continue
-			}
-
-			// Case 2: api_req_started follows (no later error_retry) - retry succeeded
-			// Don't show the error_retry unless it has failed: true
-			if (hasApiReqStartedBefore) {
+			if (nextRetryOrApi === "error_retry") {
+				keep = false
+			} else if (nextRetryOrApi === "api_req_started") {
 				try {
-					const retryInfo = JSON.parse(message.text || "{}")
-					// Only skip if this wasn't a final failure message
-					if (!retryInfo.failed) {
-						continue
-					}
+					const retryInfo = JSON.parse(message.text || "{}") as { failed?: boolean }
+					// Only keep a retry if it represents a final failure.
+					keep = retryInfo.failed === true
 				} catch {
-					// If we can't parse, still skip to be safe
-					continue
+					// Match the previous safe behavior for malformed retry metadata.
+					keep = false
 				}
 			}
 		}
 
-		result.push(message)
+		if (keep) result.push(message)
+		if (message.say === "error_retry" || message.say === "api_req_started") {
+			nextRetryOrApi = message.say
+		}
 	}
 
-	return result
+	return result.reverse()
 }

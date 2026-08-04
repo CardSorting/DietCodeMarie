@@ -14,95 +14,55 @@ import type { ChatState, MessageHandlers } from "../types/chatTypes"
  */
 export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatState): MessageHandlers {
 	const { backgroundCommandRunning, currentTaskItem } = useExtensionState()
-	const {
-		setInputValue,
-		activeQuote,
-		setActiveQuote,
-		setPendingQuote,
-		setSelectedImages,
-		setSelectedFiles,
-		setSendingDisabled,
-		setEnableButtons,
-		dietcodeAsk,
-		lastMessage,
-	} = chatState
-	const sendRouteOptions = useMemo(() => ({ taskSessionActive: Boolean(currentTaskItem?.id) }), [currentTaskItem?.id])
+	const messagesRef = useRef(messages)
+	messagesRef.current = messages
+	const chatStateRef = useRef(chatState)
+	chatStateRef.current = chatState
+	const backgroundCommandRunningRef = useRef(backgroundCommandRunning)
+	backgroundCommandRunningRef.current = backgroundCommandRunning
+	const taskIdRef = useRef(currentTaskItem?.id)
+	taskIdRef.current = currentTaskItem?.id
 	const cancelInFlightRef = useRef(false)
 
 	// Handle sending a message
-	const handleSendMessage = useCallback(
-		async (text: string, images: string[], files: string[]) => {
-			let messageToSend = text.trim()
-			const hasContent = messageToSend || images.length > 0 || files.length > 0
+	const handleSendMessage = useCallback(async (text: string, images: string[], files: string[]) => {
+		const currentChatState = chatStateRef.current
+		const currentMessages = messagesRef.current
+		const activeQuote = currentChatState.activeQuote
+		const dietcodeAsk = currentChatState.dietcodeAsk
+		const sendRouteOptions = { taskSessionActive: Boolean(taskIdRef.current) }
+		let messageToSend = text.trim()
+		const hasContent = messageToSend || images.length > 0 || files.length > 0
 
-			// Prepend the active quote if it exists
-			if (activeQuote && hasContent) {
-				const prefix = "[context] \n> "
-				const formattedQuote = activeQuote
-				const suffix = "\n[/context] \n\n"
-				messageToSend = `${prefix} ${formattedQuote} ${suffix} ${messageToSend}`
-			}
+		// Prepend the active quote if it exists
+		if (activeQuote && hasContent) {
+			const prefix = "[context] \n> "
+			const formattedQuote = activeQuote
+			const suffix = "\n[/context] \n\n"
+			messageToSend = `${prefix} ${formattedQuote} ${suffix} ${messageToSend}`
+		}
 
-			if (hasContent) {
-				const sendRoute = resolveChatSendRoute(messages, dietcodeAsk, sendRouteOptions)
-				console.log("[ChatView] handleSendMessage - route:", sendRoute, messageToSend)
-				let messageSent = false
+		if (hasContent) {
+			const sendRoute = resolveChatSendRoute(currentMessages, dietcodeAsk, sendRouteOptions)
+			console.log("[ChatView] handleSendMessage - route:", sendRoute, messageToSend)
+			let messageSent = false
 
-				if (sendRoute === "new_task") {
-					await TaskServiceClient.newTask(
-						NewTaskRequest.create({
-							text: messageToSend,
-							images,
-							files,
-						}),
-					)
-					messageSent = true
-				} else if (sendRoute === "ask") {
-					// For resume_task and resume_completed_task, use yesButtonClicked to match Resume button behavior
-					// This ensures Enter key and Resume button work identically
-					if (dietcodeAsk === "resume_task" || dietcodeAsk === "resume_completed_task") {
-						await TaskServiceClient.askResponse(
-							AskResponseRequest.create({
-								responseType: "yesButtonClicked",
-								text: messageToSend,
-								images,
-								files,
-							}),
-						)
-						messageSent = true
-					} else {
-						// All other ask types use messageResponse
-						switch (dietcodeAsk) {
-							case "followup":
-							case "plan_mode_respond":
-							case "tool":
-							case "browser_action_launch":
-							case "command":
-							case "command_output":
-							case "use_mcp_server":
-							case "use_subagents":
-							case "completion_result":
-							case "mistake_limit_reached":
-							case "api_req_failed":
-							case "new_task":
-							case "condense":
-							case "report_bug":
-								await TaskServiceClient.askResponse(
-									AskResponseRequest.create({
-										responseType: "messageResponse",
-										text: messageToSend,
-										images,
-										files,
-									}),
-								)
-								messageSent = true
-								break
-						}
-					}
-				} else if (sendRoute === "follow_up") {
+			if (sendRoute === "new_task") {
+				await TaskServiceClient.newTask(
+					NewTaskRequest.create({
+						text: messageToSend,
+						images,
+						files,
+					}),
+				)
+				messageSent = true
+			} else if (sendRoute === "ask") {
+				// For resume_task and resume_completed_task, use yesButtonClicked to match Resume button behavior
+				// This ensures Enter key and Resume button work identically
+				if (dietcodeAsk === "resume_task" || dietcodeAsk === "resume_completed_task") {
 					await TaskServiceClient.askResponse(
 						AskResponseRequest.create({
-							responseType: "messageResponse",
+							responseType: "yesButtonClicked",
 							text: messageToSend,
 							images,
 							files,
@@ -110,68 +70,90 @@ export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatS
 					)
 					messageSent = true
 				} else {
-					console.warn("[ChatView] Message not sent — no active send route", {
-						dietcodeAsk,
-						messageCount: messages.length,
-					})
-				}
-
-				// Only clear input and disable UI if message was actually sent
-				if (messageSent) {
-					const isFollowUpMessage = sendRoute === "follow_up"
-					setInputValue("")
-					setActiveQuote(null)
-					setPendingQuote(null)
-					if (!isFollowUpMessage) {
-						setSendingDisabled(true)
-						setEnableButtons(false)
+					// All other ask types use messageResponse
+					switch (dietcodeAsk) {
+						case "followup":
+						case "plan_mode_respond":
+						case "tool":
+						case "browser_action_launch":
+						case "command":
+						case "command_output":
+						case "use_mcp_server":
+						case "use_subagents":
+						case "completion_result":
+						case "mistake_limit_reached":
+						case "api_req_failed":
+						case "new_task":
+						case "condense":
+						case "report_bug":
+							await TaskServiceClient.askResponse(
+								AskResponseRequest.create({
+									responseType: "messageResponse",
+									text: messageToSend,
+									images,
+									files,
+								}),
+							)
+							messageSent = true
+							break
 					}
-					setSelectedImages([])
-					setSelectedFiles([])
-
-					// Reset auto-scroll
-					if ("disableAutoScrollRef" in chatState) {
-						;(chatState as any).disableAutoScrollRef.current = false
-					}
 				}
+			} else if (sendRoute === "follow_up") {
+				await TaskServiceClient.askResponse(
+					AskResponseRequest.create({
+						responseType: "messageResponse",
+						text: messageToSend,
+						images,
+						files,
+					}),
+				)
+				messageSent = true
+			} else {
+				console.warn("[ChatView] Message not sent — no active send route", {
+					dietcodeAsk,
+					messageCount: currentMessages.length,
+				})
 			}
-		},
-		[
-			messages.length,
-			dietcodeAsk,
-			activeQuote,
-			setInputValue,
-			setActiveQuote,
-			setPendingQuote,
-			setSendingDisabled,
-			setSelectedImages,
-			setSelectedFiles,
-			setEnableButtons,
-			chatState,
-			messages,
-			sendRouteOptions,
-		],
-	)
+
+			// Only clear input and disable UI if message was actually sent
+			if (messageSent) {
+				const isFollowUpMessage = sendRoute === "follow_up"
+				currentChatState.setInputValue("")
+				currentChatState.setActiveQuote(null)
+				currentChatState.setPendingQuote(null)
+				if (!isFollowUpMessage) {
+					currentChatState.setSendingDisabled(true)
+					currentChatState.setEnableButtons(false)
+				}
+				currentChatState.setSelectedImages([])
+				currentChatState.setSelectedFiles([])
+			}
+		}
+	}, [])
 
 	// Start a new task
 	const startNewTask = useCallback(async () => {
-		setActiveQuote(null)
-		setPendingQuote(null)
+		chatStateRef.current.setActiveQuote(null)
+		chatStateRef.current.setPendingQuote(null)
 		await TaskServiceClient.clearTask(EmptyRequest.create({}))
-	}, [setActiveQuote, setPendingQuote])
+	}, [])
 
 	// Clear input state helper
 	const clearInputState = useCallback(() => {
-		setInputValue("")
-		setActiveQuote(null)
-		setPendingQuote(null)
-		setSelectedImages([])
-		setSelectedFiles([])
-	}, [setInputValue, setActiveQuote, setPendingQuote, setSelectedImages, setSelectedFiles])
+		const currentChatState = chatStateRef.current
+		currentChatState.setInputValue("")
+		currentChatState.setActiveQuote(null)
+		currentChatState.setPendingQuote(null)
+		currentChatState.setSelectedImages([])
+		currentChatState.setSelectedFiles([])
+	}, [])
 
 	// Execute button action based on type
 	const executeButtonAction = useCallback(
 		async (actionType: ButtonActionType, text?: string, images?: string[], files?: string[]) => {
+			const currentChatState = chatStateRef.current
+			const dietcodeAsk = currentChatState.dietcodeAsk
+			const lastMessage = currentChatState.lastMessage
 			const trimmedInput = text?.trim()
 			const hasContent = trimmedInput || (images && images.length > 0) || (files && files.length > 0)
 
@@ -264,10 +246,10 @@ export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatS
 						return
 					}
 					cancelInFlightRef.current = true
-					setSendingDisabled(true)
-					setEnableButtons(false)
+					currentChatState.setSendingDisabled(true)
+					currentChatState.setEnableButtons(false)
 					try {
-						if (backgroundCommandRunning) {
+						if (backgroundCommandRunningRef.current) {
 							await TaskServiceClient.cancelBackgroundCommand(EmptyRequest.create({})).catch((err) =>
 								console.error("Failed to cancel background command:", err),
 							)
@@ -276,8 +258,8 @@ export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatS
 					} finally {
 						cancelInFlightRef.current = false
 						// Clear any pending state that might interfere with resume
-						setSendingDisabled(false)
-						setEnableButtons(true)
+						currentChatState.setSendingDisabled(false)
+						currentChatState.setEnableButtons(true)
 					}
 					break
 				}
@@ -297,21 +279,8 @@ export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatS
 					}
 					break
 			}
-
-			if ("disableAutoScrollRef" in chatState) {
-				;(chatState as any).disableAutoScrollRef.current = false
-			}
 		},
-		[
-			dietcodeAsk,
-			lastMessage,
-			clearInputState,
-			startNewTask,
-			chatState,
-			backgroundCommandRunning,
-			setSendingDisabled,
-			setEnableButtons,
-		],
+		[clearInputState, startNewTask],
 	)
 
 	// Handle task close button click
@@ -319,10 +288,13 @@ export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatS
 		startNewTask()
 	}, [startNewTask])
 
-	return {
-		handleSendMessage,
-		executeButtonAction,
-		handleTaskCloseButtonClick,
-		startNewTask,
-	}
+	return useMemo(
+		() => ({
+			handleSendMessage,
+			executeButtonAction,
+			handleTaskCloseButtonClick,
+			startNewTask,
+		}),
+		[handleSendMessage, executeButtonAction, handleTaskCloseButtonClick, startNewTask],
+	)
 }

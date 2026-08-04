@@ -86,7 +86,13 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 
 	const isLastApiReqInterrupted = useMemo(() => {
 		// Check if last api_req_started is cancelled
-		const lastApiReqStarted = [...messages].reverse().find((m) => m.say === "api_req_started")
+		let lastApiReqStarted: DietCodeMessage | undefined
+		for (let index = messages.length - 1; index >= 0; index--) {
+			if (messages[index].say === "api_req_started") {
+				lastApiReqStarted = messages[index]
+				break
+			}
+		}
 		if (lastApiReqStarted?.text != null) {
 			const info = JSON.parse(lastApiReqStarted.text)
 			if (info.cancelReason != null) {
@@ -200,15 +206,13 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 		setCurrentPageIndex(pages.length - 1)
 	}, [pages.length])
 
-	// Get initial URL from launch message
-	const initialUrl = useMemo(() => {
+	// Get launch metadata with one pass over the session.
+	const { initialUrl, isAutoApproved } = useMemo(() => {
 		const launchMessage = messages.find((m) => m.ask === "browser_action_launch" || m.say === "browser_action_launch")
-		return launchMessage?.text || ""
-	}, [messages])
-
-	const isAutoApproved = useMemo(() => {
-		const launchMessage = messages.find((m) => m.ask === "browser_action_launch" || m.say === "browser_action_launch")
-		return launchMessage?.say === "browser_action_launch"
+		return {
+			initialUrl: launchMessage?.text || "",
+			isAutoApproved: launchMessage?.say === "browser_action_launch",
+		}
 	}, [messages])
 
 	// const lastCheckpointMessageTs = useMemo(() => {

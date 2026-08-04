@@ -32,6 +32,7 @@ export function useScrollBehavior(
 	const virtuosoRef = useRef<VirtuosoHandle>(null)
 	const scrollContainerRef = useRef<HTMLDivElement>(null)
 	const disableAutoScrollRef = useRef(false)
+	const scrolledPastCheckFrameRef = useRef<number | null>(null)
 
 	// State
 	const [showScrollToBottom, setShowScrollToBottom] = useState(false)
@@ -59,13 +60,25 @@ export function useScrollBehavior(
 		// We iterate from the end to find the latest one that's above the viewport
 		let mostRecentScrolledPast: DietCodeMessage | null = null
 
+		// Build one lookup for the currently mounted virtualized rows. Repeating
+		// querySelector for every feedback message turns a scroll event into a
+		// DOM traversal per message; the list is already virtualized, so one scan
+		// of the mounted rows is both cheaper and equivalent.
+		const renderedMessageElements = new Map<string, HTMLElement>()
+		for (const element of scrollContainer.querySelectorAll<HTMLElement>("[data-message-ts]")) {
+			const timestamp = element.dataset.messageTs
+			if (timestamp) {
+				renderedMessageElements.set(timestamp, element)
+			}
+		}
+
 		// Track if we've found any visible message element in the DOM
 		// This helps us determine if missing elements are above or below viewport
 		let foundAnyVisibleElement = false
 
 		for (let i = userFeedbackMessages.length - 1; i >= 0; i--) {
 			const msg = userFeedbackMessages[i]
-			const messageElement = scrollContainer.querySelector(`[data-message-ts="${msg.ts}"]`) as HTMLElement
+			const messageElement = renderedMessageElements.get(String(msg.ts))
 
 			if (messageElement) {
 				foundAnyVisibleElement = true
@@ -115,7 +128,11 @@ export function useScrollBehavior(
 		const scrollableElement = findScrollableElement()
 
 		const handleScroll = () => {
-			checkScrolledPastUserMessage()
+			if (scrolledPastCheckFrameRef.current !== null) return
+			scrolledPastCheckFrameRef.current = requestAnimationFrame(() => {
+				scrolledPastCheckFrameRef.current = null
+				checkScrolledPastUserMessage()
+			})
 		}
 
 		scrollableElement.addEventListener("scroll", handleScroll, { passive: true })
@@ -125,6 +142,10 @@ export function useScrollBehavior(
 
 		return () => {
 			scrollableElement.removeEventListener("scroll", handleScroll)
+			if (scrolledPastCheckFrameRef.current !== null) {
+				cancelAnimationFrame(scrolledPastCheckFrameRef.current)
+				scrolledPastCheckFrameRef.current = null
+			}
 		}
 	}, [checkScrolledPastUserMessage])
 
@@ -316,22 +337,36 @@ export function useScrollBehavior(
 	}, [])
 	useEvent("wheel", handleWheel, window, { passive: true }) // passive improves scrolling performance
 
-	return {
-		virtuosoRef,
-		scrollContainerRef,
-		disableAutoScrollRef,
-		scrollToBottomSmooth,
-		scrollToBottomAuto,
-		scrollToMessage,
-		toggleRowExpansion,
-		handleRowHeightChange,
-		showScrollToBottom,
-		setShowScrollToBottom,
-		isAtBottom,
-		setIsAtBottom,
-		pendingScrollToMessage,
-		setPendingScrollToMessage,
-		scrolledPastUserMessage,
-		handleRangeChanged,
-	}
+	return useMemo(
+		() => ({
+			virtuosoRef,
+			scrollContainerRef,
+			disableAutoScrollRef,
+			scrollToBottomSmooth,
+			scrollToBottomAuto,
+			scrollToMessage,
+			toggleRowExpansion,
+			handleRowHeightChange,
+			showScrollToBottom,
+			setShowScrollToBottom,
+			isAtBottom,
+			setIsAtBottom,
+			pendingScrollToMessage,
+			setPendingScrollToMessage,
+			scrolledPastUserMessage,
+			handleRangeChanged,
+		}),
+		[
+			scrollToBottomSmooth,
+			scrollToBottomAuto,
+			scrollToMessage,
+			toggleRowExpansion,
+			handleRowHeightChange,
+			showScrollToBottom,
+			isAtBottom,
+			pendingScrollToMessage,
+			scrolledPastUserMessage,
+			handleRangeChanged,
+		],
+	)
 }

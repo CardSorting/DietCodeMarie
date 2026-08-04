@@ -36,6 +36,7 @@ term, but it belongs to exactly one primary classification here.
 | Execution header legacy `operatorMessage` and `recoveryPath` | Removed as guidance; status uses canonical projection or fixed user-facing copy. |
 | Fresh legacy lifecycle fallback | Demoted to evidence-only; it cannot emit actions or operator instructions. |
 | Audit/gate task-note panels | Hidden normally and available only under the explicit internal-diagnostics flag. |
+| High-frequency projection re-renders | `projectMessageForWebview` caches projected messages in a `WeakMap` (`projectionCache`) by immutable message reference, ensuring sub-millisecond per-frame sanitization during active streaming (see [ADR-002](architecture/adr-002-webview-state-decoupling-and-streaming-optimization.md)). |
 
 ## Boundary invariant
 

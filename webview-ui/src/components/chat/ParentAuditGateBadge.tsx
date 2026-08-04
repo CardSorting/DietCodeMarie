@@ -2,7 +2,7 @@ import { describeGateReadiness } from "@shared/audit/auditGateReadiness"
 import { getLatestAuditFromMessages } from "@shared/audit/auditMessages"
 import { ShieldAlertIcon, ShieldCheckIcon } from "lucide-react"
 import { memo, useMemo } from "react"
-import { useExtensionState } from "@/context/ExtensionStateContext"
+import { useChatMessages } from "@/context/ExtensionStateContext"
 import { useAuditGateEvaluation } from "@/hooks/useAuditGateEvaluation"
 import { cn } from "@/lib/utils"
 
@@ -13,7 +13,7 @@ const LEVEL_STYLES = {
 } as const
 
 export const ParentAuditGateBadge = memo(() => {
-	const { dietcodeMessages } = useExtensionState()
+	const dietcodeMessages = useChatMessages()
 	const metadata = useMemo(() => getLatestAuditFromMessages(dietcodeMessages), [dietcodeMessages])
 	const gateOptions = useAuditGateEvaluation(metadata)
 

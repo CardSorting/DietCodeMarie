@@ -49,7 +49,7 @@ src/extension.ts
 | `src/core/task/tools/` | Tool handlers and coordinator |
 | `src/core/task/tools/completion/` | **Completion lifecycle decision engine** — single deterministic authority for completion/finalization eligibility, with binding action contracts enforced at the tool boundary |
 | `src/core/api/` | LLM provider handlers and streaming transforms |
-| `src/core/api/transform/token-buffer-engine.ts` | **Token Ingestion Buffer Engine** — Centralized context buffering, 10-stage DSL token compression, vision eviction, and prompt cache alignment (see [ADR-001](adr-001-token-ingestion-buffer-engine.md)) |
+| `src/core/api/transform/token-buffer-engine.ts` | **Token Ingestion Buffer Engine** — Centralized context buffering, 10-stage DSL token compression, vision eviction, and prompt cache alignment (see [ADR-001](/architecture/adr-001-token-ingestion-buffer-engine)) |
 | `src/core/context/` | Context window, file tracking, user rules |
 | `src/core/prompts/` | System prompts, slash-command templates |
 | `src/core/hooks/` | Lifecycle hooks (PreToolUse, PostToolUse, etc.) |
@@ -103,7 +103,7 @@ See [All tools](../tools-reference/all-dietcode-tools.mdx) for the full list.
 
 | Layer | Mechanism | Location |
 |-------|-----------|----------|
-| Webview ↔ extension | Protobuf over webview message passing; persistent `subscribeTo*` streams use [subscription runtime](../grpc-subscription-persistence.md) | `src/core/controller/grpc-*`, `src/shared/grpc/persistent-stream.ts`, `webview-ui/src/services/grpc-subscription-runtime.ts` |
+| Webview ↔ extension | Protobuf over webview message passing; persistent `subscribeTo*` streams use [subscription runtime](../grpc-subscription-persistence.md); message updates decoupled into `ChatMessagesContext` (see [ADR-002](/architecture/adr-002-webview-state-decoupling-and-streaming-optimization)) | `src/core/controller/grpc-*`, `src/shared/grpc/persistent-stream.ts`, `webview-ui/src/services/` |
 | Extension ↔ VS Code | Host bridge gRPC client | `src/hosts/vscode/hostbridge/` |
 | Extension ↔ LLM | Provider-specific HTTP/SSE | `src/core/api/providers/` |
 | Extension ↔ MCP | MCP SDK transports | `src/services/mcp/` |

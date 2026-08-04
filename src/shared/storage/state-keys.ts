@@ -1,12 +1,6 @@
 import { AutoApprovalSettings, DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
-import {
-	ApiProvider,
-	DEFAULT_API_PROVIDER,
-	LiteLLMModelInfo,
-	ModelInfo,
-	type OcaModelInfo,
-	OpenAiCompatibleModelInfo,
-} from "@shared/api"
+import type { ApiProvider, LiteLLMModelInfo, ModelInfo, OcaModelInfo, OpenAiCompatibleModelInfo } from "@shared/api"
+import { DEFAULT_API_PROVIDER } from "@shared/api-defaults"
 import { BrowserSettings, DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
 import { DietCodeRulesToggles } from "@shared/dietcode-rules"
 import { DEFAULT_FOCUS_CHAIN_SETTINGS, FocusChainSettings } from "@shared/FocusChainSettings"

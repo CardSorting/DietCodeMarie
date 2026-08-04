@@ -57,6 +57,8 @@ Map of LUMI agent workspace documentation. BroccoliDB docs are maintained separa
 |-----|---------|
 | [PROJECT_MAP.md](PROJECT_MAP.md) | Directory map |
 | [architecture/current.md](architecture/current.md) | System architecture |
+| [architecture/adr-001-token-ingestion-buffer-engine.md](architecture/adr-001-token-ingestion-buffer-engine.md) | Token buffer engine & 10-stage DSL compression |
+| [architecture/adr-002-webview-state-decoupling-and-streaming-optimization.md](architecture/adr-002-webview-state-decoupling-and-streaming-optimization.md) | Webview state decoupling & streaming optimization |
 | [papers/philosophy.md](papers/philosophy.md) | Calm agency — design values |
 | [papers/companion-brief.md](papers/companion-brief.md) | Executive metrics |
 | [papers/whitepaper.md](papers/whitepaper.md) | Technical depth |

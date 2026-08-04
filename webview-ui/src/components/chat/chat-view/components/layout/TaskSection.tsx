@@ -4,12 +4,13 @@ import type { AuditHealthSummary } from "@shared/audit/auditRollup"
 import type { SubagentAuditSummary } from "@shared/audit/auditSubagentRollup"
 import type { ResolvedCompletionFunnelSnapshot } from "@shared/completion/completionFunnelMessages"
 import { DietCodeMessage } from "@shared/ExtensionMessage"
-import React from "react"
+import { memo } from "react"
 import TaskHeader from "@/components/chat/task-header/TaskHeader"
 import { MessageHandlers } from "../../types/chatTypes"
 
 interface TaskSectionProps {
 	task: DietCodeMessage
+	messages: DietCodeMessage[]
 	apiMetrics: {
 		totalTokensIn: number
 		totalTokensOut: number
@@ -41,49 +42,53 @@ interface TaskSectionProps {
  * Task section shown when there's an active task
  * Includes the task header and manages task-specific UI
  */
-export const TaskSection: React.FC<TaskSectionProps> = ({
-	task,
-	apiMetrics,
-	lastApiReqTotalTokens,
-	latestAuditMetadata,
-	auditTrend,
-	auditSnapshots,
-	auditHealth,
-	subagentAuditSummary,
-	checklistSummary,
-	selectedModelInfo,
-	messageHandlers,
-	lastProgressMessageText,
-	showFocusChainPlaceholder,
-	onScrollToAuditMessage,
-	onScrollToLatestGateBlock,
-	onScrollToLatestAdvisory,
-	completionFunnelSnapshot,
-}) => {
-	return (
-		<TaskHeader
-			auditHealth={auditHealth}
-			auditSnapshots={auditSnapshots}
-			auditTrend={auditTrend}
-			cacheReads={apiMetrics.totalCacheReads}
-			cacheWrites={apiMetrics.totalCacheWrites}
-			checklistSummary={checklistSummary}
-			completionFunnelSnapshot={completionFunnelSnapshot}
-			doesModelSupportPromptCache={selectedModelInfo.supportsPromptCache}
-			lastApiReqTotalTokens={lastApiReqTotalTokens}
-			lastProgressMessageText={lastProgressMessageText}
-			latestAuditMetadata={latestAuditMetadata}
-			onClose={messageHandlers.handleTaskCloseButtonClick}
-			onScrollToAuditMessage={onScrollToAuditMessage}
-			onScrollToLatestAdvisory={onScrollToLatestAdvisory}
-			onScrollToLatestGateBlock={onScrollToLatestGateBlock}
-			onSendMessage={messageHandlers.handleSendMessage}
-			showFocusChainPlaceholder={showFocusChainPlaceholder}
-			subagentAuditSummary={subagentAuditSummary}
-			task={task}
-			tokensIn={apiMetrics.totalTokensIn}
-			tokensOut={apiMetrics.totalTokensOut}
-			totalCost={apiMetrics.totalCost}
-		/>
-	)
-}
+export const TaskSection = memo<TaskSectionProps>(
+	({
+		task,
+		messages,
+		apiMetrics,
+		lastApiReqTotalTokens,
+		latestAuditMetadata,
+		auditTrend,
+		auditSnapshots,
+		auditHealth,
+		subagentAuditSummary,
+		checklistSummary,
+		selectedModelInfo,
+		messageHandlers,
+		lastProgressMessageText,
+		showFocusChainPlaceholder,
+		onScrollToAuditMessage,
+		onScrollToLatestGateBlock,
+		onScrollToLatestAdvisory,
+		completionFunnelSnapshot,
+	}) => {
+		return (
+			<TaskHeader
+				auditHealth={auditHealth}
+				auditSnapshots={auditSnapshots}
+				auditTrend={auditTrend}
+				cacheReads={apiMetrics.totalCacheReads}
+				cacheWrites={apiMetrics.totalCacheWrites}
+				checklistSummary={checklistSummary}
+				completionFunnelSnapshot={completionFunnelSnapshot}
+				doesModelSupportPromptCache={selectedModelInfo.supportsPromptCache}
+				lastApiReqTotalTokens={lastApiReqTotalTokens}
+				lastProgressMessageText={lastProgressMessageText}
+				latestAuditMetadata={latestAuditMetadata}
+				messages={messages}
+				onClose={messageHandlers.handleTaskCloseButtonClick}
+				onScrollToAuditMessage={onScrollToAuditMessage}
+				onScrollToLatestAdvisory={onScrollToLatestAdvisory}
+				onScrollToLatestGateBlock={onScrollToLatestGateBlock}
+				onSendMessage={messageHandlers.handleSendMessage}
+				showFocusChainPlaceholder={showFocusChainPlaceholder}
+				subagentAuditSummary={subagentAuditSummary}
+				task={task}
+				tokensIn={apiMetrics.totalTokensIn}
+				tokensOut={apiMetrics.totalTokensOut}
+				totalCost={apiMetrics.totalCost}
+			/>
+		)
+	},
+)

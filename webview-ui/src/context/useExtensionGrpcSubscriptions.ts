@@ -1,4 +1,3 @@
-import { findLastIndex } from "@shared/array"
 import { projectMessageForWebview, projectMessagesForWebview } from "@shared/diagnostics/webviewDiagnostics"
 import type { ExtensionState } from "@shared/ExtensionMessage"
 import { DEFAULT_STALE_AFTER_MS } from "@shared/grpc/persistent-stream"
@@ -9,20 +8,26 @@ import type { State, TerminalProfile } from "@shared/proto/dietcode/state"
 import type { DietCodeMessage } from "@shared/proto/dietcode/ui"
 import { convertProtoToDietCodeMessage } from "@shared/proto-conversions/dietcode-message"
 import { convertProtoMcpServersToMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
-import { fromProtobufModels } from "@shared/proto-conversions/models/typeConversion"
 import type { Dispatch, MutableRefObject, SetStateAction } from "react"
-import { useEffect } from "react"
+import { startTransition, useCallback, useEffect, useRef } from "react"
 import { useGrpcSubscription } from "@/hooks/useGrpcSubscription"
-import { McpServiceClient, ModelsServiceClient, StateServiceClient, UiServiceClient } from "@/services/grpc-client"
+import { StateServiceClient, UiServiceClient } from "@/services/core-grpc-client"
+import { createLazyMcpSubscription } from "@/services/mcp-grpc-loader"
+import { convertModelResponse, createLazyModelSubscription } from "@/services/model-grpc-loader"
 import type { ModelInfo } from "../../../src/shared/api"
-import { openRouterDefaultModelId, openRouterDefaultModelInfo } from "../../../src/shared/api"
+import { openRouterDefaultModelId, openRouterDefaultModelInfo } from "../../../src/shared/api-defaults"
 import type { McpMarketplaceCatalog, McpServer } from "../../../src/shared/mcp"
 
 const EMPTY_REQUEST = EmptyRequest.create({})
 const EMPTY_UI_REQUEST = {}
+const subscribeToOpenRouterModels = createLazyModelSubscription("subscribeToOpenRouterModels")
+const subscribeToLiteLlmModels = createLazyModelSubscription("subscribeToLiteLlmModels")
+const subscribeToMcpServers = createLazyMcpSubscription("subscribeToMcpServers")
+const subscribeToMcpMarketplaceCatalog = createLazyMcpSubscription("subscribeToMcpMarketplaceCatalog")
 
 export interface ExtensionGrpcSubscriptionsParams {
 	setState: Dispatch<SetStateAction<ExtensionState>>
+	setDietcodeMessages: Dispatch<SetStateAction<ExtensionState["dietcodeMessages"]>>
 	setDidHydrateState: (value: boolean) => void
 	setShowWelcome: (value: boolean) => void
 	setMcpServers: (value: McpServer[]) => void
@@ -30,6 +35,7 @@ export interface ExtensionGrpcSubscriptionsParams {
 	setOpenRouterModels: (value: Record<string, ModelInfo>) => void
 	setLiteLlmModels: (value: Record<string, ModelInfo>) => void
 	setAvailableTerminalProfiles: (value: TerminalProfile[]) => void
+	isStateHydrated: boolean
 	relinquishControlCallbacks: MutableRefObject<Set<() => void>>
 	navigateToMcp: () => void
 	navigateToHistory: () => void
@@ -42,6 +48,7 @@ export interface ExtensionGrpcSubscriptionsParams {
 export function useExtensionGrpcSubscriptions(params: ExtensionGrpcSubscriptionsParams): void {
 	const {
 		setState,
+		setDietcodeMessages,
 		setDidHydrateState,
 		setShowWelcome,
 		setMcpServers,
@@ -49,6 +56,7 @@ export function useExtensionGrpcSubscriptions(params: ExtensionGrpcSubscriptions
 		setOpenRouterModels,
 		setLiteLlmModels,
 		setAvailableTerminalProfiles,
+		isStateHydrated,
 		relinquishControlCallbacks,
 		navigateToMcp,
 		navigateToHistory,
@@ -57,6 +65,86 @@ export function useExtensionGrpcSubscriptions(params: ExtensionGrpcSubscriptions
 		navigateToWorktrees,
 	} = params
 
+	const currentTaskIdRef = useRef<string | undefined>(undefined)
+	const showInternalDiagnosticsRef = useRef(false)
+	const pendingPartialMessagesRef = useRef(new Map<number, ExtensionState["dietcodeMessages"][number]>())
+	const cancelPartialFlushRef = useRef<(() => void) | null>(null)
+	const messageIndexCacheRef = useRef<{
+		messages: ExtensionState["dietcodeMessages"]
+		indexByTimestamp: Map<number, number>
+	} | null>(null)
+
+	// Partial messages can arrive much faster than the browser can paint. Keep
+	// only the newest update for each message and commit the batch once per frame
+	// so a fast stream cannot create an unbounded render queue.
+	const flushPendingPartialMessages = useCallback(() => {
+		cancelPartialFlushRef.current = null
+		const pendingMessages = Array.from(pendingPartialMessagesRef.current.values())
+		pendingPartialMessagesRef.current.clear()
+		if (pendingMessages.length === 0) return
+
+		startTransition(() => {
+			setDietcodeMessages((previousMessages) => {
+				let messageIndexByTimestamp = messageIndexCacheRef.current?.indexByTimestamp
+				if (messageIndexCacheRef.current?.messages !== previousMessages || !messageIndexByTimestamp) {
+					messageIndexByTimestamp = new Map<number, number>()
+					for (let index = 0; index < previousMessages.length; index++) {
+						// Assigning in forward order preserves findLastIndex semantics if
+						// legacy state ever contains duplicate timestamps.
+						messageIndexByTimestamp.set(previousMessages[index].ts, index)
+					}
+					messageIndexCacheRef.current = { messages: previousMessages, indexByTimestamp: messageIndexByTimestamp }
+				}
+
+				let nextMessages = previousMessages
+				for (const incomingPartialMessage of pendingMessages) {
+					const partialMessage = projectMessageForWebview(incomingPartialMessage, {
+						showInternalDiagnostics: showInternalDiagnosticsRef.current,
+					})
+					const lastIndex = messageIndexByTimestamp.get(partialMessage.ts)
+					if (lastIndex === undefined) continue
+					if (nextMessages === previousMessages) {
+						nextMessages = [...previousMessages]
+					}
+					nextMessages[lastIndex] = partialMessage
+				}
+				if (nextMessages !== previousMessages) {
+					// Partial updates replace existing rows in place, so the timestamp
+					// index remains valid for the new immutable array identity.
+					messageIndexCacheRef.current = { messages: nextMessages, indexByTimestamp: messageIndexByTimestamp }
+				}
+				return nextMessages
+			})
+		})
+	}, [setDietcodeMessages])
+
+	const schedulePartialFlush = useCallback(() => {
+		if (cancelPartialFlushRef.current) return
+
+		if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+			const frameId = window.requestAnimationFrame(() => {
+				cancelPartialFlushRef.current = null
+				flushPendingPartialMessages()
+			})
+			cancelPartialFlushRef.current = () => window.cancelAnimationFrame(frameId)
+			return
+		}
+
+		const timeoutId = setTimeout(() => {
+			cancelPartialFlushRef.current = null
+			flushPendingPartialMessages()
+		}, 16)
+		cancelPartialFlushRef.current = () => clearTimeout(timeoutId)
+	}, [flushPendingPartialMessages])
+
+	useEffect(() => {
+		return () => {
+			cancelPartialFlushRef.current?.()
+			cancelPartialFlushRef.current = null
+			pendingPartialMessagesRef.current.clear()
+		}
+	}, [])
+
 	useGrpcSubscription<typeof EMPTY_REQUEST, State>({
 		key: "state",
 		debugLabel: "Extension State",
@@ -64,33 +152,47 @@ export function useExtensionGrpcSubscriptions(params: ExtensionGrpcSubscriptions
 		request: EMPTY_REQUEST,
 		staleAfterMs: DEFAULT_STALE_AFTER_MS,
 		onMessage: (response) => {
-			if (!response.stateJson) return
+			if (!response.stateJson) {
+				setDidHydrateState(true)
+				return
+			}
 			try {
 				const stateData = JSON.parse(response.stateJson) as ExtensionState
+				showInternalDiagnosticsRef.current = stateData.showInternalDiagnostics === true
 				stateData.dietcodeMessages = projectMessagesForWebview(stateData.dietcodeMessages ?? [], {
-					showInternalDiagnostics: stateData.showInternalDiagnostics === true,
+					showInternalDiagnostics: showInternalDiagnosticsRef.current,
 				})
+				const incomingTaskId = stateData.currentTaskItem?.id
+				const taskChanged = incomingTaskId !== currentTaskIdRef.current
+				currentTaskIdRef.current = incomingTaskId
+				if (stateData.dietcodeMessages.length > 0 || taskChanged) {
+					setDietcodeMessages(stateData.dietcodeMessages)
+				}
 				setState((prevState) => {
 					const incomingVersion = stateData.autoApprovalSettings?.version ?? 1
 					const currentVersion = prevState.autoApprovalSettings?.version ?? 1
 					const shouldUpdateAutoApproval = incomingVersion > currentVersion
-					if (stateData.currentTaskItem?.id === prevState.currentTaskItem?.id) {
-						stateData.dietcodeMessages = stateData.dietcodeMessages?.length
-							? stateData.dietcodeMessages
-							: prevState.dietcodeMessages
-					}
-					setShowWelcome(false)
-					setDidHydrateState(true)
 					return {
 						...stateData,
+						// The live message list is intentionally stored on its own
+						// context; keep this compatibility field stable so the global
+						// context does not broadcast on every partial.
+						dietcodeMessages: prevState.dietcodeMessages,
 						autoApprovalSettings: shouldUpdateAutoApproval
 							? stateData.autoApprovalSettings
 							: prevState.autoApprovalSettings,
 					}
 				})
+				setShowWelcome(false)
+				setDidHydrateState(true)
 			} catch (error) {
 				console.error("Error parsing state JSON:", error)
+				setDidHydrateState(true)
 			}
+		},
+		onError: (error) => {
+			console.error("State subscription failed; rendering the fallback shell:", error)
+			setDidHydrateState(true)
 		},
 	})
 
@@ -103,16 +205,8 @@ export function useExtensionGrpcSubscriptions(params: ExtensionGrpcSubscriptions
 			try {
 				if (!protoMessage.ts || protoMessage.ts <= 0) return
 				const incomingPartialMessage = convertProtoToDietCodeMessage(protoMessage)
-				setState((prevState) => {
-					const partialMessage = projectMessageForWebview(incomingPartialMessage, {
-						showInternalDiagnostics: prevState.showInternalDiagnostics === true,
-					})
-					const lastIndex = findLastIndex(prevState.dietcodeMessages, (msg) => msg.ts === partialMessage.ts)
-					if (lastIndex === -1) return prevState
-					const newDietCodeMessages = [...prevState.dietcodeMessages]
-					newDietCodeMessages[lastIndex] = partialMessage
-					return { ...prevState, dietcodeMessages: newDietCodeMessages }
-				})
+				pendingPartialMessagesRef.current.set(incomingPartialMessage.ts, incomingPartialMessage)
+				schedulePartialFlush()
 			} catch (error) {
 				console.error("Failed to process partial message:", error, protoMessage)
 			}
@@ -122,9 +216,10 @@ export function useExtensionGrpcSubscriptions(params: ExtensionGrpcSubscriptions
 	useGrpcSubscription<typeof EMPTY_REQUEST, McpServers>({
 		key: "mcpServers",
 		debugLabel: "MCP Servers",
-		subscribe: McpServiceClient.subscribeToMcpServers.bind(McpServiceClient),
+		subscribe: subscribeToMcpServers,
 		request: EMPTY_REQUEST,
 		staleAfterMs: DEFAULT_STALE_AFTER_MS,
+		enabled: isStateHydrated,
 		onMessage: (response) => {
 			if (response.mcpServers) {
 				setMcpServers(convertProtoMcpServersToMcpServers(response.mcpServers))
@@ -135,33 +230,44 @@ export function useExtensionGrpcSubscriptions(params: ExtensionGrpcSubscriptions
 	useGrpcSubscription<typeof EMPTY_REQUEST, ProtoMcpMarketplaceCatalog>({
 		key: "mcpMarketplaceCatalog",
 		debugLabel: "MCP Marketplace",
-		subscribe: McpServiceClient.subscribeToMcpMarketplaceCatalog.bind(McpServiceClient),
+		subscribe: subscribeToMcpMarketplaceCatalog,
 		request: EMPTY_REQUEST,
 		staleAfterMs: DEFAULT_STALE_AFTER_MS,
+		enabled: isStateHydrated,
 		onMessage: (catalog) => setMcpMarketplaceCatalog(catalog),
 	})
 
 	useGrpcSubscription<typeof EMPTY_REQUEST, OpenRouterCompatibleModelInfo>({
 		key: "openRouterModels",
 		debugLabel: "OpenRouter Models",
-		subscribe: ModelsServiceClient.subscribeToOpenRouterModels.bind(ModelsServiceClient),
+		subscribe: subscribeToOpenRouterModels,
 		request: EMPTY_REQUEST,
 		staleAfterMs: DEFAULT_STALE_AFTER_MS,
+		enabled: isStateHydrated,
 		onMessage: (response) => {
-			setOpenRouterModels({
-				[openRouterDefaultModelId]: openRouterDefaultModelInfo,
-				...fromProtobufModels(response.models),
-			})
+			void convertModelResponse(response)
+				.then((models) =>
+					setOpenRouterModels({
+						[openRouterDefaultModelId]: openRouterDefaultModelInfo,
+						...models,
+					}),
+				)
+				.catch((error) => console.error("Failed to convert OpenRouter models:", error))
 		},
 	})
 
 	useGrpcSubscription<typeof EMPTY_REQUEST, OpenRouterCompatibleModelInfo>({
 		key: "liteLlmModels",
 		debugLabel: "LiteLLM Models",
-		subscribe: ModelsServiceClient.subscribeToLiteLlmModels.bind(ModelsServiceClient),
+		subscribe: subscribeToLiteLlmModels,
 		request: EMPTY_REQUEST,
 		staleAfterMs: DEFAULT_STALE_AFTER_MS,
-		onMessage: (response) => setLiteLlmModels(fromProtobufModels(response.models)),
+		enabled: isStateHydrated,
+		onMessage: (response) => {
+			void convertModelResponse(response)
+				.then(setLiteLlmModels)
+				.catch((error) => console.error("Failed to convert LiteLLM models:", error))
+		},
 	})
 
 	useGrpcSubscription({
@@ -222,8 +328,13 @@ export function useExtensionGrpcSubscriptions(params: ExtensionGrpcSubscriptions
 		UiServiceClient.initializeWebview(EMPTY_REQUEST).catch((error) => {
 			console.error("Failed to initialize webview via gRPC:", error)
 		})
+	}, [])
+
+	useEffect(() => {
+		if (!isStateHydrated) return
+
 		StateServiceClient.getAvailableTerminalProfiles(EMPTY_REQUEST)
 			.then((response) => setAvailableTerminalProfiles(response.profiles))
 			.catch((error) => console.error("Failed to fetch available terminal profiles:", error))
-	}, [setAvailableTerminalProfiles])
+	}, [isStateHydrated, setAvailableTerminalProfiles])
 }

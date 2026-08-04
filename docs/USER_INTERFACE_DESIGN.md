@@ -265,6 +265,7 @@ The MIRA UX work landed in ten focused passes:
 | **9** | Workshop atmosphere — vertical audit reading surface, JoyZoning reflection, serenity levels |
 | **10** | Language de-infrastructuring — archival export labels, reading reveal animation, softened risk metrics |
 | **11** | Glassbox MoD Council Inspector — 5-stage visual stepper, live specialist persona lenses, locked decision drawer (`🔒`), mutation checklist (`⚡`), 8-gate audit matrix (`🛡️`), and complete removal of generic spinners |
+| **12** | Streaming UI Ergonomics & Decoupled State — Dedicated `ChatMessagesContext`, modular `chat-view/` component hierarchy (`MessagesArea`, `TaskSection`, `ChatFooter`), and WeakMap projection caching for 60 FPS streaming responsiveness during intense agent swarms (see [ADR-002](architecture/adr-002-webview-state-decoupling-and-streaming-optimization.md)) |
 
 ---
 

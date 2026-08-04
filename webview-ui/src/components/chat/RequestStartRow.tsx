@@ -1,10 +1,9 @@
 import type { DietCodeMessage, DietCodeSayTool } from "@shared/ExtensionMessage"
 import type { LucideIcon } from "lucide-react"
 import type React from "react"
-import { useMemo } from "react"
+import { createContext, useContext } from "react"
 import { cleanPathPrefix } from "../common/CodeAccordian"
-import { getIconByToolName } from "./chat-view"
-import { isApiReqAbsorbable, isLowStakesTool } from "./chat-view/utils/messageUtils"
+import { getApiRequestTextInfo, getIconByToolName, isLowStakesTool } from "./chat-view/utils/messageUtils"
 import ErrorRow from "./ErrorRow"
 import { ThinkingRow } from "./ThinkingRow"
 import { TypewriterText } from "./TypewriterText"
@@ -15,8 +14,6 @@ interface RequestStartRowProps {
 	apiReqStreamingFailedMessage?: string
 	cost?: number
 	reasoningContent?: string
-	responseStarted?: boolean
-	dietcodeMessages: DietCodeMessage[]
 	classNames?: string
 	isExpanded: boolean
 	handleToggle: () => void
@@ -24,6 +21,23 @@ interface RequestStartRowProps {
 
 // State type for api_req_started rendering
 type ApiReqState = "pre" | "thinking" | "error" | "final"
+
+export interface RequestStartRuntimeState {
+	currentActivities: { icon: LucideIcon; text: string }[]
+	hasCompletedTools: boolean
+}
+
+const EMPTY_REQUEST_START_RUNTIME_STATE: RequestStartRuntimeState = {
+	currentActivities: [],
+	hasCompletedTools: false,
+}
+
+const RequestStartRuntimeContext = createContext<RequestStartRuntimeState>(EMPTY_REQUEST_START_RUNTIME_STATE)
+
+export const RequestStartRuntimeProvider: React.FC<{
+	value: RequestStartRuntimeState
+	children: React.ReactNode
+}> = ({ value, children }) => <RequestStartRuntimeContext.Provider value={value}>{children}</RequestStartRuntimeContext.Provider>
 
 // Helper to format search regex for display - show all terms separated by |
 const formatSearchRegex = (regex: string, path: string, filePattern?: string): string => {
@@ -94,33 +108,38 @@ const findCurrentApiReq = (messages: DietCodeMessage[]): { index: number; hasCos
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const msg = messages[i]
 		if (msg.say === "api_req_started" && msg.text) {
-			try {
-				const info = JSON.parse(msg.text)
-				return { index: i, hasCost: info.cost != null }
-			} catch {
+			const info = getApiRequestTextInfo(msg)
+			if (!info.parsed) {
 				return null
 			}
+			return { index: i, hasCost: info.hasCost }
 		}
 	}
 	return null
 }
 
-// Find the most recent completed api_req before the given index
-const _findPrevCompletedApiReq = (messages: DietCodeMessage[], beforeIdx: number): number => {
-	for (let i = beforeIdx - 1; i >= 0; i--) {
-		const msg = messages[i]
-		if (msg.say === "api_req_started" && msg.text) {
-			try {
-				const info = JSON.parse(msg.text)
-				if (info.cost != null) {
-					return i
-				}
-			} catch {
-				// ignore parse errors
-			}
+/** Derive shared in-flight tool state once for all visible request rows. */
+export const buildRequestStartRuntimeState = (messages: DietCodeMessage[]): RequestStartRuntimeState => {
+	const currentApiReq = findCurrentApiReq(messages)
+	const currentActivities =
+		currentApiReq && !currentApiReq.hasCost ? collectToolsInRange(messages, currentApiReq.index + 1, messages.length) : []
+
+	// Track the latest API request status while walking forward. This is the
+	// same predecessor lookup used by the old per-row scan, but shared once.
+	let latestApiReqHasCost: boolean | undefined
+	let hasCompletedTools = false
+	for (const message of messages) {
+		if (message.say === "api_req_started" && message.text) {
+			const info = getApiRequestTextInfo(message)
+			latestApiReqHasCost = info.parsed && info.hasCost
+		}
+		if (latestApiReqHasCost && message.say === "tool" && isLowStakesTool(message)) {
+			hasCompletedTools = true
+			break
 		}
 	}
-	return -1
+
+	return { currentActivities, hasCompletedTools }
 }
 
 /**
@@ -131,71 +150,17 @@ export const RequestStartRow: React.FC<RequestStartRowProps> = ({
 	apiReqStreamingFailedMessage,
 	cost,
 	reasoningContent,
-	responseStarted,
-	dietcodeMessages,
 	handleToggle,
 	isExpanded,
 	message,
 }) => {
+	const { currentActivities, hasCompletedTools } = useContext(RequestStartRuntimeContext)
 	// Derive explicit state
 	const hasError = !!(apiRequestFailedMessage || apiReqStreamingFailedMessage)
 	const hasCost = cost != null
 	const hasReasoning = !!reasoningContent
 
 	const apiReqState: ApiReqState = hasError ? "error" : hasCost ? "final" : hasReasoning ? "thinking" : "pre"
-
-	// While reasoning is streaming, keep the Brain ThinkingBlock exactly as-is.
-	// Once response content starts (any text/tool/command), collapse into a compact
-	// "🧠 Thinking" row that can be expanded to show the reasoning only.
-	const _showStreamingThinking = useMemo(
-		() => hasReasoning && !hasError && !cost && !responseStarted,
-		[hasReasoning, hasError, cost, responseStarted],
-	)
-
-	// Check if this api_req will be absorbed into a tool group (reasoning will disappear)
-	const _willBeAbsorbed = useMemo(() => {
-		return isApiReqAbsorbable(message.ts, dietcodeMessages)
-	}, [message.ts, dietcodeMessages])
-
-	// Find all exploratory tool activities that are currently in flight.
-	// Tools come AFTER the api_req_started message, so we look from currentApiReq forward.
-	const currentActivities = useMemo(() => {
-		const currentApiReq = findCurrentApiReq(dietcodeMessages)
-		if (!currentApiReq) {
-			return []
-		}
-
-		if (!currentApiReq.hasCost) {
-			// CASE A: Current api_req is INCOMPLETE
-			// Look for ask === "tool" messages AFTER the current api_req_started
-			return collectToolsInRange(dietcodeMessages, currentApiReq.index + 1, dietcodeMessages.length)
-		}
-		// CASE B: Current api_req is COMPLETE - no activities to show
-		return []
-	}, [dietcodeMessages])
-
-	// Check if there are any completed tools in the tool group
-	const hasCompletedTools = useMemo(() => {
-		// Look for any completed low-stakes tool messages that would be in a tool group
-		return dietcodeMessages.some((msg, idx) => {
-			if (msg.say === "tool" && isLowStakesTool(msg)) {
-				// Check if this tool is from a completed API request
-				// (looking backwards for an api_req with cost)
-				for (let i = idx - 1; i >= 0; i--) {
-					const prevMsg = dietcodeMessages[i]
-					if (prevMsg.say === "api_req_started" && prevMsg.text) {
-						try {
-							const info = JSON.parse(prevMsg.text)
-							return info.cost != null
-						} catch {
-							return false
-						}
-					}
-				}
-			}
-			return false
-		})
-	}, [dietcodeMessages])
 
 	// Only show currentActivities if there are NO completed tools
 	// (otherwise they'll be shown in the unified ToolGroupRenderer list)

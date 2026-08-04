@@ -834,6 +834,15 @@ Cheatsheet: [governed-roadmap-projection-quickref.md](governed-roadmap-projectio
 
 ---
 
+## Swarm Telemetry & Webview Render Decoupling
+
+When governed swarms execute multiple parallel lanes emitting high-frequency progress updates, subagent telemetry, and tool receipts:
+
+1. **Decoupled Context Provider (`ChatMessagesContext`)**: High-volume streaming updates push directly to `ChatMessagesContext`, bypassing global extension configuration state (`ExtensionStateContext`) to prevent re-render cascades across non-chat UI panels (see [ADR-002](architecture/adr-002-webview-state-decoupling-and-streaming-optimization.md)).
+2. **$O(1)$ WeakMap Telemetry Caching**: Swarm receipt panels and status rows consume `projectMessageForWebview()` with `projectionCache` and `apiUsageCache` WeakMap lookups. Historical message sanitization and JSON parsing are bypassed on every streaming frame, ensuring smooth 60 FPS UI rendering even under 5-lane parallel swarm execution.
+
+---
+
 ## Related
 
 - [Quick reference](governed-roadmap-projection-quickref.md) — tags, invariants, operator legend

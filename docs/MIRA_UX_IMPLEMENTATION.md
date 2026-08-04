@@ -18,8 +18,9 @@ This guide documents **where and how** the MIRA emotional UX system is implement
 | Session comfort hook | `webview-ui/src/hooks/useMiraSessionComfort.ts` |
 | Ambient orb | `webview-ui/src/components/common/MiraAmbientOrb.tsx` |
 | Progress indicator | `webview-ui/src/components/common/MiraProgressIndicator.tsx` |
-| Chat mood wiring | `webview-ui/src/components/chat/ChatView.tsx` |
-| Chat layout + serenity attrs | `webview-ui/src/components/chat/chat-view/components/layout/ChatLayout.tsx` |
+| Chat mood & state wiring | `webview-ui/src/components/chat/chat-view/` (`ChatView.tsx`, `useChatState.ts`, `useMessageHandlers.ts`) |
+| Decoupled message state | `webview-ui/src/context/ExtensionStateContext.tsx` (`ChatMessagesContext`, `useChatMessages`) |
+| Chat layout + serenity attrs | `webview-ui/src/components/chat/chat-view/components/layout/MessagesArea.tsx` |
 | Silent completions | `webview-ui/src/components/chat/CompletionOutputRow.tsx` |
 | Tool narration | `webview-ui/src/components/chat/ChatRow.tsx` |
 | Error recovery copy | `webview-ui/src/components/chat/ErrorRow.tsx` |

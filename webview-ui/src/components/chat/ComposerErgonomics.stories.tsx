@@ -3,8 +3,8 @@ import { type ApiConfiguration, bedrockModels } from "@shared/api"
 import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import type { HistoryItem } from "@shared/HistoryItem"
 import type { Meta, StoryObj } from "@storybook/react-vite"
-import { useMemo } from "react"
-import { ExtensionStateContext, useExtensionState } from "@/context/ExtensionStateContext"
+import { type ComponentProps, type ReactNode, useMemo } from "react"
+import { ChatMessagesContext, ExtensionStateContext, useExtensionState } from "@/context/ExtensionStateContext"
 import ChatView from "./ChatView"
 
 // Component that mimics App behavior in Storybook with a density container
@@ -16,7 +16,14 @@ const DensityMockApp = () => {
 	)
 }
 
-const ExtensionStateProviderMock = ExtensionStateContext.Provider
+const ExtensionStateProviderMock = ({
+	value,
+	children,
+}: ComponentProps<typeof ExtensionStateContext.Provider> & { children: ReactNode }) => (
+	<ExtensionStateContext.Provider value={value}>
+		<ChatMessagesContext.Provider value={value?.dietcodeMessages ?? []}>{children}</ChatMessagesContext.Provider>
+	</ExtensionStateContext.Provider>
+)
 
 const meta: Meta<typeof DensityMockApp> = {
 	title: "Views/ComposerErgonomics",

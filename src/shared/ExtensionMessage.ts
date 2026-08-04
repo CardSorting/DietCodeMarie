@@ -4,7 +4,7 @@ import { WorkspaceRoot } from "@shared/multi-root/types"
 import { RemoteConfigFields } from "@shared/storage/state-keys"
 import type { Environment } from "../config"
 import { AutoApprovalSettings } from "./AutoApprovalSettings"
-import { ApiConfiguration } from "./api"
+import type { ApiConfiguration } from "./api"
 import type { TaskAuditMetadata } from "./audit/types"
 import { BrowserSettings } from "./BrowserSettings"
 import type { CompletionFunnelEvent } from "./completion/completionFunnelEvent"
@@ -41,7 +41,7 @@ export type GrpcResponse = {
 
 export type Platform = "aix" | "darwin" | "freebsd" | "linux" | "openbsd" | "sunos" | "win32" | "unknown"
 
-export const DEFAULT_PLATFORM = "unknown"
+export { DEFAULT_PLATFORM } from "./platform-default"
 
 export const COMMAND_CANCEL_TOKEN = "__dietcode_command_cancel__"
 export interface ExtensionState {

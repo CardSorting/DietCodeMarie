@@ -8,11 +8,10 @@ import { StringArrayRequest } from "@shared/proto/dietcode/common"
 import React, { useCallback, useMemo, useState } from "react"
 import Thumbnails from "@/components/common/Thumbnails"
 import { getModeSpecificFields, normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
-import { useIsCompact, useIsUltraCompact } from "@/context/DensityContext"
+import { useIsCompact } from "@/context/DensityContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
 import { TaskServiceClient } from "@/services/grpc-client"
-import { getEnvironmentColor } from "@/utils/environmentColors"
 import { ExecutionStatusHeader } from "../execution-status/ExecutionStatusHeader"
 import { deriveExecutionStatus } from "../execution-status/executionStatus"
 import OpenDiskConversationHistoryButton from "./buttons/OpenDiskConversationHistoryButton"
@@ -24,6 +23,7 @@ import { TaskNotesSection } from "./TaskNotesSection"
 const IS_DEV = process.env.IS_DEV === '"true"'
 interface TaskHeaderProps {
 	task: DietCodeMessage
+	messages: DietCodeMessage[]
 	tokensIn: number
 	tokensOut: number
 	doesModelSupportPromptCache: boolean
@@ -51,6 +51,7 @@ const BUTTON_CLASS = "max-h-3 border-0 font-bold bg-transparent hover:opacity-10
 
 const TaskHeader: React.FC<TaskHeaderProps> = ({
 	task,
+	messages,
 	tokensIn,
 	tokensOut,
 	cacheWrites,
@@ -81,8 +82,6 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		mode,
 		expandTaskHeader: isTaskExpanded,
 		setExpandTaskHeader,
-		environment,
-		dietcodeMessages,
 		taskLifecycleEvent,
 	} = useExtensionState()
 
@@ -92,9 +91,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		navigateToSettings("features")
 	}, [navigateToSettings])
 
-	const environmentBorderColor = getEnvironmentColor(environment, "border")
 	const isCompact = useIsCompact()
-	const isUltraCompact = useIsUltraCompact()
 
 	// Simplified computed values
 	const { selectedModelInfo } = normalizeApiConfiguration(apiConfiguration, mode)
@@ -103,21 +100,14 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	const status = useMemo(
 		() =>
 			deriveExecutionStatus({
-				messages: dietcodeMessages,
+				messages,
 				auditMetadata: latestAuditMetadata,
 				auditHealth,
 				completionFunnel: completionFunnelSnapshot,
 				lifecycleEvent: taskLifecycleEvent,
 				checkpointError: checkpointManagerErrorMessage,
 			}),
-		[
-			dietcodeMessages,
-			latestAuditMetadata,
-			auditHealth,
-			completionFunnelSnapshot,
-			taskLifecycleEvent,
-			checkpointManagerErrorMessage,
-		],
+		[messages, latestAuditMetadata, auditHealth, completionFunnelSnapshot, taskLifecycleEvent, checkpointManagerErrorMessage],
 	)
 
 	const isCostAvailable = Boolean(totalCost) && modeFields.apiProvider !== "openai-codex" // Subscription-based, no per-token costs
@@ -144,7 +134,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 				completionFunnel={completionFunnelSnapshot}
 				isDetailsOpen={isTaskExpanded}
 				lifecycleEvent={taskLifecycleEvent}
-				messages={dietcodeMessages}
+				messages={messages}
 				onReviewBlock={onScrollToLatestGateBlock}
 				onToggleDetails={() => setExpandTaskHeader(!isTaskExpanded)}>
 				{isTaskExpanded && (

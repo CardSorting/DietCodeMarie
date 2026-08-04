@@ -5,7 +5,7 @@ import deepEqual from "fast-deep-equal"
 import type React from "react"
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
 import { useGrpcSubscription } from "@/hooks/useGrpcSubscription"
-import { AccountServiceClient } from "@/services/grpc-client"
+import { AccountServiceClient } from "@/services/account-grpc-client"
 
 const EMPTY_REQUEST = EmptyRequest.create({})
 

@@ -37,6 +37,9 @@ if (!VALID_PLATFORMS.includes(platform)) {
 console.log("Building webview for", platform)
 
 export default defineConfig({
+	// VS Code webviews resolve resources from an origin-specific URI. Relative
+	// paths keep lazily loaded route chunks valid in that environment.
+	base: "./",
 	plugins: [react(), tailwindcss(), writePortToFile()],
 	test: {
 		environment: "jsdom",
@@ -86,9 +89,8 @@ export default defineConfig({
 		sourcemap: isDevBuild ? "inline" : false,
 		rollupOptions: {
 			output: {
-				inlineDynamicImports: true,
 				entryFileNames: `assets/[name].js`,
-				chunkFileNames: `assets/[name].js`,
+				chunkFileNames: `assets/[name]-[hash].js`,
 				assetFileNames: `assets/[name].[ext]`,
 				// Disable compact output for dev build
 				compact: !isDevBuild,

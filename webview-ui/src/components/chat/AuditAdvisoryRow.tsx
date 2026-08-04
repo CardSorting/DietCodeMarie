@@ -6,7 +6,7 @@ import { formatViolationLabel, HARDENING_GRADE_STYLES, type HardeningGrade } fro
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { AlertTriangleIcon } from "lucide-react"
 import { memo, useMemo, useState } from "react"
-import { useExtensionState } from "@/context/ExtensionStateContext"
+import { useChatMessages } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
 import { AuditReportPanel } from "./AuditReportPanel"
 import { auditSideAccent, auditStrip } from "./audit/auditUiStyles"
@@ -21,7 +21,7 @@ interface AuditAdvisoryRowProps {
 /** SonarQube-style act-mode advisory annotation — surfaces progress audit findings in chat. */
 export const AuditAdvisoryRow = memo(({ text, auditMetadata, messageTs }: AuditAdvisoryRowProps) => {
 	const [expanded, setExpanded] = useState(false)
-	const { dietcodeMessages } = useExtensionState()
+	const dietcodeMessages = useChatMessages()
 	const newViolations = useMemo(() => {
 		if (!messageTs) {
 			return []

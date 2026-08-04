@@ -1,24 +1,28 @@
 import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import type React from "react"
-import { useMemo } from "react"
+import { memo } from "react"
 import BrowserSessionRow from "@/components/chat/BrowserSessionRow"
 import ChatRow from "@/components/chat/ChatRow"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
 import type { ChatState, MessageHandlers } from "../../types/chatTypes"
-import { findReasoningForApiReq, isTextMessagePendingToolCall, isToolGroup } from "../../utils/messageUtils"
+import { buildPendingToolCallByTextTimestamp, buildReasoningByApiReqTimestamp, isToolGroup } from "../../utils/messageUtils"
 import { ActionButtons } from "../layout/ActionButtons"
 import { ToolGroupRenderer } from "./ToolGroupRenderer"
 
 interface MessageRendererProps {
-	index: number
 	messageOrGroup: DietCodeMessage | DietCodeMessage[]
-	groupedMessages: (DietCodeMessage | DietCodeMessage[])[]
 	modifiedMessages: DietCodeMessage[]
+	isLastMessage: boolean
+	isLastToolGroup: boolean
+	lastModifiedMessage?: DietCodeMessage
+	reasoningContent?: string
+	isRequestInProgress: boolean
 	expandedRows: Record<number, boolean>
 	onToggleExpand: (ts: number) => void
 	onHeightChange: (isTaller: boolean) => void
 	onPendingQuoteChange: (quote: string | null) => void
+	onCancelCommand: () => void
 	inputValue: string
 	messageHandlers: MessageHandlers
 	footerActive: boolean
@@ -30,15 +34,19 @@ interface MessageRendererProps {
  * Specialized component for rendering different message types
  * Handles browser sessions, regular messages, and checkpoint logic
  */
-export const MessageRenderer: React.FC<MessageRendererProps> = ({
-	index,
+const MessageRendererContent: React.FC<MessageRendererProps> = ({
 	messageOrGroup,
-	groupedMessages,
 	modifiedMessages,
+	isLastMessage,
+	isLastToolGroup,
+	lastModifiedMessage,
+	reasoningContent,
+	isRequestInProgress,
 	expandedRows,
 	onToggleExpand,
 	onHeightChange,
 	onPendingQuoteChange,
+	onCancelCommand,
 	inputValue,
 	messageHandlers,
 	footerActive,
@@ -46,41 +54,6 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 	task,
 }) => {
 	const { mode } = useExtensionState()
-
-	const isLastMessage = useMemo(() => index === groupedMessages?.length - 1, [groupedMessages, index])
-
-	// Get reasoning content and response status for api_req_started messages
-	const reasoningData = useMemo(() => {
-		if (!Array.isArray(messageOrGroup) && messageOrGroup.say === "api_req_started") {
-			// Use the same message source-of-truth that `groupedMessages` is derived from.
-			return findReasoningForApiReq(messageOrGroup.ts, modifiedMessages)
-		}
-		return { reasoning: undefined, responseStarted: false }
-	}, [messageOrGroup, modifiedMessages])
-
-	// Check if a text message is waiting for tool call completion
-	const isRequestInProgress = useMemo(() => {
-		if (!Array.isArray(messageOrGroup) && messageOrGroup.say === "text") {
-			// Use modifiedMessages so this stays consistent with the rendered list.
-			return isTextMessagePendingToolCall(messageOrGroup.ts, modifiedMessages)
-		}
-		return false
-	}, [messageOrGroup, modifiedMessages])
-
-	// Tool group (low-stakes tools grouped together)
-	// Determine if this is the last tool group to show active items
-	const isLastToolGroup = useMemo(() => {
-		if (!isToolGroup(messageOrGroup)) {
-			return false
-		}
-		// Find the last tool group in groupedMessages
-		for (let i = groupedMessages.length - 1; i >= 0; i--) {
-			if (isToolGroup(groupedMessages[i])) {
-				return i === index
-			}
-		}
-		return false
-	}, [messageOrGroup, groupedMessages, index])
 
 	const content = (() => {
 		if (isToolGroup(messageOrGroup)) {
@@ -94,7 +67,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 					expandedRows={expandedRows}
 					isLast={isLastMessage}
 					key={messageOrGroup[0]?.ts}
-					lastModifiedMessage={modifiedMessages.at(-1)}
+					lastModifiedMessage={lastModifiedMessage}
 					messages={messageOrGroup}
 					onHeightChange={onHeightChange}
 					onPendingQuoteChange={onPendingQuoteChange}
@@ -111,15 +84,14 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 				isLast={isLastMessage}
 				isRequestInProgress={isRequestInProgress}
 				key={messageOrGroup.ts}
-				lastModifiedMessage={modifiedMessages.at(-1)}
+				lastModifiedMessage={lastModifiedMessage}
 				message={messageOrGroup}
 				mode={mode}
-				onCancelCommand={() => messageHandlers.executeButtonAction("cancel")}
+				onCancelCommand={onCancelCommand}
 				onHeightChange={onHeightChange}
 				onPendingQuoteChange={onPendingQuoteChange}
 				onToggleExpand={onToggleExpand}
-				reasoningContent={reasoningData.reasoning}
-				responseStarted={reasoningData.responseStarted}
+				reasoningContent={reasoningContent}
 				sendMessageFromChatRow={messageHandlers.handleSendMessage}
 			/>
 		)
@@ -147,6 +119,38 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 	)
 }
 
+const areMessageRendererPropsEqual = (previous: MessageRendererProps, next: MessageRendererProps) => {
+	const transcriptSensitive =
+		previous.isLastMessage ||
+		next.isLastMessage ||
+		previous.isLastToolGroup ||
+		next.isLastToolGroup ||
+		isToolGroup(previous.messageOrGroup) ||
+		isToolGroup(next.messageOrGroup)
+
+	return (
+		previous.messageOrGroup === next.messageOrGroup &&
+		previous.isLastMessage === next.isLastMessage &&
+		previous.isLastToolGroup === next.isLastToolGroup &&
+		previous.lastModifiedMessage === next.lastModifiedMessage &&
+		previous.reasoningContent === next.reasoningContent &&
+		previous.isRequestInProgress === next.isRequestInProgress &&
+		previous.expandedRows === next.expandedRows &&
+		previous.onToggleExpand === next.onToggleExpand &&
+		previous.onHeightChange === next.onHeightChange &&
+		previous.onPendingQuoteChange === next.onPendingQuoteChange &&
+		previous.onCancelCommand === next.onCancelCommand &&
+		previous.inputValue === next.inputValue &&
+		previous.messageHandlers === next.messageHandlers &&
+		previous.footerActive === next.footerActive &&
+		previous.chatState === next.chatState &&
+		previous.task === next.task &&
+		(!transcriptSensitive || previous.modifiedMessages === next.modifiedMessages)
+	)
+}
+
+export const MessageRenderer = memo(MessageRendererContent, areMessageRendererPropsEqual)
+
 /**
  * Factory function to create the itemContent callback for Virtuoso
  * This allows us to encapsulate the rendering logic while maintaining performance
@@ -164,20 +168,46 @@ export const createMessageRenderer = (
 	chatState: ChatState,
 	task: DietCodeMessage,
 ) => {
+	let lastToolGroupIndex = -1
+	for (let index = groupedMessages.length - 1; index >= 0; index--) {
+		if (isToolGroup(groupedMessages[index])) {
+			lastToolGroupIndex = index
+			break
+		}
+	}
+	const lastModifiedMessage = modifiedMessages.at(-1)
+	const reasoningByApiReqTimestamp = buildReasoningByApiReqTimestamp(modifiedMessages)
+	const pendingToolCallByTextTimestamp = buildPendingToolCallByTextTimestamp(modifiedMessages)
+	const handleCancelCommand = () => {
+		void messageHandlers.executeButtonAction("cancel")
+	}
+
 	return (index: number, messageOrGroup: DietCodeMessage | DietCodeMessage[]) => (
 		<MessageRenderer
 			chatState={chatState}
 			expandedRows={expandedRows}
 			footerActive={footerActive}
-			groupedMessages={groupedMessages}
-			index={index}
 			inputValue={inputValue}
+			isLastMessage={index === groupedMessages.length - 1}
+			isLastToolGroup={index === lastToolGroupIndex}
+			isRequestInProgress={
+				!Array.isArray(messageOrGroup) && messageOrGroup.say === "text"
+					? (pendingToolCallByTextTimestamp.get(messageOrGroup.ts) ?? false)
+					: false
+			}
+			lastModifiedMessage={index === groupedMessages.length - 1 ? lastModifiedMessage : undefined}
 			messageHandlers={messageHandlers}
 			messageOrGroup={messageOrGroup}
 			modifiedMessages={modifiedMessages}
+			onCancelCommand={handleCancelCommand}
 			onHeightChange={onHeightChange}
 			onPendingQuoteChange={onPendingQuoteChange}
 			onToggleExpand={onToggleExpand}
+			reasoningContent={
+				!Array.isArray(messageOrGroup) && messageOrGroup.say === "api_req_started"
+					? reasoningByApiReqTimestamp.get(messageOrGroup.ts)
+					: undefined
+			}
 			task={task}
 		/>
 	)

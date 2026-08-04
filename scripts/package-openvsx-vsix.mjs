@@ -28,8 +28,25 @@ function restorePackageJson(original) {
 function ensureBuildArtifacts(repoRoot) {
 	const extensionJs = path.join(repoRoot, "dist", "extension.js")
 	const webviewBuild = path.join(repoRoot, "webview-ui", "build")
+	const packageJsonPath = path.join(repoRoot, "package.json")
+
+	let needsRebuild = false
 	if (!fs.existsSync(extensionJs) || !fs.existsSync(webviewBuild)) {
-		console.log("[openvsx] build artifacts missing; compiling extension and webview via ci:build...")
+		needsRebuild = true
+	} else {
+		try {
+			const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"))
+			const extensionJsContent = fs.readFileSync(extensionJs, "utf8")
+			if (!extensionJsContent.includes(`"${pkg.version}"`)) {
+				needsRebuild = true
+			}
+		} catch {
+			needsRebuild = true
+		}
+	}
+
+	if (needsRebuild) {
+		console.log("[openvsx] build artifacts out-of-date or missing; compiling extension and webview via ci:build...")
 		execFileSync(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "ci:build"], {
 			stdio: "inherit",
 			cwd: repoRoot,

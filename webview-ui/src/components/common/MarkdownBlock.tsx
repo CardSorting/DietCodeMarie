@@ -2,18 +2,21 @@ import { sanitizeWebviewMessageContent } from "@shared/diagnostics/webviewDiagno
 import { StringRequest } from "@shared/proto/dietcode/common"
 import { marked } from "marked"
 import type { ComponentProps } from "react"
-import React, { memo, useEffect, useMemo, useRef, useState } from "react"
+import React, { lazy, memo, Suspense, useEffect, useMemo, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import rehypeHighlight, { Options } from "rehype-highlight"
 import remarkGfm from "remark-gfm"
 import type { Node } from "unist"
 import { visit } from "unist-util-visit"
-import MermaidBlock from "@/components/common/MermaidBlock"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icons"
 import { cn } from "@/lib/utils"
 import { FileServiceClient } from "@/services/grpc-client"
 import { WithCopyButton } from "./CopyButton"
+
+// Mermaid is an infrequent code path and its parser is comparatively large.
+// Keep it out of the initial chat chunk until a diagram is actually displayed.
+const MermaidBlock = lazy(() => import("@/components/common/MermaidBlock"))
 
 function parseMarkdownIntoBlocks(markdown: string): string[] {
 	try {
@@ -42,7 +45,11 @@ const MemoizedMarkdownBlock = memo(
 						const className = props.className || ""
 						if (className.includes("language-mermaid")) {
 							const codeText = String(props.children || "")
-							return <MermaidBlock code={codeText} />
+							return (
+								<Suspense fallback={<span className="text-description">Loading diagram renderer…</span>}>
+									<MermaidBlock code={codeText} />
+								</Suspense>
+							)
 						}
 
 						// Use the async file check component for potential file paths

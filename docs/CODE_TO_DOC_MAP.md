@@ -52,6 +52,12 @@ Use this when you change code and need to update the matching doc.
 
 | Source | Documentation |
 |--------|---------------|
+| `webview-ui/src/context/ExtensionStateContext.tsx` | [ADR-002 Webview State Decoupling](architecture/adr-002-webview-state-decoupling-and-streaming-optimization.md) · [System communication](SYSTEM_COMMUNICATION.md) |
+| `webview-ui/src/components/chat/chat-view/` | [ADR-002 Webview State Decoupling](architecture/adr-002-webview-state-decoupling-and-streaming-optimization.md) · [Architecture (current)](architecture/current.md) |
+| `webview-ui/src/services/` | [ADR-002 Webview State Decoupling](architecture/adr-002-webview-state-decoupling-and-streaming-optimization.md) · [System communication](SYSTEM_COMMUNICATION.md) · [gRPC subscription persistence](grpc-subscription-persistence.md) |
+| `src/shared/diagnostics/webviewDiagnostics.ts` | [ADR-002 Webview State Decoupling](architecture/adr-002-webview-state-decoupling-and-streaming-optimization.md) · [Diagnostic webview audit](diagnostic-webview-audit.md) |
+| `src/shared/getApiMetrics.ts` | [ADR-002 Webview State Decoupling](architecture/adr-002-webview-state-decoupling-and-streaming-optimization.md) |
+| `src/shared/api-defaults.ts` | [Architecture (current)](architecture/current.md) |
 | `webview-ui/src/copy/lumiVoice.ts` | [USER_INTERFACE_DESIGN.md](USER_INTERFACE_DESIGN.md) · [MIRA_UX_IMPLEMENTATION.md](MIRA_UX_IMPLEMENTATION.md) |
 | `src/shared/grpc/persistent-stream.ts` | [gRPC subscription persistence](grpc-subscription-persistence.md) |
 | `webview-ui/src/services/grpc-subscription-runtime.ts` | [gRPC subscription persistence](grpc-subscription-persistence.md) |

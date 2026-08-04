@@ -21,54 +21,63 @@ import { DietCodeMessage } from "./ExtensionMessage"
  * // Result: [{ type: 'ask', ask: 'command', text: 'ls\nfile1.txt\nfile2.txt', ts: 1625097600000 }]
  */
 export function combineCommandSequences(messages: DietCodeMessage[]): DietCodeMessage[] {
-	const combinedCommands: DietCodeMessage[] = []
+	const combinedByTimestamp = new Map<number, DietCodeMessage>()
+	let activeCommand:
+		| {
+				message: DietCodeMessage
+				text: string
+				didAddOutput: boolean
+		  }
+		| undefined
 
-	// First pass: combine commands with their outputs
-	for (let i = 0; i < messages.length; i++) {
-		if (messages[i].ask === "command" || messages[i].say === "command") {
-			let combinedText = messages[i].text || ""
-			let didAddOutput = false
-			let j = i + 1
-
-			while (j < messages.length) {
-				if (messages[j].ask === "command" || messages[j].say === "command") {
-					// Stop if we encounter the next command
-					break
-				}
-				if (messages[j].ask === "command_output" || messages[j].say === "command_output") {
-					if (!didAddOutput) {
-						// Add a newline before the first output
-						combinedText += `\n${COMMAND_OUTPUT_STRING}`
-						didAddOutput = true
-					}
-					// handle cases where we receive empty command_output (ie when extension is relinquishing control over exit command button)
-					const output = messages[j].text || ""
-					if (output.length > 0) {
-						combinedText += `\n${output}`
-					}
-				}
-				j++
-			}
-
-			combinedCommands.push({
-				...messages[i],
-				text: combinedText,
+	const finalizeCommand = () => {
+		if (!activeCommand) return
+		if (!combinedByTimestamp.has(activeCommand.message.ts)) {
+			combinedByTimestamp.set(activeCommand.message.ts, {
+				...activeCommand.message,
+				text: activeCommand.text,
 			})
-
-			i = j - 1 // Move to the index just before the next command or end of array
 		}
+		activeCommand = undefined
 	}
 
-	// Second pass: remove command_outputs and replace original commands with combined ones
-	return messages
-		.filter((msg) => !(msg.ask === "command_output" || msg.say === "command_output"))
-		.map((msg) => {
-			if (msg.ask === "command" || msg.say === "command") {
-				const combinedCommand = combinedCommands.find((cmd) => cmd.ts === msg.ts)
-				return combinedCommand || msg
+	// Keep one active command while walking the stream. Command outputs belong
+	// to it until the next command, so this replaces the old nested tail scan.
+	for (const message of messages) {
+		if (message.ask === "command" || message.say === "command") {
+			finalizeCommand()
+			activeCommand = {
+				message,
+				text: message.text || "",
+				didAddOutput: false,
 			}
-			return msg
-		})
+			continue
+		}
+
+		if (activeCommand && (message.ask === "command_output" || message.say === "command_output")) {
+			if (!activeCommand.didAddOutput) {
+				activeCommand.text += `\n${COMMAND_OUTPUT_STRING}`
+				activeCommand.didAddOutput = true
+			}
+			const output = message.text || ""
+			if (output.length > 0) {
+				activeCommand.text += `\n${output}`
+			}
+		}
+	}
+	finalizeCommand()
+
+	// Remove command outputs and replace original commands with their combined
+	// representation in one final pass.
+	return messages.reduce<DietCodeMessage[]>((result, message) => {
+		if (message.ask === "command_output" || message.say === "command_output") return result
+		if (message.ask === "command" || message.say === "command") {
+			result.push(combinedByTimestamp.get(message.ts) || message)
+		} else {
+			result.push(message)
+		}
+		return result
+	}, [])
 }
 export const COMMAND_OUTPUT_STRING = "Output:"
 export const COMMAND_REQ_APP_STRING = "REQ_APP"

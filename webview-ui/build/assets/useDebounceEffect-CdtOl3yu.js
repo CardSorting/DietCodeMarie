@@ -1,0 +1,1 @@
+import{r}from"./index.js";function s(t,u,n){const c=r.useRef(t),e=r.useRef(null);r.useEffect(()=>{c.current=t},[t]),r.useEffect(()=>(e.current&&clearTimeout(e.current),e.current=setTimeout(()=>{c.current()},u),()=>{e.current&&clearTimeout(e.current)}),[u,...n])}export{s as u};

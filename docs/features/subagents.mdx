@@ -109,3 +109,10 @@ When `use_subagents` runs **multiple lanes that edit files** in parallel, LUMI u
 ```
 
 Full reference: [Roadmap projection quick reference](/governed-roadmap-projection-quickref) · [Governed subagent execution](/governed-subagent-execution) · [Runbook](/governed-execution-runbook).
+
+## High-Throughput Swarm Telemetry & Streaming Ergonomics
+
+When multi-agent swarms stream continuous progress notes, subagent logs, and tool execution events in parallel, message updates pass through the decoupled `ChatMessagesContext` (see [ADR-002](/architecture/adr-002-webview-state-decoupling-and-streaming-optimization)):
+
+- **Non-blocking UI Streaming**: High-frequency subagent message streams push directly to `ChatMessagesContext`, bypassing global `ExtensionStateContext` state updates so that non-chat webview components (settings, MCP, worktree panels) remain completely unaffected.
+- **WeakMap Telemetry Caching**: Subagent progress rows and tool result projections use `projectionCache` and `apiUsageCache` by immutable message reference, ensuring sub-millisecond per-frame render times even during concurrent 5-lane swarm execution.

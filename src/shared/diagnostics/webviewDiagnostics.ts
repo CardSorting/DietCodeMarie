@@ -83,6 +83,12 @@ const CONTAINS_INTERNAL_DIAGNOSTIC = new RegExp(
 const INTERNAL_JSON_KEYS =
 	/^(?:diagnostics?|internalDiagnostics?|completionGateEnvelope|stabilityAudit|substrateTelemetry|completion_gate(?:_[\w-]+)?|advisory_gate(?:_[\w-]+)?|legacyLifecycle)$/i
 
+// Projection is intentionally repeated at rendering boundaries as defense in
+// depth. Cache by immutable message identity so that boundary checks remain
+// cheap for rows that are already projected, without retaining task history in
+// a long-lived strong-reference cache.
+const projectionCache = new WeakMap<object, { showInternalDiagnostics: boolean; projected: DietCodeMessage }>()
+
 /**
  * Removes backend-only diagnostics from prose before it can enter a rendered
  * webview surface. This is intentionally independent of message type because
@@ -229,6 +235,12 @@ export function projectMessageForWebview(
 	message: DietCodeMessage,
 	options: WebviewDiagnosticProjectionOptions = {},
 ): DietCodeMessage {
+	const showInternalDiagnostics = options.showInternalDiagnostics === true
+	const cached = projectionCache.get(message)
+	if (cached?.showInternalDiagnostics === showInternalDiagnostics) {
+		return cached.projected
+	}
+
 	const projected: DietCodeMessage = {
 		...message,
 		text: message.text === undefined ? undefined : sanitizeWebviewMessageContent(message.text),
@@ -246,11 +258,12 @@ export function projectMessageForWebview(
 			: undefined,
 	}
 
-	if (!options.showInternalDiagnostics) {
+	if (!showInternalDiagnostics) {
 		delete projected.diagnostics
 		delete projected.auditMetadata
 	}
 
+	projectionCache.set(message, { showInternalDiagnostics, projected })
 	return projected
 }
 

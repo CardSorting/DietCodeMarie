@@ -4,9 +4,9 @@ import { type ApiConfiguration, bedrockModels } from "@shared/api"
 import type { DietCodeMessage, DietCodeSayTool } from "@shared/ExtensionMessage"
 import type { HistoryItem } from "@shared/HistoryItem"
 import type { Meta, StoryObj } from "@storybook/react-vite"
-import { useEffect, useMemo, useState } from "react"
+import { type ComponentProps, type ReactNode, useEffect, useMemo, useState } from "react"
 import { expect, userEvent, within } from "storybook/test"
-import { ExtensionStateContext, useExtensionState } from "@/context/ExtensionStateContext"
+import { ChatMessagesContext, ExtensionStateContext, useExtensionState } from "@/context/ExtensionStateContext"
 import ChatView from "./components/chat/ChatView"
 import { ChatToolbar } from "./components/chat/navigation/ChatToolbar"
 import WelcomeView from "./components/welcome/WelcomeView"
@@ -44,7 +44,14 @@ const MockApp = () => {
 
 // Constants
 const SIDEBAR_CLASS = "flex flex-col justify-center h-[60%] w-[80%] overflow-hidden"
-const ExtensionStateProviderMock = ExtensionStateContext.Provider
+const ExtensionStateProviderMock = ({
+	value,
+	children,
+}: ComponentProps<typeof ExtensionStateContext.Provider> & { children: ReactNode }) => (
+	<ExtensionStateContext.Provider value={value}>
+		<ChatMessagesContext.Provider value={value?.dietcodeMessages ?? []}>{children}</ChatMessagesContext.Provider>
+	</ExtensionStateContext.Provider>
+)
 
 const meta: Meta<typeof MockApp> = {
 	title: "Views/Chat",

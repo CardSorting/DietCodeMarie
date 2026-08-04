@@ -18,7 +18,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
-import { TaskServiceClient } from "@/services/grpc-client"
+import { TaskServiceClient } from "@/services/core-grpc-client"
 
 interface AppShellProps {
 	children: React.ReactNode

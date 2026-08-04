@@ -69,7 +69,6 @@ interface ChatRowProps {
 	onCancelCommand?: () => void
 	mode?: Mode
 	reasoningContent?: string
-	responseStarted?: boolean
 	isRequestInProgress?: boolean
 }
 
@@ -147,16 +146,9 @@ export const ChatRowContent = memo(
 		mode,
 		isRequestInProgress,
 		reasoningContent,
-		responseStarted,
 	}: ChatRowContentProps) => {
-		const {
-			backgroundEditEnabled,
-			mcpServers,
-			mcpMarketplaceCatalog,
-			onRelinquishControl,
-			dietcodeMessages,
-			showInternalDiagnostics,
-		} = useExtensionState()
+		const { backgroundEditEnabled, mcpServers, mcpMarketplaceCatalog, onRelinquishControl, showInternalDiagnostics } =
+			useExtensionState()
 		const [seeNewChangesDisabled, setSeeNewChangesDisabled] = useState(false)
 		const [explainChangesDisabled, setExplainChangesDisabled] = useState(false)
 		const contentRef = useRef<HTMLDivElement>(null)
@@ -840,12 +832,10 @@ export const ChatRowContent = memo(
 								apiReqStreamingFailedMessage={apiReqStreamingFailedMessage}
 								apiRequestFailedMessage={apiRequestFailedMessage}
 								cost={cost}
-								dietcodeMessages={dietcodeMessages}
 								handleToggle={handleToggle}
 								isExpanded={isExpanded}
 								message={message}
 								reasoningContent={reasoningContent}
-								responseStarted={responseStarted}
 							/>
 						)
 					case "api_req_finished":

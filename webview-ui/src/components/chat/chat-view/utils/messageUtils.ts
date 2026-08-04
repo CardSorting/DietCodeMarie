@@ -18,6 +18,91 @@ const LOW_STAKES_TOOLS = new Set([
 	"searchFiles",
 ])
 
+type ToolClassificationCacheEntry = {
+	text: string | undefined
+	type: DietCodeMessage["type"]
+	ask: DietCodeMessage["ask"]
+	say: DietCodeMessage["say"]
+	isLowStakes: boolean
+}
+
+// A streamed transcript reuses immutable message objects for every row that
+// did not change. Cache the small tool classification so grouping, request
+// activity, and row rendering do not repeatedly parse the same JSON payload.
+const toolClassificationCache = new WeakMap<DietCodeMessage, ToolClassificationCacheEntry>()
+
+export interface ApiRequestTextInfo {
+	parsed: boolean
+	hasCost: boolean
+	cost?: number
+	hasCancelReason: boolean
+	hasStreamingFailedMessage: boolean
+}
+
+interface ApiRequestTextInfoCacheEntry extends ApiRequestTextInfo {
+	text: string
+}
+
+// API request payloads can include a large prompt. Cache only the scalar
+// decisions used by the timeline so repeated render passes do not retain or
+// reparse another copy of that payload.
+const apiRequestTextInfoCache = new WeakMap<DietCodeMessage, ApiRequestTextInfoCacheEntry>()
+
+export function getApiRequestTextInfo(message: DietCodeMessage): ApiRequestTextInfo {
+	const text = message.text ?? ""
+	const cached = apiRequestTextInfoCache.get(message)
+	if (cached?.text === text) {
+		return cached
+	}
+
+	try {
+		const parsedData = JSON.parse(text || "{}") as Record<string, unknown> | null
+		if (parsedData === null) {
+			const invalidEntry = {
+				text,
+				parsed: false,
+				hasCost: false,
+				hasCancelReason: false,
+				hasStreamingFailedMessage: false,
+			}
+			apiRequestTextInfoCache.set(message, invalidEntry)
+			return invalidEntry
+		}
+
+		const info: ApiRequestTextInfoCacheEntry = {
+			text,
+			parsed: true,
+			hasCost: parsedData.cost != null,
+			cost: typeof parsedData.cost === "number" ? parsedData.cost : undefined,
+			hasCancelReason: Boolean(parsedData.cancelReason),
+			hasStreamingFailedMessage: Boolean(parsedData.streamingFailedMessage),
+		}
+		apiRequestTextInfoCache.set(message, info)
+		return info
+	} catch {
+		const invalidEntry = {
+			text,
+			parsed: false,
+			hasCost: false,
+			hasCancelReason: false,
+			hasStreamingFailedMessage: false,
+		}
+		apiRequestTextInfoCache.set(message, invalidEntry)
+		return invalidEntry
+	}
+}
+
+const BROWSER_SESSION_SAY_TYPES = new Set([
+	"browser_action_launch",
+	"api_req_started",
+	"text",
+	"browser_action",
+	"browser_action_result",
+	"checkpoint_created",
+	"reasoning",
+	"error_retry",
+])
+
 /**
  * Check if a tool message is a low-stakes tool
  */
@@ -25,19 +110,39 @@ export function isLowStakesTool(message: DietCodeMessage): boolean {
 	if (message.say !== "tool" && message.ask !== "tool") {
 		return false
 	}
+	const cached = toolClassificationCache.get(message)
+	if (
+		cached &&
+		cached.text === message.text &&
+		cached.type === message.type &&
+		cached.ask === message.ask &&
+		cached.say === message.say
+	) {
+		return cached.isLowStakes
+	}
+
+	let isLowStakes = false
 	try {
 		const tool = JSON.parse(message.text || "{}") as DietCodeSayTool
-		return LOW_STAKES_TOOLS.has(tool.tool)
+		isLowStakes = LOW_STAKES_TOOLS.has(tool.tool)
 	} catch {
-		return false
+		isLowStakes = false
 	}
+	toolClassificationCache.set(message, {
+		text: message.text,
+		type: message.type,
+		ask: message.ask,
+		say: message.say,
+		isLowStakes,
+	})
+	return isLowStakes
 }
 
 /**
  * Check if a message group is a tool group (array with _isToolGroup marker)
  */
 export function isToolGroup(item: DietCodeMessage | DietCodeMessage[]): item is DietCodeMessage[] & { _isToolGroup: true } {
-	return Array.isArray(item) && (item as any)._isToolGroup === true
+	return Array.isArray(item) && (item as DietCodeMessage[] & { _isToolGroup?: boolean })._isToolGroup === true
 }
 
 /**
@@ -51,7 +156,24 @@ export function processMessages(messages: DietCodeMessage[]): DietCodeMessage[] 
  * Filter messages that should be visible in the chat
  */
 export function filterVisibleMessages(messages: DietCodeMessage[]): DietCodeMessage[] {
-	return messages.filter((message, index, arr) => {
+	// `use_subagents` is hidden once a later subagent row exists. Precompute that
+	// suffix fact once so filtering stays linear and does not allocate/scan a tail
+	// slice for every message.
+	const hasSubagentControlMessage = messages.some(
+		(message) => message.ask === "use_subagents" || message.say === "use_subagents",
+	)
+	const hasSubagentAfter = hasSubagentControlMessage ? new Uint8Array(messages.length) : undefined
+	if (hasSubagentAfter) {
+		let hasSubagent = false
+		for (let index = messages.length - 1; index >= 0; index--) {
+			hasSubagentAfter[index] = hasSubagent ? 1 : 0
+			if (messages[index].type === "say" && messages[index].say === "subagent") {
+				hasSubagent = true
+			}
+		}
+	}
+
+	return messages.filter((message, index) => {
 		switch (message.ask) {
 			case "completion_result":
 				// don't show a chat row for a completion_result ask without text. This specific type of message only occurs if dietcode wants to execute a command as part of its completion result, in which case we interject the completion_result tool with the execute_command tool.
@@ -64,7 +186,7 @@ export function filterVisibleMessages(messages: DietCodeMessage[]): DietCodeMess
 			case "resume_completed_task":
 				return false
 			case "use_subagents":
-				if (arr.slice(index + 1).some((candidate) => candidate.type === "say" && candidate.say === "subagent")) {
+				if (hasSubagentAfter?.[index]) {
 					return false
 				}
 				break
@@ -81,12 +203,8 @@ export function filterVisibleMessages(messages: DietCodeMessage[]): DietCodeMess
 				// api_req_started rows only render visible content for errors/cancels.
 				// Reasoning has its own standalone ChatRows. Everything else renders
 				// as invisible padding. Filter out unless there's an error.
-				try {
-					const info = JSON.parse(message.text || "{}")
-					if (info.cancelReason || info.streamingFailedMessage) {
-						break // keep - has error content
-					}
-				} catch {
+				const info = getApiRequestTextInfo(message)
+				if (!info.parsed || info.hasCancelReason || info.hasStreamingFailedMessage) {
 					break // keep on parse error to be safe
 				}
 				return false
@@ -100,7 +218,7 @@ export function filterVisibleMessages(messages: DietCodeMessage[]): DietCodeMess
 			case "mcp_server_request_started":
 				return false
 			case "use_subagents":
-				if (arr.slice(index + 1).some((candidate) => candidate.type === "say" && candidate.say === "subagent")) {
+				if (hasSubagentAfter?.[index]) {
 					return false
 				}
 				break
@@ -114,19 +232,10 @@ export function filterVisibleMessages(messages: DietCodeMessage[]): DietCodeMess
  */
 export function isBrowserSessionMessage(message: DietCodeMessage): boolean {
 	if (message.type === "ask") {
-		return ["browser_action_launch"].includes(message.ask!)
+		return message.ask === "browser_action_launch"
 	}
 	if (message.type === "say") {
-		return [
-			"browser_action_launch",
-			"api_req_started",
-			"text",
-			"browser_action",
-			"browser_action_result",
-			"checkpoint_created",
-			"reasoning",
-			"error_retry",
-		].includes(message.say!)
+		return message.say !== undefined && BROWSER_SESSION_SAY_TYPES.has(message.say)
 	}
 	return false
 }
@@ -138,12 +247,14 @@ export function groupMessages(visibleMessages: DietCodeMessage[]): (DietCodeMess
 	const result: (DietCodeMessage | DietCodeMessage[])[] = []
 	let currentGroup: DietCodeMessage[] = []
 	let isInBrowserSession = false
+	let lastApiReqStarted: DietCodeMessage | undefined
 
 	const endBrowserSession = () => {
 		if (currentGroup.length > 0) {
 			result.push([...currentGroup])
 			currentGroup = []
 			isInBrowserSession = false
+			lastApiReqStarted = undefined
 		}
 	}
 
@@ -153,12 +264,12 @@ export function groupMessages(visibleMessages: DietCodeMessage[]): (DietCodeMess
 			endBrowserSession()
 			// start new
 			isInBrowserSession = true
+			lastApiReqStarted = undefined
 			currentGroup.push(message)
 		} else if (isInBrowserSession) {
 			// end session if api_req_started is cancelled
 			if (message.say === "api_req_started") {
 				// get last api_req_started in currentGroup to check if it's cancelled
-				const lastApiReqStarted = [...currentGroup].reverse().find((m) => m.say === "api_req_started")
 				if (lastApiReqStarted?.text != null) {
 					const info = JSON.parse(lastApiReqStarted.text)
 					const isCancelled = info.cancelReason != null
@@ -172,6 +283,9 @@ export function groupMessages(visibleMessages: DietCodeMessage[]): (DietCodeMess
 
 			if (isBrowserSessionMessage(message)) {
 				currentGroup.push(message)
+				if (message.say === "api_req_started") {
+					lastApiReqStarted = message
+				}
 
 				// Check if this is a close action
 				if (message.say === "browser_action") {
@@ -214,20 +328,15 @@ export function shouldShowScrollButton(disableAutoScroll: boolean, isAtBottom: b
 
 /**
  * Find reasoning content associated with an api_req_started message.
- * Also returns whether response content (non-reasoning) has started.
  */
-export function findReasoningForApiReq(
-	apiReqTs: number,
-	allMessages: DietCodeMessage[],
-): { reasoning: string | undefined; responseStarted: boolean } {
+export function findReasoningForApiReq(apiReqTs: number, allMessages: DietCodeMessage[]): { reasoning: string | undefined } {
 	const apiReqIndex = allMessages.findIndex((m) => m.ts === apiReqTs && m.say === "api_req_started")
 	if (apiReqIndex === -1) {
-		return { reasoning: undefined, responseStarted: false }
+		return { reasoning: undefined }
 	}
 
-	// Collect reasoning and check if response content has started
+	// Collect reasoning content until the next API request.
 	const reasoningParts: string[] = []
-	let responseStarted = false
 
 	for (let i = apiReqIndex + 1; i < allMessages.length; i++) {
 		const msg = allMessages[i]
@@ -239,16 +348,57 @@ export function findReasoningForApiReq(
 		if (msg.say === "reasoning" && msg.text) {
 			reasoningParts.push(msg.text)
 		}
-		// Check if non-reasoning response content has started (text, tool calls, etc.)
-		if (msg.say === "text" || msg.say === "tool" || msg.ask === "tool" || msg.ask === "command" || msg.say === "command") {
-			responseStarted = true
-		}
 	}
 
 	return {
 		reasoning: reasoningParts.length > 0 ? reasoningParts.join("\n\n") : undefined,
-		responseStarted,
 	}
+}
+
+/** Build reasoning lookups once for all visible API request rows. */
+export function buildReasoningByApiReqTimestamp(allMessages: DietCodeMessage[]): Map<number, string | undefined> {
+	const reasoningByApiReqTimestamp = new Map<number, string | undefined>()
+	let currentApiReqTs: number | undefined
+	let reasoningParts: string[] = []
+
+	const flush = () => {
+		if (currentApiReqTs === undefined || reasoningByApiReqTimestamp.has(currentApiReqTs)) return
+		reasoningByApiReqTimestamp.set(currentApiReqTs, reasoningParts.length > 0 ? reasoningParts.join("\n\n") : undefined)
+	}
+
+	for (const message of allMessages) {
+		if (message.say === "api_req_started") {
+			flush()
+			currentApiReqTs = message.ts
+			reasoningParts = []
+			continue
+		}
+		if (currentApiReqTs !== undefined && message.say === "reasoning" && message.text) {
+			reasoningParts.push(message.text)
+		}
+	}
+	flush()
+	return reasoningByApiReqTimestamp
+}
+
+/** Build text-row pending state once instead of scanning backwards per row. */
+export function buildPendingToolCallByTextTimestamp(allMessages: DietCodeMessage[]): Map<number, boolean> {
+	const pendingByTextTimestamp = new Map<number, boolean>()
+	let currentApiReqPending = false
+
+	for (const message of allMessages) {
+		if (message.say === "text" && !pendingByTextTimestamp.has(message.ts)) {
+			pendingByTextTimestamp.set(message.ts, currentApiReqPending)
+		}
+
+		if (message.type === "say" && message.say === "api_req_started") {
+			const info = getApiRequestTextInfo(message)
+			// Match isTextMessagePendingToolCall's defensive behavior.
+			currentApiReqPending = info.parsed && !info.hasCost
+		}
+	}
+
+	return pendingByTextTimestamp
 }
 
 /**
@@ -360,13 +510,9 @@ export function findNextSegmentCost(checkpointTs: number, allMessages: DietCodeM
 	for (let i = checkpointIndex + 1; i < endIndex; i++) {
 		const msg = allMessages[i]
 		if (msg.say === "api_req_started" && msg.text) {
-			try {
-				const info = JSON.parse(msg.text)
-				if (typeof info.cost === "number") {
-					totalCost += info.cost
-				}
-			} catch {
-				// ignore parse errors
+			const info = getApiRequestTextInfo(msg)
+			if (info.cost !== undefined) {
+				totalCost += info.cost
 			}
 		}
 	}
@@ -389,13 +535,9 @@ export function isTextMessagePendingToolCall(textTs: number, allMessages: DietCo
 	for (let i = textIndex - 1; i >= 0; i--) {
 		const msg = allMessages[i]
 		if (msg.say === "api_req_started" && msg.text) {
-			try {
-				const info = JSON.parse(msg.text)
-				// If no cost, the request is still in progress
-				return info.cost == null
-			} catch {
-				return false
-			}
+			const info = getApiRequestTextInfo(msg)
+			// If no cost, the request is still in progress
+			return info.parsed && !info.hasCost
 		}
 	}
 	return false
@@ -435,13 +577,11 @@ export function isToolGroupInFlight(toolGroupMessages: DietCodeMessage[], allMes
 	}
 
 	// Step 2: Determine if most recent api_req is complete (has cost) or incomplete (no cost)
-	let mostRecentHasCost = false
-	try {
-		const info = JSON.parse(mostRecentApiReq.text)
-		mostRecentHasCost = info.cost != null
-	} catch {
+	const mostRecentApiReqInfo = getApiRequestTextInfo(mostRecentApiReq)
+	if (!mostRecentApiReqInfo.parsed) {
 		return false
 	}
+	const mostRecentHasCost = mostRecentApiReqInfo.hasCost
 
 	// Find the last tool in this group
 	const lastTool = [...toolGroupMessages].reverse().find((m) => isLowStakesTool(m))
@@ -464,14 +604,10 @@ export function isToolGroupInFlight(toolGroupMessages: DietCodeMessage[], allMes
 		for (let i = mostRecentApiReqIndex - 1; i >= 0; i--) {
 			const msg = allMessages[i]
 			if (msg.say === "api_req_started" && msg.text) {
-				try {
-					const prevInfo = JSON.parse(msg.text)
-					if (prevInfo.cost != null) {
-						prevCompletedApiReqIndex = i
-						break
-					}
-				} catch {
-					/* continue searching */
+				const prevInfo = getApiRequestTextInfo(msg)
+				if (prevInfo.parsed && prevInfo.hasCost) {
+					prevCompletedApiReqIndex = i
+					break
 				}
 			}
 		}
@@ -489,6 +625,67 @@ export function isToolGroupInFlight(toolGroupMessages: DietCodeMessage[], allMes
 	return toolIndex > mostRecentApiReqIndex
 }
 
+interface ToolActivityRuntime {
+	tsToIndex: Map<number, number>
+	mostRecentApiReqIndex: number
+	mostRecentHasCost: boolean
+	mostRecentApiReqIsUsable: boolean
+	previousCompletedApiReqIndex: number
+}
+
+// ToolGroupRenderer can ask for the same transcript-wide activity facts once
+// per visible group. Keep that scan shared for the lifetime of the immutable
+// message array; WeakMap avoids retaining old transcripts.
+const toolActivityRuntimeCache = new WeakMap<DietCodeMessage[], ToolActivityRuntime>()
+
+function getToolActivityRuntime(allMessages: DietCodeMessage[]): ToolActivityRuntime {
+	const cached = toolActivityRuntimeCache.get(allMessages)
+	if (cached) return cached
+
+	const tsToIndex = new Map<number, number>()
+	for (let index = 0; index < allMessages.length; index++) {
+		tsToIndex.set(allMessages[index].ts, index)
+	}
+
+	let mostRecentApiReqIndex = -1
+	let mostRecentHasCost = false
+	let mostRecentApiReqIsUsable = false
+	for (let index = allMessages.length - 1; index >= 0; index--) {
+		const message = allMessages[index]
+		if (message.say !== "api_req_started") continue
+		mostRecentApiReqIndex = index
+		if (message.text) {
+			const info = getApiRequestTextInfo(message)
+			mostRecentHasCost = info.hasCost
+			mostRecentApiReqIsUsable = info.parsed
+		}
+		break
+	}
+
+	let previousCompletedApiReqIndex = -1
+	if (mostRecentApiReqIndex !== -1 && !mostRecentHasCost) {
+		for (let index = mostRecentApiReqIndex - 1; index >= 0; index--) {
+			const message = allMessages[index]
+			if (message.say !== "api_req_started" || !message.text) continue
+			const info = getApiRequestTextInfo(message)
+			if (info.parsed && info.hasCost) {
+				previousCompletedApiReqIndex = index
+				break
+			}
+		}
+	}
+
+	const runtime = {
+		tsToIndex,
+		mostRecentApiReqIndex,
+		mostRecentHasCost,
+		mostRecentApiReqIsUsable,
+		previousCompletedApiReqIndex,
+	}
+	toolActivityRuntimeCache.set(allMessages, runtime)
+	return runtime
+}
+
 /**
  * Filter a tool group to exclude tools that are in the "current activities" range.
  * Returns the filtered array of messages (may be empty).
@@ -504,64 +701,22 @@ export function getToolsNotInCurrentActivities(
 	toolGroupMessages: DietCodeMessage[],
 	allMessages: DietCodeMessage[],
 ): DietCodeMessage[] {
-	// Build a Map of timestamp -> index for O(1) lookups instead of O(n) findIndex calls
-	const tsToIndex = new Map<number, number>()
-	for (let i = 0; i < allMessages.length; i++) {
-		tsToIndex.set(allMessages[i].ts, i)
-	}
-
-	// Step 1: Find the MOST RECENT api_req_started overall (search backwards)
-	let mostRecentApiReqIndex = -1
-	let mostRecentApiReq: DietCodeMessage | null = null
-	for (let i = allMessages.length - 1; i >= 0; i--) {
-		if (allMessages[i].say === "api_req_started") {
-			mostRecentApiReqIndex = i
-			mostRecentApiReq = allMessages[i]
-			break
-		}
-	}
+	const { tsToIndex, mostRecentApiReqIndex, mostRecentHasCost, mostRecentApiReqIsUsable, previousCompletedApiReqIndex } =
+		getToolActivityRuntime(allMessages)
 
 	if (mostRecentApiReqIndex === -1) {
 		// No api_req at all - show all tools
 		return toolGroupMessages
 	}
-
-	if (!mostRecentApiReq?.text) {
+	if (!mostRecentApiReqIsUsable) {
 		return toolGroupMessages
 	}
 
-	// Step 2: Determine if most recent api_req is complete (has cost) or incomplete (no cost)
-	let mostRecentHasCost = false
-	try {
-		const info = JSON.parse(mostRecentApiReq.text)
-		mostRecentHasCost = info.cost != null
-	} catch {
-		return toolGroupMessages
-	}
-
-	// Step 3: Determine which tools are "in current activities"
 	if (!mostRecentHasCost) {
 		// CASE A: Most recent api_req is INCOMPLETE (loading state active)
 		// Tools are in-flight if they're between prev completed api_req and current incomplete one
 
-		// Find the previous COMPLETED api_req
-		let prevCompletedApiReqIndex = -1
-		for (let i = mostRecentApiReqIndex - 1; i >= 0; i--) {
-			const msg = allMessages[i]
-			if (msg.say === "api_req_started" && msg.text) {
-				try {
-					const prevInfo = JSON.parse(msg.text)
-					if (prevInfo.cost != null) {
-						prevCompletedApiReqIndex = i
-						break
-					}
-				} catch {
-					/* continue searching */
-				}
-			}
-		}
-
-		if (prevCompletedApiReqIndex === -1) {
+		if (previousCompletedApiReqIndex === -1) {
 			// No previous completed api_req, so no tools are in the "current activities" range
 			return toolGroupMessages
 		}
@@ -581,7 +736,7 @@ export function getToolsNotInCurrentActivities(
 					return true
 				}
 				// Tool is in "current activities" range if AFTER prevCompleted AND BEFORE current
-				const isInCurrentActivitiesRange = toolIndex > prevCompletedApiReqIndex && toolIndex < mostRecentApiReqIndex
+				const isInCurrentActivitiesRange = toolIndex > previousCompletedApiReqIndex && toolIndex < mostRecentApiReqIndex
 				// Filter out if in current activities range
 				return !isInCurrentActivitiesRange
 			}
@@ -676,53 +831,6 @@ export function isApiReqAbsorbable(apiReqTs: number, allMessages: DietCodeMessag
 }
 
 /**
- * Check if an api_req_started at a given index produces low-stakes tools
- * (regardless of whether it also produces text).
- * If so, it should be absorbed into the tool group rather than rendered separately.
- * The key is: no HIGH-stakes tools (write, edit, command, etc.) AND no reasoning
- */
-function isApiReqFollowedOnlyByLowStakesTools(index: number, messages: (DietCodeMessage | DietCodeMessage[])[]): boolean {
-	let hasLowStakesTool = false
-	let hasReasoning = false
-	for (let i = index + 1; i < messages.length; i++) {
-		const item = messages[i]
-		if (Array.isArray(item)) {
-			// Browser session - this ends the low-stakes run
-			break
-		}
-		const msg = item
-		// Another api_req_started - stop checking
-		if (msg.say === "api_req_started") {
-			break
-		}
-		// Reasoning - mark it but don't absorb if present
-		if (msg.say === "reasoning") {
-			hasReasoning = true
-			continue
-		}
-		// Low-stakes tool - mark it
-		if (isLowStakesTool(msg)) {
-			hasLowStakesTool = true
-			continue
-		}
-		// Checkpoint is OK
-		if (msg.say === "checkpoint_created") {
-			continue
-		}
-		// Text is OK - it will render separately, but we still absorb api_req
-		if (msg.say === "text") {
-			continue
-		}
-		// High-stakes tool (write, edit, command, etc.) - don't absorb
-		if (msg.say === "tool" || msg.ask === "tool" || msg.ask === "command" || msg.say === "command") {
-			return false
-		}
-	}
-	// Don't absorb if there's reasoning - we want to show "Thoughts >"
-	return hasLowStakesTool && !hasReasoning
-}
-
-/**
  * Group consecutive low-stakes tools (and their reasoning) into arrays.
  * Also filters out checkpoints that follow low-stakes tool groups.
  * Absorbs api_req_started messages that are followed only by low-stakes tools.
@@ -732,6 +840,46 @@ function isApiReqFollowedOnlyByLowStakesTools(index: number, messages: (DietCode
 export function groupLowStakesTools(
 	groupedMessages: (DietCodeMessage | DietCodeMessage[])[],
 ): (DietCodeMessage | DietCodeMessage[])[] {
+	// Precompute the look-ahead decision for every api_req_started in one
+	// reverse pass. The old implementation scanned forward until the next API
+	// boundary for each request, which became quadratic on long transcripts.
+	const apiReqAbsorbable = new Uint8Array(groupedMessages.length)
+	let hasLowStakesToolAfter = false
+	let hasReasoningAfter = false
+	let hasHighStakesToolAfter = false
+	for (let index = groupedMessages.length - 1; index >= 0; index--) {
+		const item = groupedMessages[index]
+		if (Array.isArray(item)) {
+			hasLowStakesToolAfter = false
+			hasReasoningAfter = false
+			hasHighStakesToolAfter = false
+			continue
+		}
+
+		if (item.say === "api_req_started") {
+			apiReqAbsorbable[index] = hasLowStakesToolAfter && !hasReasoningAfter && !hasHighStakesToolAfter ? 1 : 0
+			hasLowStakesToolAfter = false
+			hasReasoningAfter = false
+			hasHighStakesToolAfter = false
+			continue
+		}
+
+		if (item.say === "reasoning") {
+			hasReasoningAfter = true
+			continue
+		}
+		if (isLowStakesTool(item)) {
+			hasLowStakesToolAfter = true
+			continue
+		}
+		if (item.say === "checkpoint_created" || item.say === "text") {
+			continue
+		}
+		if (item.say === "tool" || item.ask === "tool" || item.ask === "command" || item.say === "command") {
+			hasHighStakesToolAfter = true
+		}
+	}
+
 	const result: (DietCodeMessage | DietCodeMessage[])[] = []
 	let toolGroup: DietCodeMessage[] = []
 	let pendingReasoning: DietCodeMessage[] = []
@@ -740,8 +888,8 @@ export function groupLowStakesTools(
 	const pendingTools: DietCodeMessage[] = []
 
 	const flushPending = () => {
-		pendingApiReq.forEach((m) => result.push(m))
-		pendingReasoning.forEach((m) => result.push(m))
+		for (const message of pendingApiReq) result.push(message)
+		for (const message of pendingReasoning) result.push(message)
 		pendingApiReq = []
 		pendingReasoning = []
 	}
@@ -810,7 +958,7 @@ export function groupLowStakesTools(
 
 		// API request - absorb if followed by low-stakes tools, otherwise render
 		if (messageType === "api_req_started") {
-			if (isApiReqFollowedOnlyByLowStakesTools(i, groupedMessages)) {
+			if (apiReqAbsorbable[i] === 1) {
 				absorbPending()
 				pendingApiReq.push(message)
 			} else {

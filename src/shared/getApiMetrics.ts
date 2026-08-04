@@ -1,4 +1,4 @@
-import { DietCodeMessage } from "./ExtensionMessage"
+import type { DietCodeMessage } from "./ExtensionMessage"
 
 interface ApiMetrics {
 	totalTokensIn: number
@@ -6,6 +6,59 @@ interface ApiMetrics {
 	totalCacheWrites?: number
 	totalCacheReads?: number
 	totalCost: number
+}
+
+interface ApiUsageCacheEntry {
+	text: string
+	parsed: boolean
+	tokensIn?: number
+	tokensOut?: number
+	cacheWrites?: number
+	cacheReads?: number
+	cost?: number
+}
+
+// The immutable message objects are reused while the transcript streams. Keep
+// parsed scalar usage values on the message so every render can walk the list
+// without reparsing the same API payloads (which can contain large request
+// strings).
+const apiUsageCache = new WeakMap<DietCodeMessage, ApiUsageCacheEntry>()
+
+const getApiUsage = (message: DietCodeMessage): ApiUsageCacheEntry => {
+	const text = message.text
+	if (!text) {
+		return { text: "", parsed: false }
+	}
+
+	const cached = apiUsageCache.get(message)
+	if (cached?.text === text) {
+		return cached
+	}
+
+	try {
+		const parsedData = JSON.parse(text) as Record<string, unknown> | null
+		if (parsedData === null) {
+			const invalidEntry = { text, parsed: false }
+			apiUsageCache.set(message, invalidEntry)
+			return invalidEntry
+		}
+
+		const usage: ApiUsageCacheEntry = {
+			text,
+			parsed: true,
+			tokensIn: typeof parsedData.tokensIn === "number" ? parsedData.tokensIn : undefined,
+			tokensOut: typeof parsedData.tokensOut === "number" ? parsedData.tokensOut : undefined,
+			cacheWrites: typeof parsedData.cacheWrites === "number" ? parsedData.cacheWrites : undefined,
+			cacheReads: typeof parsedData.cacheReads === "number" ? parsedData.cacheReads : undefined,
+			cost: typeof parsedData.cost === "number" ? parsedData.cost : undefined,
+		}
+		apiUsageCache.set(message, usage)
+		return usage
+	} catch {
+		const invalidEntry = { text, parsed: false }
+		apiUsageCache.set(message, invalidEntry)
+		return invalidEntry
+	}
 }
 
 /**
@@ -43,27 +96,23 @@ export function getApiMetrics(messages: DietCodeMessage[]): ApiMetrics {
 			(message.say === "api_req_started" || message.say === "deleted_api_reqs" || message.say === "subagent_usage") &&
 			message.text
 		) {
-			try {
-				const parsedData = JSON.parse(message.text)
-				const { tokensIn, tokensOut, cacheWrites, cacheReads, cost } = parsedData
-
-				if (typeof tokensIn === "number") {
-					result.totalTokensIn += tokensIn
+			const usage = getApiUsage(message)
+			if (usage.parsed) {
+				if (usage.tokensIn !== undefined) {
+					result.totalTokensIn += usage.tokensIn
 				}
-				if (typeof tokensOut === "number") {
-					result.totalTokensOut += tokensOut
+				if (usage.tokensOut !== undefined) {
+					result.totalTokensOut += usage.tokensOut
 				}
-				if (typeof cacheWrites === "number") {
-					result.totalCacheWrites = (result.totalCacheWrites ?? 0) + cacheWrites
+				if (usage.cacheWrites !== undefined) {
+					result.totalCacheWrites = (result.totalCacheWrites ?? 0) + usage.cacheWrites
 				}
-				if (typeof cacheReads === "number") {
-					result.totalCacheReads = (result.totalCacheReads ?? 0) + cacheReads
+				if (usage.cacheReads !== undefined) {
+					result.totalCacheReads = (result.totalCacheReads ?? 0) + usage.cacheReads
 				}
-				if (typeof cost === "number") {
-					result.totalCost += cost
+				if (usage.cost !== undefined) {
+					result.totalCost += usage.cost
 				}
-			} catch {
-				// Ignore JSON parse errors
 			}
 		}
 	})
@@ -84,14 +133,12 @@ export function getLastApiReqTotalTokens(messages: DietCodeMessage[]): number {
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const msg = messages[i]
 		if (msg.type === "say" && msg.say === "api_req_started" && msg.text) {
-			try {
-				const { tokensIn, tokensOut, cacheWrites, cacheReads } = JSON.parse(msg.text)
-				const total = (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
+			const usage = getApiUsage(msg)
+			if (usage.parsed) {
+				const total = (usage.tokensIn ?? 0) + (usage.tokensOut ?? 0) + (usage.cacheWrites ?? 0) + (usage.cacheReads ?? 0)
 				if (total > 0) {
 					return total
 				}
-			} catch {
-				// Ignore JSON parse errors, continue searching
 			}
 		}
 	}
