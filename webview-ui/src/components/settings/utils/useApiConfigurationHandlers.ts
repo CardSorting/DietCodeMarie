@@ -59,7 +59,7 @@ export const useApiConfigurationHandlers = () => {
 		options?: ApiConfigurationUpdateOptions,
 	) => {
 		if (planActSeparateModelsSetting) {
-			const targetField = fieldPair[currentMode]
+			const targetField = currentMode === "plan" ? fieldPair.plan : fieldPair.act
 			await handleFieldChange(targetField, value, options)
 		} else {
 			await handleFieldsChange(

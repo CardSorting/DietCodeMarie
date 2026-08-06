@@ -4,7 +4,27 @@
 > **When do I use it?** Before introducing new abstractions, changing completion contracts, or altering workspace data-flow spines.
 > **What is the source of truth?** Approved implementation plans, user-signed ADRs, and structural design conventions.
 
-Last audited: 2026-07-24
+Last audited: 2026-08-06
+
+## ADR-017: Guided Spec Execution Mode (v1.0.0-spec) & Zero-Syntax Product Management
+
+**Status:** Accepted & Implemented
+
+**Context:** Non-technical stakeholders (product managers, client approvers, non-engineering leadership) struggle with classic AI coding interfaces that require acting as software architects—formulating complex prompt queries, reviewing code diffs, reading terminal execution output, and interpreting stack traces.
+
+**Decision:** Implement Guided Spec Mode (`v1.0.0-spec`) layered over the core LLM execution engine under the `AUTO` execution mode:
+1. **`AUTO` Mode Integration**: Extend the `Mode` union type to include `"auto"` across storage, policy engines (`UniversalGuard`, `FluidPolicyEngine`), system prompts, and UI controls.
+2. **Zero-Code & Zero-Terminal Prompt Injection**: When in `"auto"` mode, `PromptBuilder.ts` injects `# SYSTEM OVERRIDE: LUMI GUIDED SPEC MODE`, banning raw code blocks, bash commands, and speculative developer language in favor of 4-block structured product specifications.
+3. **4-State Deterministic Lifecycle Engine**: `0. IDLE` $\rightarrow$ `1. DISCOVERY` $\rightarrow$ `2. SPEC LOCK` $\rightarrow$ `3. MILESTONE EXEC` $\rightarrow$ `4. HANDOFF`.
+4. **Real-time Parser & Product Canvas**: `parseGuidedSpecOutput` (`parser.ts`) extracts real-time state streams. `GuidedSpecCard.tsx` renders visual Breadboards, Progress Stepper Timelines, 1-Click Decision Chips (`Option A` / `Option B`), single-key Superhuman shortcuts (`Press A` / `Press B`), trade-off rationale drawers, and an interactive **Product Architecture Canvas Drawer**.
+5. **Sticky Composer Quick Approve**: `ChatTextArea.tsx` renders a sticky 1-click **"Proceed with Defaults"** action bar above the input field.
+
+**Consequences:**
+- Eliminates technical syntax noise for non-technical stakeholders.
+- Enables 1-click or 1-key (`A`) milestone progression with zero prompt typing.
+- Auto-generates rollback restoration snapshot checkpoints upon feature handoff.
+
+
 
 ## ADR-016: Unified MoD Prompt Steering Toggle Architecture
 

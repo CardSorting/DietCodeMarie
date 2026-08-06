@@ -34,13 +34,16 @@
 12. If projections remain above the emergency fence, advance the complete historical-pair deletion range at the same safe boundary. Preserve the initial objective without a model-visible alert.
 13. Emit existing auto-compaction telemetry and keep semantic model summarization only as the fallback for histories too small to roll safely.
 
-## Master of Design (MoD) Steering & Execution Patterns
-
-1. **System Prompt Steering Toggle**: Set `modEnabled: true` in global settings. `PromptBuilder` injects `MOD_DESIGNER_STEERING` right after `AGENT_ROLE_SECTION`.
-2. **6 Senior Design Engineering Pillars**: Automatically steers every task loop execution with Design Token Sensing, Complete 7-State UI Matrix, WCAG 2.1 AA Accessibility, Visual Aesthetics, Responsive Layout Ergonomics, and 5-Whys Cognitive Analysis.
-3. **Unified Task Execution Path**: Executes on the standard task loop with 100% tool parity (`read_file`, `replace_in_file`, `execute_command`, `browser_action`, subagents, MCP tools).
-4. **Subagent Swarm Inheritance**: `SubagentRunner.ts` propagates `modEnabled: true` context down to subagent task swarms.
-5. **Non-Technical UX Switcher**: Segmented control bar (`ModModeSwitcher.tsx`) with zero-jargon copy, keyboard navigation (`ArrowLeft` / `ArrowRight`), and popover guides.
+44: 
+45: ## Guided Spec Mode (`AUTO`) Zero-Syntax Steering Patterns
+46: 
+47: 1. **`AUTO` Mode Selection**: Select `"auto"` mode via `ModModeSwitcher.tsx` or settings.
+48: 2. **System Prompt Override**: `PromptBuilder.ts` automatically injects `# SYSTEM OVERRIDE: LUMI GUIDED SPEC MODE`, banning raw code blocks, raw shell execution, and speculative developer language.
+49: 3. **4-Block Structured Format Enforcement**: Every assistant response must output structured 4-block specifications: Block 1 Breadboard Map (`Place`, `Affordances`, `Wiring`), Block 2 Milestone Stepper (`[DONE]`, `[IN PROGRESS]`, `[PENDING]`), Block 3 Decision Waypoint (Question), and Block 4 Decision Chips (`Option A` & `Option B`).
+50: 4. **Real-time Output Parsing**: Streamed text is continuously parsed into `GuidedSpecState` via `parseGuidedSpecOutput()` (`src/shared/guidedSpec/parser.ts`).
+51: 5. **Visual Breadboards & Steppers**: `GuidedSpecCard.tsx` renders visual surface maps, milestone progress timers (`2/3 - 66%`), interactive milestone accordions, trade-off rationale drawers (`💡 Why Option A is Recommended`), and an interactive **Product Architecture Canvas Drawer**.
+52: 6. **1-Click / Single-Key Approvals**: Approvers execute decisions via 1-click decision chips, single-key Superhuman shortcuts (`Press A` / `Press B`), or the composer's sticky **"Proceed with Defaults"** quick action bar.
+53: 7. **Automated Handoff Snapshot**: State 4 (`HANDOFF`) auto-generates a rollback restoration point (`📸 Snapshot Ready`).
 
 ## Transactional Task Lifecycle
 

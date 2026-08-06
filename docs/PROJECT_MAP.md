@@ -32,7 +32,8 @@ This map reflects the **actual** layout of the LUMI agent workspace. Paths are r
 | **`src/shared/`** | Shared types, proto conversions, `DietCodeDefaultTool` enum |
 | **`src/integrity/`** | Stability monitor, audit recorder, handover |
 | **`src/domain/`** | Import resolution (`import-resolution/`) |
-| **`webview-ui/`** | React sidebar — chat, settings, MCP configuration |
+| **`src/shared/guidedSpec/`** | Guided Spec Mode parser (`parseGuidedSpecOutput`), data schemas, and state types |
+| **`webview-ui/`** | React sidebar — chat, settings, MCP configuration, GuidedSpecCard, ModModeSwitcher |
 | **`broccolidb/`** | Context store package (documented separately) |
 | **`proto/`** | Protobuf schemas for state, host bridge, hooks |
 

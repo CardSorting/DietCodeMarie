@@ -509,18 +509,19 @@ LUMI includes **Master of Design (MoD)**, a prompt-steered execution mode that i
 
 ---
 
-## Plan & Act modes
+## Execution Modes (Plan, Act & AUTO)
 
-LUMI runs in **`plan`** or **`act`** mode. Each mode can use a different provider and model.
+LUMI operates across **`plan`**, **`act`**, and **`auto`** (Guided Spec) modes. Each mode targets specific user workflow requirements:
 
-| Mode | Response tool | Behavior | Context Compaction Integration |
-|------|---------------|----------|--------------------------------|
-| **Plan** | `plan_mode_respond` | Strategy, exploration, read-only tools | Large repository traversals and file searches compact structural outlines into BroccoliDB CAS, keeping architectural context active without token bloat. |
-| **Act** | `act_mode_respond` | Implementation — mutating tools with approval | Command logs and tool evidence are compact-projected under strict SQLite transactions, ensuring file diff approvals remain fast and reliable. |
+| Mode | Response tool | Behavior | Non-Technical & Developer Ergonomics |
+|------|---------------|----------|--------------------------------------|
+| **Plan** | `plan_mode_respond` | Strategy, exploration, read-only tools | Large repository traversals and file searches compact structural outlines into CAS without token bloat. |
+| **Act** | `act_mode_respond` | Implementation — mutating tools with approval | Command logs and tool evidence are projected under strict transactions for rapid diff approvals. |
+| **AUTO (Guided Spec)** | Guided Spec Engine | Zero-syntax product management wrapper | Suppresses code and terminal noise. Renders visual Breadboards, Progress Steppers, 1-Click Decision Chips (`Option A`/`Option B`), and Superhuman keyboard shortcuts (`Press A`/`Press B`). |
 
-Typical flow: gather context in Plan → approve direction → Act executes writes → `attempt_completion` through completion gates. During long sessions, **BroccoliDB Recoverable Compaction** operates automatically across both modes at turn boundaries.
+Typical flow: gather context in Plan → approve direction → Act executes writes → `attempt_completion` through completion gates. Non-technical client approvers can switch to **AUTO** mode to steer feature builds via 1-click approvals with zero code fatigue.
 
-Guide: [docs/core-workflows/plan-and-act.mdx](docs/core-workflows/plan-and-act.mdx)
+Guide: [docs/core-features/guided-spec-mode.md](docs/core-features/guided-spec-mode.md) · Architecture ADR: [ADR-003](docs/architecture/adr-003-guided-spec-execution-mode.md) / [ADR-017](DECISIONS.md#adr-017-guided-spec-execution-mode-v100-spec--zero-syntax-product-management)
 
 ---
 

@@ -28,6 +28,7 @@ This ledger now routes to the current LUMI workspace operating docs and preserve
 - [**MEOW-012: Transactional Task Lifecycle Authority**](adr/MEOW-012-transactional-task-lifecycle.md) — Generation-bound state transitions, cancellation, resume, parent/child propagation, and immutable events.
 - [**MEOW-013: Recoverable Turn-Boundary Context Projection**](adr/MEOW-013-recoverable-context-projection.md) — Durable-source, bounded, stream-safe context projection.
 - [**MEOW-014: Universal Zenith Resilience Engineering & Epistemic Graph Infrastructure**](adr/MEOW-014-universal-zenith-resilience.md) — Circuit breakers, speculative read caching, adaptive lock backoff jitter, Epistemic PageRank confidence scoring, 4-pillar forensic diagnostic probes, and Task DAG dependency scheduling.
+- [**MEOW-017: Guided Spec Execution Mode (v1.0.0-spec) & Zero-Syntax Shielding**](adr/MEOW-017-guided-spec-execution-mode.md) — Zero-syntax product management wrapper, 4-phase state machine, real-time parser, visual breadboards, 1-click decision chips, Superhuman shortcuts (`Press A`/`Press B`), and interactive Product Architecture Canvas.
 - [**MEOW Migration Report**](meow-migration.md) — Before/after evolution and measured evidence.
 - [**00 Forensic Substrate Report**](00-forensics.md) — Historical forensic report; refresh before treating as current.
 

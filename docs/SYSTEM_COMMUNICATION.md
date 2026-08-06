@@ -35,6 +35,7 @@ The sidebar webview does not call Node APIs directly. Instead:
 3. `Controller` updates state or forwards to the active `Task`.
 4. State and partial streams push back through the same channel (`sendStateUpdate`, `sendPartialMessageEvent`, etc.).
 5. Live streaming chat messages update through `ChatMessagesContext`, which is decoupled from global extension settings (`ExtensionStateContext`) to prevent webview re-render cascades during streaming (see [ADR-002](architecture/adr-002-webview-state-decoupling-and-streaming-optimization.md)).
+6. When `mode === "auto"`, assistant text streams are continuously parsed by `parseGuidedSpecOutput` (`src/shared/guidedSpec/parser.ts`) into `GuidedSpecState`, rendering visual Breadboard surface maps, Milestone timelines, Decision Chips, and Product Architecture Canvases directly in `GuidedSpecCard.tsx` (see [ADR-003](architecture/adr-003-guided-spec-execution-mode.md)).
 
 Generated types live in `src/generated/` and `src/shared/proto/`.
 

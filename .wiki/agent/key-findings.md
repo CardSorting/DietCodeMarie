@@ -1,6 +1,16 @@
 # Key Findings
 
-## 2026-07-29 Hardware Automatic Prompt Caching Engine (ApcStableIngestionEngine)
+## 2026-08-06 Guided Spec Mode (`AUTO` Execution Wrapper v1.0.0-spec)
+
+- **Zero-Syntax Shielding for Non-Technical Stakeholders**: Eliminates prompt fatigue and code/terminal noise for product managers, client approvers, and non-engineering leadership by forcing LLM outputs into 4-block structured product specifications.
+- **Deterministic 4-Phase Lifecycle Engine**: State machine (`DISCOVERY` $\rightarrow$ `SPEC LOCK` $\rightarrow$ `MILESTONE EXEC` $\rightarrow$ `HANDOFF`) enforces 4-block output formats: Block 1 Breadboard Map (`Place`, `Affordances`, `Wiring`), Block 2 Milestone Stepper (`[DONE]`, `[IN PROGRESS]`, `[PENDING]`), Block 3 Decision Waypoint (Question), and Block 4 Decision Chips (`Option A` & `Option B`).
+- **Superhuman Single-Key Keyboard Acceleration (`Press A` / `Press B`)**: Keyboard event listeners in `GuidedSpecCard.tsx` allow instant 1-key decision approvals (`A` for Option A, `B` for Option B) with visual keyboard shortcut badges.
+- **Decision Rationale & Trade-off Matrix**: `Rationale` drawers on decision chips explain *why* Option A is recommended and evaluate trade-offs before approving.
+- **Interactive Live Architecture Canvas**: `🎨 Live Canvas` drawer in `GuidedSpecCard.tsx` expands full surface places, wireframed affordances, and lock metrics.
+- **Automated Rollback Checkpoint**: State 4 (`HANDOFF`) auto-generates a rollback restoration snapshot (`📸 Snapshot Ready`).
+- **Verification Evidence**: `parseGuidedSpecOutput` mocha parser test suite passing (`2/2 passing`), `npm run check-types` clean with 0 errors across extension backend and webview frontend.
+
+
 
 - **100% Multi-Turn Prefix Invariance**: Historical turns ($0..N-1$) remain byte-for-byte invariant across multi-turn agent sessions, eliminating prompt cache invalidation on Cerebras wafer-scale hardware and Gemma models.
 - **BPE Vocabulary Preservation**: Cleans whitespace, CRLF, HTML comments, stack frames, paths, and URLs without introducing artificial shorthand symbols (`st:`, `msg:`, `err:`, `[@diff]`) that shatter Gemma/Cerebras BPE subword tokens.

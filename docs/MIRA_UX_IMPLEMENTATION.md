@@ -24,6 +24,9 @@ This guide documents **where and how** the MIRA emotional UX system is implement
 | Silent completions | `webview-ui/src/components/chat/CompletionOutputRow.tsx` |
 | Tool narration | `webview-ui/src/components/chat/ChatRow.tsx` |
 | Error recovery copy | `webview-ui/src/components/chat/ErrorRow.tsx` |
+| Guided Spec Card | `webview-ui/src/components/chat/GuidedSpecCard.tsx` |
+| Mode Switcher Bar | `webview-ui/src/components/chat/ModModeSwitcher.tsx` |
+| Guided Spec Stream Parser | `src/shared/guidedSpec/parser.ts` |
 | Audit UI tokens | `webview-ui/src/components/chat/audit/auditUiStyles.ts` |
 | Audit report panel | `webview-ui/src/components/chat/AuditReportPanel.tsx` |
 | Audit history strip | `webview-ui/src/components/chat/task-header/AuditHistoryStrip.tsx` |

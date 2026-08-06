@@ -31,7 +31,7 @@ The parent task is **coordinator, reviewer, and receipt presenter** — not a me
 | **Is it safe to merge?** | `MergeGate` optimistic reconciliation | Silent success on partial evidence |
 | **What may change workspace roadmap?** | Evidence-backed `proposedWorkspacePatch` → `runRoadmapPatchReconciliation` | `localRoadmapEvents` smuggling authoritative state |
 
-Non-mutating lanes (`read_only`, `audit_only`, …) emit full receipts with `lockRequired: false` — replayable and visible without ownership pressure.
+Non-mutating lanes (`read_only`, `audit_only`, …) emit full receipts with `lockRequired: false` — replayable and visible without ownership pressure. Subagent swarms created via `use_subagents` automatically inherit the active execution mode context (`mode: "auto"`, `modEnabled: true`) from `SubagentRunner.ts`, ensuring child lanes honor zero-syntax shielding and design constraints.
 
 ---
 

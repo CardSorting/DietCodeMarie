@@ -1,3 +1,4 @@
+import { Mode } from "@shared/storage/types"
 import { DietCodeDefaultTool } from "@shared/tools"
 import * as crypto from "crypto"
 import * as fs from "fs/promises"
@@ -54,7 +55,7 @@ export interface PolicyResult {
 export class FluidPolicyEngine {
 	private readonly tspPlugin: TspPolicyPlugin
 	private readonly spiderEngine: SpiderEngine
-	private mode: "plan" | "act" = "act"
+	private mode: Mode = "act"
 	private commitSeal: string | null = null
 	private sealReason: string | null = null
 	private layerCache: Map<string, string> = new Map()
@@ -224,7 +225,7 @@ export class FluidPolicyEngine {
 		}
 	}
 
-	public setMode(mode: "plan" | "act") {
+	public setMode(mode: Mode) {
 		this.mode = mode
 	}
 

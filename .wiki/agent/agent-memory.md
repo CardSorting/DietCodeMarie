@@ -47,7 +47,10 @@
 - Production coordination authority is immutable `sqlite`. A database failure raises `DATABASE_AUTHORITY_UNAVAILABLE`; never adopt memory or filesystem state as fallback authority.
 - Lease identity is `resource + ownerId + leaseEpoch + fencingToken + authorityMode`. Epochs and tokens are decimal strings/`bigint`, never JavaScript `number`.
 - Memory, governed lock files, and Broccoli fences are projections. Reconciliation requires a database-available snapshot; malformed or clock-skewed records fail closed and remain on disk.
-- `AdministrativeLockCleaner` is the only ownership override. It requires an explicit reason and is not callable through normal `LockAuthority` orchestration.
+- Guided Spec Mode (`AUTO`) is a deterministic execution wrapper layered over the core LLM engine. When `mode === "auto"`, `PromptBuilder.ts` automatically injects `# SYSTEM OVERRIDE: LUMI GUIDED SPEC MODE`, banning raw markdown code blocks, raw shell execution, and speculative developer language.
+- Every assistant response in `AUTO` mode must adhere to 4-block structured product specification formatting (Block 1 Breadboard Spec, Block 2 Milestone Stepper, Block 3 Decision Waypoint, Block 4 Decision Chips). `parseGuidedSpecOutput` (`parser.ts`) extracts state in real time.
+- State 4 (`HANDOFF`) auto-generates a rollback restoration point (`📸 Snapshot Ready`). Non-technical stakeholders steer feature builds via 1-click decision chips, single-key Superhuman shortcuts (`Press A`/`Press B`), decision rationale trade-off drawers, and an interactive **Product Architecture Canvas Drawer**.
+
 - Deadlock recovery requires a typed immutable scheduler snapshot, an SCC with no timer/lease/owner/capacity escape, and unchanged scheduler plus lane versions at apply time.
 - Task completion is terminal only after the `task_completions` `BEGIN IMMEDIATE` CAS verifies the current lease generation and unchanged task state version. Sibling validation command runs as a separately admitted invocation after the original completion permit is released, coordinated via a state-machine that claims dispatch atomically under `evidence_dispatching`. Never use raw database connections or synchronous getters in domain logic; read execution evidence through narrow repository functions.
 

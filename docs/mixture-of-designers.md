@@ -157,9 +157,11 @@ When a primary task running in MoD Mode launches subagents via `use_subagents`, 
 
 ---
 
-## World-Class UX Ergonomics
+## World-Class UX Ergonomics & 3-Mode Switcher
 
-- **Segmented Control Pill**: Clean, zero-jargon toggle between **Coding Mode** and **Design Mode (MoD)** positioned directly above the chat composer input.
+- **3-Segment Control Pill**: Clean, zero-jargon toggle between **Coding Mode** (direct execution), **Design Mode (MoD)** (studio design steering), and **AUTO Mode (Guided Spec)** positioned directly above the chat composer input (`ModModeSwitcher.tsx`).
+- **Guided Spec (`AUTO`) Synergy**: While MoD Mode enforces studio-grade frontend design engineering, **Guided Spec Mode (`v1.0.0-spec`)** layers a zero-syntax product management wrapper over LLM outputs for non-technical stakeholders (visual Breadboards, Progress Steppers, 1-Click Decision Chips, Superhuman shortcuts `A`/`B`, and Product Architecture Canvas).
 - **Keyboard Ergonomics**: Keyboard arrow key navigation (`ArrowLeft` / `ArrowRight`) across execution tabs with proper `role="tablist"` ARIA attributes.
-- **Execution Mode Guide**: Integrated popover offering non-technical explanations and visual indicator badges.
+- **Execution Mode Guide**: Integrated popover offering non-technical explanations, visual indicator badges, and live telemetry status (`⚡ Zero-Syntax Shielding Active`).
+
 

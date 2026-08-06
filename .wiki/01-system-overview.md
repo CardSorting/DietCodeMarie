@@ -44,6 +44,7 @@ src/extension.ts
 | Prompts | `src/core/prompts/system-prompt/` |
 | Webview UI | `webview-ui/` |
 | Protocol | `proto/`, `src/generated/` |
+| Guided Spec Mode (`AUTO`) | `src/shared/guidedSpec/`, `webview-ui/src/components/chat/GuidedSpecCard.tsx` |
 | Roadmap/governance | `src/services/roadmap/`, `ROADMAP.md` |
 | Substrate package | `broccolidb/` |
 

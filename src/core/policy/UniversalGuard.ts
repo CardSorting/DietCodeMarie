@@ -2,6 +2,7 @@
  * [LAYER: CORE]
  */
 
+import { Mode } from "@shared/storage/types"
 import { PlanModeEnforcer } from "@/core/policy/PlanModeEnforcer"
 import { ToolUse } from "../assistant-message"
 import { StateManager } from "../storage/StateManager"
@@ -15,7 +16,7 @@ import { FluidPolicyEngine, PolicyResult } from "./FluidPolicyEngine"
 export class UniversalGuard {
 	public readonly engine: FluidPolicyEngine
 	private readonly planModeEnforcer: PlanModeEnforcer
-	private currentMode: "plan" | "act" = "act"
+	private currentMode: Mode = "act"
 
 	constructor(cwd: string, taskId: string, stateManager: StateManager) {
 		this.engine = new FluidPolicyEngine(cwd, taskId, stateManager)
@@ -25,14 +26,14 @@ export class UniversalGuard {
 	/**
 	 * Sets the current agent mode. This affects enforcement behavior:
 	 * - PLAN mode: enforcement is relaxed (guidance only, no blocking)
-	 * - ACT mode: full enforcement with progressive strike tracking
+	 * - ACT / AUTO mode: full enforcement with progressive strike tracking
 	 */
-	public setMode(mode: "plan" | "act") {
+	public setMode(mode: Mode) {
 		this.currentMode = mode
 		this.engine.setMode(mode)
 	}
 
-	public getMode(): "plan" | "act" {
+	public getMode(): Mode {
 		return this.currentMode
 	}
 

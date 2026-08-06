@@ -173,8 +173,8 @@ export interface SystemPromptContext {
 	readonly enableNativeToolCalls?: boolean
 	readonly enableParallelToolCalling?: boolean
 	readonly terminalExecutionMode?: "vscodeTerminal"
-	readonly mode?: "plan" | "act"
-	readonly parentMode?: "plan" | "act"
+	readonly mode?: "plan" | "act" | "auto"
+	readonly parentMode?: "plan" | "act" | "auto"
 	readonly taskState?: TaskState // To avoid circular dependency issues if TaskState isn't exported well, but we can try proper import first.
 	readonly goldenCartridgeAvailable?: boolean
 	readonly modEnabled?: boolean

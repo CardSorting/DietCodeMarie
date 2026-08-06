@@ -11,4 +11,4 @@ export function normalizeOpenaiReasoningEffort(effort?: string): OpenaiReasoning
 	return isOpenaiReasoningEffort(value) ? value : "medium"
 }
 
-export type Mode = "plan" | "act"
+export type Mode = "plan" | "act" | "auto"

@@ -1,6 +1,7 @@
 import { mentionRegex } from "@shared/context-mentions"
 import { EmptyRequest, StringRequest } from "@shared/proto/dietcode/common"
 import { FileSearchRequest, FileSearchType, RelativePathsRequest, SkillInfo } from "@shared/proto/dietcode/file"
+import { ArrowRight, Sparkles } from "lucide-react"
 import type React from "react"
 import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import DynamicTextArea from "react-textarea-autosize"
@@ -37,6 +38,7 @@ import {
 	slashCommandDeleteRegex,
 } from "@/utils/slash-commands"
 import { ChatInputActions } from "./ChatInputActions"
+import { MicrophonePermissionBanner } from "./MicrophonePermissionBanner"
 import { VoiceDictationCapsule } from "./VoiceDictationCapsule"
 
 const { MAX_IMAGES_AND_FILES_PER_MESSAGE } = CHAT_CONSTANTS
@@ -181,8 +183,10 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			interimTranscript,
 			language: detectedLanguage,
 			error: speechError,
+			isPermissionBlocked,
 			toggleListening: toggleVoiceInput,
 			resetError: clearSpeechError,
+			requestPermission: requestSpeechPermission,
 		} = useSpeechToText({
 			onTranscript: handleSpeechTranscript,
 		})
@@ -1266,7 +1270,12 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								? "Send follow-up"
 								: "Send message"
 		const sendIsSecondary = composerMode === "approval" || composerMode === "recovering" || composerMode === "completion"
-		const effectivePlaceholder = composerMode === "resume" ? "Describe what to change before resuming…" : placeholderText
+		const effectivePlaceholder =
+			mode === "auto"
+				? "Click 'Proceed with Defaults' above or select an option to steer LUMI..."
+				: composerMode === "resume"
+					? "Describe what to change before resuming…"
+					: placeholderText
 
 		return (
 			<section
@@ -1411,25 +1420,32 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					)}
 
 					{speechError && (
-						<div className="mx-3 my-1.5 flex items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300">
-							<span className="truncate">{speechError}</span>
-							<div className="flex items-center gap-2 shrink-0">
-								<button
-									className="rounded border border-amber-500/30 bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-200 hover:bg-amber-500/30"
-									onClick={() => {
-										clearSpeechError()
-										toggleVoiceInput()
-									}}
-									type="button">
-									Try Again
-								</button>
-								<button
-									className="text-[10px] text-amber-200/70 hover:underline"
-									onClick={clearSpeechError}
-									type="button">
-									Dismiss
-								</button>
-							</div>
+						<MicrophonePermissionBanner
+							error={speechError}
+							isPermissionBlocked={isPermissionBlocked}
+							onDismiss={clearSpeechError}
+							onRequestPermission={requestSpeechPermission}
+							onTryAgain={() => {
+								clearSpeechError()
+								toggleVoiceInput()
+							}}
+						/>
+					)}
+
+					{mode === "auto" && !sendingDisabled && (
+						<div className="px-3 pb-1.5 pt-0.5">
+							<button
+								className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-purple-600/90 to-amber-600/90 hover:from-purple-500 hover:to-amber-500 text-white shadow-md border border-purple-400/40 transition-all duration-150 active:scale-[0.98]"
+								onClick={() => {
+									onSend("Proceed with Option A (Recommended Default)")
+								}}
+								type="button">
+								<span className="flex items-center gap-1.5">
+									<Sparkles className="size-3.5 text-amber-300 animate-pulse" />
+									<span>Proceed with Defaults (1-Click Approve)</span>
+								</span>
+								<ArrowRight className="size-3.5" />
+							</button>
 						</div>
 					)}
 

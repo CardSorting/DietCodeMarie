@@ -430,3 +430,12 @@ Do not introduce a new global coordinator, lifecycle gate, synchronization layer
 The architecture should evolve through increasingly precise ownership—not increasingly elaborate ceremony.
 
 > **Architectural thesis:** Execution should be constrained by dependencies, resource ownership, and concrete risk—not by presentation order, procedural ceremony, or advisory infrastructure.
+
+---
+
+## Execution Modes (Plan, Act & AUTO Guided Spec)
+
+MEOW supports three execution modes targeting distinct developer and stakeholder workflows:
+- **`plan` Mode**: Strategy, exploration, and read-only tool orchestration.
+- **`act` Mode**: Implementation — mutating tool execution with policy evaluation and permission permit gates.
+- **`auto` Mode (Guided Spec v1.0.0-spec)**: Zero-syntax product management wrapper. Suppresses raw code blocks, terminal execution logs, and developer jargon. Parses LLM outputs into 4-block structured product specifications (`Breadboard Surface Map`, `Milestone Progress Stepper`, `Decision Waypoint`, and `Decision Chips`). Approvers steer feature builds via 1-click decision chips, single-key Superhuman shortcuts (`Press A`/`Press B`), rationale trade-off drawers (`💡`), and an interactive **Product Architecture Canvas Drawer** ([MEOW-017](adr/MEOW-017-guided-spec-execution-mode.md)).

@@ -14,30 +14,41 @@ export interface ModModeSwitcherProps {
  * Provides a clean, subtle toggle between Coding Mode and Design (MoD) Mode.
  */
 export const ModModeSwitcher: React.FC<ModModeSwitcherProps> = memo(({ className }) => {
-	const { modEnabled } = useExtensionState()
+	const { mode, modEnabled } = useExtensionState()
 	const [infoOpen, setInfoOpen] = useState(false)
 
-	const isDesignMode = Boolean(modEnabled)
+	const isAutoMode = mode === "auto"
+	const isDesignMode = !isAutoMode && Boolean(modEnabled)
+	const isCodingMode = !isAutoMode && !isDesignMode
 
 	const handleSetCodingMode = useCallback(() => {
+		updateSetting("mode", "act")
 		updateSetting("modEnabled", false)
 	}, [])
 
 	const handleSetDesignMode = useCallback(() => {
+		updateSetting("mode", "act")
 		updateSetting("modEnabled", true)
+	}, [])
+
+	const handleSetAutoMode = useCallback(() => {
+		updateSetting("mode", "auto")
+		updateSetting("modEnabled", false)
 	}, [])
 
 	const handleKeyDown = useCallback(
 		(e: React.KeyboardEvent<HTMLDivElement>) => {
 			if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
 				e.preventDefault()
-				handleSetCodingMode()
+				if (isAutoMode) handleSetDesignMode()
+				else handleSetCodingMode()
 			} else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
 				e.preventDefault()
-				handleSetDesignMode()
+				if (isCodingMode) handleSetDesignMode()
+				else handleSetAutoMode()
 			}
 		},
-		[handleSetCodingMode, handleSetDesignMode],
+		[isAutoMode, isCodingMode, handleSetCodingMode, handleSetDesignMode, handleSetAutoMode],
 	)
 
 	return (
@@ -56,10 +67,10 @@ export const ModModeSwitcher: React.FC<ModModeSwitcherProps> = memo(({ className
 				{/* Coding Button */}
 				<button
 					aria-controls="coding-mode-panel"
-					aria-selected={!isDesignMode}
+					aria-selected={isCodingMode}
 					className={cn(
 						"relative flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/50",
-						!isDesignMode
+						isCodingMode
 							? "bg-[#1b2624] text-[#e6f7f3] shadow-xs font-semibold border border-emerald-500/35"
 							: "text-description/60 hover:text-[#faf9f7] hover:bg-[#1a1a24]",
 					)}
@@ -71,12 +82,12 @@ export const ModModeSwitcher: React.FC<ModModeSwitcherProps> = memo(({ className
 					<Terminal
 						className={cn(
 							"size-2.5 shrink-0 transition-colors",
-							!isDesignMode ? "text-emerald-400" : "text-description/40",
+							isCodingMode ? "text-emerald-400" : "text-description/40",
 						)}
 						strokeWidth={2}
 					/>
 					<span>Coding</span>
-					{!isDesignMode && (
+					{isCodingMode && (
 						<span className="relative flex size-1 shrink-0 ml-0.5">
 							<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
 							<span className="relative inline-flex size-1 rounded-full bg-emerald-500" />
@@ -114,10 +125,46 @@ export const ModModeSwitcher: React.FC<ModModeSwitcherProps> = memo(({ className
 						</span>
 					)}
 				</button>
+
+				{/* AUTO Button (Guided Spec Mode) */}
+				<button
+					aria-controls="auto-mode-panel"
+					aria-selected={isAutoMode}
+					className={cn(
+						"relative flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/50",
+						isAutoMode
+							? "bg-gradient-to-r from-amber-950/70 to-purple-950/70 text-[#fff7ed] shadow-xs border border-amber-500/50 font-semibold"
+							: "text-description/60 hover:text-[#faf9f7] hover:bg-[#1a1a24]",
+					)}
+					data-testid="auto-mode-button"
+					onClick={handleSetAutoMode}
+					role="tab"
+					title="AUTO Mode: Guided Spec Mode with visual breadboards, milestone steppers, and 1-click decision chips"
+					type="button">
+					<Sparkles
+						className={cn(
+							"size-2.5 shrink-0 transition-colors",
+							isAutoMode ? "text-amber-400 animate-pulse" : "text-description/40",
+						)}
+						strokeWidth={2}
+					/>
+					<span>AUTO</span>
+					{isAutoMode && (
+						<span className="inline-flex items-center gap-0.5 px-0.5 py-0.1 rounded text-[7px] font-bold uppercase tracking-wider bg-amber-500/30 text-amber-200 border border-amber-400/30">
+							SPEC
+						</span>
+					)}
+				</button>
 			</div>
 
 			{/* Minimal Info Tools */}
 			<div className="flex items-center gap-1 shrink-0 text-[9.5px]">
+				{isAutoMode && (
+					<div className="hidden sm:flex items-center gap-1 px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-950/30 text-amber-200 text-[8.5px] font-mono animate-pulse">
+						<Sparkles className="size-2.5 text-amber-300" />
+						<span>Zero-Syntax Shielding Active</span>
+					</div>
+				)}
 				<Popover onOpenChange={setInfoOpen} open={infoOpen}>
 					<PopoverTrigger asChild>
 						<button

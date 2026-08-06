@@ -20,6 +20,9 @@ Use this when you change code and need to update the matching doc.
 | `src/core/api/index.ts` | [Model selection](core-features/model-selection-guide.mdx) · [Providers overview](provider-config/README.mdx) |
 | `src/core/api/transform/token-buffer-engine.ts` | [ADR-001 Token Buffer Engine](architecture/adr-001-token-ingestion-buffer-engine.md) · [Token Buffer Brief](papers/token-buffer-companion-brief.md) · [Token Buffer Whitepaper](papers/token-buffer-whitepaper.md) |
 | `src/core/api/providers/cerebras.ts` | [ADR-001 Token Buffer Engine](architecture/adr-001-token-ingestion-buffer-engine.md) · [Token Buffer Whitepaper](papers/token-buffer-whitepaper.md) · [Providers overview](provider-config/README.mdx) |
+| `src/shared/guidedSpec/` | [Guided Spec Mode](core-features/guided-spec-mode.md) · [ADR-003 Guided Spec Mode](architecture/adr-003-guided-spec-execution-mode.md) |
+| `webview-ui/src/components/chat/GuidedSpecCard.tsx` | [Guided Spec Mode](core-features/guided-spec-mode.md) · [ADR-003 Guided Spec Mode](architecture/adr-003-guided-spec-execution-mode.md) |
+| `webview-ui/src/components/chat/ModModeSwitcher.tsx` | [Guided Spec Mode](core-features/guided-spec-mode.md) · [ADR-003 Guided Spec Mode](architecture/adr-003-guided-spec-execution-mode.md) |
 | `src/shared/providers/providers.json` | [Providers overview](provider-config/README.mdx) |
 
 ## Safety & customization

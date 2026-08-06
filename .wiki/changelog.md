@@ -2,6 +2,15 @@
 
 This log preserves historical wiki entries and records current LUMI workspace knowledge-layer changes.
 
+## [Guided Spec Execution Mode (v1.0.0-spec) & Zero-Syntax Shielding] — 2026-08-06
+
+- **Zero-Syntax Execution Mode (`AUTO`)**: Layered a deterministic zero-code product management execution wrapper over the core LLM engine to suppress raw code blocks, shell execution syntax, and developer jargon for non-technical product managers, client approvers, and business stakeholders.
+- **4-Phase Lifecycle Engine**: Implemented 4-state lifecycle machine (`DISCOVERY` $\rightarrow$ `SPEC LOCK` $\rightarrow$ `MILESTONE EXEC` $\rightarrow$ `HANDOFF`) enforcing 4-block structured product specifications: Block 1 Breadboard Map (`Place`, `Affordances`, `Wiring`), Block 2 Milestone Stepper (`[DONE]`, `[IN PROGRESS]`, `[PENDING]`), Block 3 Decision Waypoint (Question), and Block 4 Decision Chips (`Option A` & `Option B`).
+- **Real-Time Parser & Webview Card**: Built `parseGuidedSpecOutput()` (`src/shared/guidedSpec/parser.ts`) to extract streamed LLM responses in real time and render visual Breadboards, Progress Steppers (`2/3 - 66%`), 1-Click Decision Chips (`Option A`/`Option B`), Superhuman single-key shortcuts (`Press A`/`Press B`), decision trade-off drawers (`💡`), interactive **Product Architecture Canvas**, and sticky composer quick approval bars in `GuidedSpecCard.tsx`.
+- **System Prompt Override**: `PromptBuilder.ts` automatically injects `# SYSTEM OVERRIDE: LUMI GUIDED SPEC MODE` when `mode === "auto"`.
+- **Automated Rollback Checkpoints**: State 4 (`HANDOFF`) auto-generates a rollback restoration point (`📸 Snapshot Ready`).
+- **Verification & Documentation**: `2/2 passing` mocha parser tests, `npm run check-types` clean with 0 errors across 22 core documentation and code surfaces.
+
 ## [LUMI Designer-in-Residence Enterprise Architecture & Governance Upgrade] — 2026-07-24
 
 - **Designer-in-Residence Paradigm**: Replaced multi-persona voting with an embedded senior product designer agent architecture that moves fluidly across internal design lenses while maintaining one coherent product vision.

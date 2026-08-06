@@ -11,12 +11,15 @@ import {
 	DietCodeSayGenerateExplanation,
 	DietCodeSayTool,
 } from "@shared/ExtensionMessage"
+import { parseGuidedSpecOutput } from "@shared/guidedSpec/parser"
+import type { DecisionOption } from "@shared/guidedSpec/types"
 import { StringRequest } from "@shared/proto/dietcode/common"
 import { Mode } from "@shared/storage/types"
 import deepEqual from "fast-deep-equal"
 import { MouseEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSize } from "react-use"
 import { ActionCheckboxes } from "@/components/chat/ActionCheckboxes"
+import { GuidedSpecCard } from "@/components/chat/GuidedSpecCard"
 import { OptionsButtons } from "@/components/chat/OptionsButtons"
 import { CheckmarkControl } from "@/components/common/CheckmarkControl"
 import { WithCopyButton } from "@/components/common/CopyButton"
@@ -893,6 +896,31 @@ export const ChatRowContent = memo(
 							</div>
 						)
 					case "text": {
+						const isAutoMode = mode === "auto"
+						const textContent = message.text || ""
+						const isGuidedSpecText =
+							textContent.includes("BREADBOARD") ||
+							textContent.includes("Visual Layout Map") ||
+							textContent.includes("MILESTONE STEPPER") ||
+							textContent.includes("WAYPOINT") ||
+							textContent.includes("Option A")
+
+						if (isAutoMode || isGuidedSpecText) {
+							const specState = parseGuidedSpecOutput(textContent)
+							return (
+								<GuidedSpecCard
+									isLast={isLast}
+									onSelectOption={(opt: DecisionOption) => {
+										if (sendMessageFromChatRow) {
+											const text = (opt.payload?.text as string) || opt.label
+											sendMessageFromChatRow(text, [], [])
+										}
+									}}
+									specState={specState}
+								/>
+							)
+						}
+
 						return (
 							<WithCopyButton onMouseUp={handleMouseUp} ref={contentRef} textToCopy={message.text}>
 								<div className="my-2 px-3 py-2.5 rounded-lg border border-border/30 bg-code">

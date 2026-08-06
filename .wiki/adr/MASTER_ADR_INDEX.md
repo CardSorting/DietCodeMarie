@@ -24,6 +24,7 @@ Total Records: 14 Active ADRs
 | **MEOW-012** | Transactional Task Lifecycle Authority | `Accepted` | 2026-07-18 | Workspace Core | [MEOW-012-transactional-task-lifecycle.md](MEOW-012-transactional-task-lifecycle.md) |
 | **MEOW-013** | Recoverable Turn-Boundary Context Projection | `Accepted` | 2026-07-26 | Workspace Core | [MEOW-013-recoverable-context-projection.md](MEOW-013-recoverable-context-projection.md) |
 | **MEOW-014** | Universal Zenith Resilience Engineering & Epistemic Graph Infrastructure | `ACCEPTED` | 2026-07-27 | Workspace Core | [MEOW-014-universal-zenith-resilience.md](MEOW-014-universal-zenith-resilience.md) |
+| **MEOW-017** | Guided Spec Execution Mode (v1.0.0-spec) & Zero-Syntax Shielding | `Accepted` | 2026-08-06 | Presentation & Core | [MEOW-017-guided-spec-execution-mode.md](MEOW-017-guided-spec-execution-mode.md) |
 
 ---
 

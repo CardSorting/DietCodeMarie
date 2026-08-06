@@ -97,6 +97,7 @@
 							"features/multiroot-workspace",
 							"features/subagents",
 							"mixture-of-designers",
+							"core-features/guided-spec-mode",
 							"features/roadmap-steering",
 							"features/roadmap-auto-governance-postmortem",
 							"features/background-edit",
