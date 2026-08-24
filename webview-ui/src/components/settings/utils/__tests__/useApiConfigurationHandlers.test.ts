@@ -23,51 +23,51 @@ describe("useApiConfigurationHandlers", () => {
 		} as unknown as ReturnType<typeof useExtensionState>)
 	})
 
-	it("updates xai-oauth without sending a stale full configuration", async () => {
+	it("updates openrouter without sending a stale full configuration", async () => {
 		const { result } = renderHook(() => useApiConfigurationHandlers())
 
 		await act(() =>
-			result.current.handleModeFieldChange({ plan: "planModeApiProvider", act: "actModeApiProvider" }, "xai-oauth", "act"),
+			result.current.handleModeFieldChange({ plan: "planModeApiProvider", act: "actModeApiProvider" }, "openrouter", "act"),
 		)
 
 		expect(ModelsServiceClient.updateApiConfigurationPartial).toHaveBeenCalledWith(
 			expect.objectContaining({
 				updateMask: ["actModeApiProvider"],
 				apiConfiguration: expect.objectContaining({
-					actModeApiProvider: ProtoApiProvider.XAI_OAUTH,
+					actModeApiProvider: ProtoApiProvider.OPENROUTER,
 					planModeApiProvider: undefined,
 				}),
 			}),
 		)
 	})
 
-	it("persists the xAI credential through the partial request", async () => {
+	it("persists the OpenRouter API key through the partial request", async () => {
 		const { result } = renderHook(() => useApiConfigurationHandlers())
 
-		await act(() => result.current.handleFieldChange("xaiApiKey", "xai-token"))
+		await act(() => result.current.handleFieldChange("openRouterApiKey", "sk-or-v1-test"))
 
 		expect(ModelsServiceClient.updateApiConfigurationPartial).toHaveBeenCalledWith(
 			expect.objectContaining({
-				updateMask: ["xaiApiKey"],
-				apiConfiguration: expect.objectContaining({ xaiApiKey: "xai-token" }),
+				updateMask: ["openRouterApiKey"],
+				apiConfiguration: expect.objectContaining({ openRouterApiKey: "sk-or-v1-test" }),
 			}),
 		)
 	})
 
-	it("marks Cerebras credentials for immediate backend persistence", async () => {
+	it("marks OpenRouter API key for immediate backend persistence", async () => {
 		const { result } = renderHook(() => useApiConfigurationHandlers())
 
 		await act(() =>
-			result.current.handleFieldChange("cerebrasApiKey", "csk-test", {
+			result.current.handleFieldChange("openRouterApiKey", "sk-or-v1-test", {
 				flushImmediately: true,
 			}),
 		)
 
 		expect(ModelsServiceClient.updateApiConfigurationPartial).toHaveBeenCalledWith(
 			expect.objectContaining({
-				updateMask: ["cerebrasApiKey"],
+				updateMask: ["openRouterApiKey"],
 				flushImmediately: true,
-				apiConfiguration: expect.objectContaining({ cerebrasApiKey: "csk-test" }),
+				apiConfiguration: expect.objectContaining({ openRouterApiKey: "sk-or-v1-test" }),
 			}),
 		)
 	})
@@ -79,15 +79,15 @@ describe("useApiConfigurationHandlers", () => {
 		const { result } = renderHook(() => useApiConfigurationHandlers())
 
 		await act(() =>
-			result.current.handleModeFieldChange({ plan: "planModeApiProvider", act: "actModeApiProvider" }, "xai-oauth", "act"),
+			result.current.handleModeFieldChange({ plan: "planModeApiProvider", act: "actModeApiProvider" }, "openrouter", "act"),
 		)
 
 		expect(ModelsServiceClient.updateApiConfigurationPartial).toHaveBeenCalledWith(
 			expect.objectContaining({
 				updateMask: ["planModeApiProvider", "actModeApiProvider"],
 				apiConfiguration: expect.objectContaining({
-					planModeApiProvider: ProtoApiProvider.XAI_OAUTH,
-					actModeApiProvider: ProtoApiProvider.XAI_OAUTH,
+					planModeApiProvider: ProtoApiProvider.OPENROUTER,
+					actModeApiProvider: ProtoApiProvider.OPENROUTER,
 				}),
 			}),
 		)

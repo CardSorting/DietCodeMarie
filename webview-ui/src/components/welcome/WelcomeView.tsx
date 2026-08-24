@@ -19,8 +19,8 @@ const WelcomeView = memo(() => {
 	const { handleModeFieldChange, handleFieldChange } = useApiConfigurationHandlers()
 
 	// Onboarding state
-	const [selectedMethod, setSelectedMethod] = useState<"codex" | "nous" | null>(null)
-	const [nousKey, setNousKey] = useState(apiConfiguration?.nousResearchApiKey || "")
+	const [selectedMethod, setSelectedMethod] = useState<"codex" | "openrouter" | null>(null)
+	const [openRouterKey, setOpenRouterKey] = useState(apiConfiguration?.openRouterApiKey || "")
 	const [showKey, setShowKey] = useState(false)
 	const [isWaitingForCallback, setIsWaitingForCallback] = useState(false)
 
@@ -29,11 +29,11 @@ const WelcomeView = memo(() => {
 		if (openAiCodexIsAuthenticated) {
 			setSelectedMethod("codex")
 			setIsWaitingForCallback(false)
-		} else if (apiConfiguration?.nousResearchApiKey) {
-			setSelectedMethod("nous")
-			setNousKey(apiConfiguration.nousResearchApiKey)
+		} else if (apiConfiguration?.openRouterApiKey) {
+			setSelectedMethod("openrouter")
+			setOpenRouterKey(apiConfiguration.openRouterApiKey)
 		}
-	}, [openAiCodexIsAuthenticated, apiConfiguration?.nousResearchApiKey])
+	}, [openAiCodexIsAuthenticated, apiConfiguration?.openRouterApiKey])
 
 	const handleCodexSignIn = async () => {
 		setIsLoading(true)
@@ -56,10 +56,10 @@ const WelcomeView = memo(() => {
 		}
 	}
 
-	const handleNousKeyChange = (event: ChangeEvent<HTMLInputElement>) => {
+	const handleOpenRouterKeyChange = (event: ChangeEvent<HTMLInputElement>) => {
 		const val = event.target.value
-		setNousKey(val)
-		handleFieldChange("nousResearchApiKey", val)
+		setOpenRouterKey(val)
+		handleFieldChange("openRouterApiKey", val)
 	}
 
 	const handleProceed = async () => {
@@ -72,11 +72,11 @@ const WelcomeView = memo(() => {
 					mode,
 					{ flushImmediately: true },
 				)
-			} else if (selectedMethod === "nous" && nousKey.trim()) {
-				await handleFieldChange("nousResearchApiKey", nousKey.trim(), { flushImmediately: true })
+			} else if (selectedMethod === "openrouter" && openRouterKey.trim()) {
+				await handleFieldChange("openRouterApiKey", openRouterKey.trim(), { flushImmediately: true })
 				await handleModeFieldChange(
 					{ plan: "planModeApiProvider", act: "actModeApiProvider" },
-					"nousResearch" as ApiProvider,
+					"openrouter" as ApiProvider,
 					mode,
 					{ flushImmediately: true },
 				)
@@ -98,7 +98,8 @@ const WelcomeView = memo(() => {
 	}
 
 	const isProceedEnabled =
-		(selectedMethod === "codex" && openAiCodexIsAuthenticated) || (selectedMethod === "nous" && nousKey.trim().length > 0)
+		(selectedMethod === "codex" && openAiCodexIsAuthenticated) ||
+		(selectedMethod === "openrouter" && openRouterKey.trim().length > 0)
 
 	return (
 		<div className="fixed inset-0 p-0 flex flex-col items-center justify-center bg-background overflow-y-auto">
@@ -123,22 +124,16 @@ const WelcomeView = memo(() => {
 
 					{/* OpenAI Codex Card */}
 					<div
-						aria-checked={selectedMethod === "codex"}
-						className={`flex flex-col gap-3 p-4 rounded-2xl border cursor-pointer select-none transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lumi hover:-translate-y-0.5 active:translate-y-0 ${
+						className={`flex flex-col gap-3 p-4 rounded-2xl border transition-all duration-200 ease-out ${
 							selectedMethod === "codex"
 								? "bg-lumi/10 border-lumi shadow-[0_4px_16px_rgba(99,102,160,0.15)]"
 								: "bg-muted/5 border-border-panel hover:bg-muted/10 hover:border-lumi/40"
-						}`}
-						onClick={() => setSelectedMethod("codex")}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" || e.key === " ") {
-								e.preventDefault()
-								setSelectedMethod("codex")
-							}
-						}}
-						role="radio"
-						tabIndex={0}>
-						<div className="flex items-center justify-between">
+						}`}>
+						<button
+							aria-pressed={selectedMethod === "codex"}
+							className="w-full bg-transparent border-none p-0 text-left cursor-pointer select-none flex items-center justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lumi rounded-lg"
+							onClick={() => setSelectedMethod("codex")}
+							type="button">
 							<div className="flex items-center gap-3">
 								<div
 									className={`p-2 rounded-lg transition-colors ${selectedMethod === "codex" ? "bg-lumi text-lumi-foreground" : "bg-muted text-description"}`}>
@@ -156,12 +151,10 @@ const WelcomeView = memo(() => {
 									<VscIcon className="size-3.5" name="check" />
 								</div>
 							)}
-						</div>
+						</button>
 
 						{selectedMethod === "codex" && (
-							<div
-								className="mt-2 pt-2 border-t border-border-panel/40 flex flex-col gap-2 animate-in fade-in zoom-in-95 duration-200"
-								onClick={(e) => e.stopPropagation()}>
+							<div className="mt-2 pt-2 border-t border-border-panel/40 flex flex-col gap-2 animate-in fade-in zoom-in-95 duration-200">
 								{openAiCodexIsAuthenticated ? (
 									<div className="flex items-center justify-between gap-2">
 										<span className="text-xs text-success flex items-center gap-1.5 font-medium">
@@ -205,55 +198,47 @@ const WelcomeView = memo(() => {
 						)}
 					</div>
 
-					{/* Nous Research Card */}
+					{/* OpenRouter Card */}
 					<div
-						aria-checked={selectedMethod === "nous"}
-						className={`flex flex-col gap-3 p-4 rounded-2xl border cursor-pointer select-none transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lumi hover:-translate-y-0.5 active:translate-y-0 ${
-							selectedMethod === "nous"
+						className={`flex flex-col gap-3 p-4 rounded-2xl border transition-all duration-200 ease-out ${
+							selectedMethod === "openrouter"
 								? "bg-lumi/10 border-lumi shadow-[0_4px_16px_rgba(99,102,160,0.15)]"
 								: "bg-muted/5 border-border-panel hover:bg-muted/10 hover:border-lumi/40"
-						}`}
-						onClick={() => setSelectedMethod("nous")}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" || e.key === " ") {
-								e.preventDefault()
-								setSelectedMethod("nous")
-							}
-						}}
-						role="radio"
-						tabIndex={0}>
-						<div className="flex items-center justify-between">
+						}`}>
+						<button
+							aria-pressed={selectedMethod === "openrouter"}
+							className="w-full bg-transparent border-none p-0 text-left cursor-pointer select-none flex items-center justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lumi rounded-lg"
+							onClick={() => setSelectedMethod("openrouter")}
+							type="button">
 							<div className="flex items-center gap-3">
 								<div
-									className={`p-2 rounded-lg transition-colors ${selectedMethod === "nous" ? "bg-lumi text-lumi-foreground" : "bg-muted text-description"}`}>
+									className={`p-2 rounded-lg transition-colors ${selectedMethod === "openrouter" ? "bg-lumi text-lumi-foreground" : "bg-muted text-description"}`}>
 									<VscIcon className="size-5" name="key" />
 								</div>
 								<div className="flex flex-col">
-									<h3 className="font-semibold text-sm text-foreground m-0">Nous Research API</h3>
+									<h3 className="font-semibold text-sm text-foreground m-0">OpenRouter API</h3>
 									<p className="text-[11px] text-description m-0 mt-0.5 leading-normal">
-										Bring your own Nous Research API key.
+										Bring your own OpenRouter API key for 300+ AI models.
 									</p>
 								</div>
 							</div>
-							{nousKey.trim().length > 0 && (
+							{openRouterKey.trim().length > 0 && (
 								<div className="flex items-center justify-center bg-success text-white p-1 rounded-full size-5">
 									<VscIcon className="size-3.5" name="check" />
 								</div>
 							)}
-						</div>
+						</button>
 
-						{selectedMethod === "nous" && (
-							<div
-								className="mt-2 pt-2 border-t border-border-panel/40 flex flex-col gap-2 animate-in fade-in zoom-in-95 duration-200"
-								onClick={(e) => e.stopPropagation()}>
+						{selectedMethod === "openrouter" && (
+							<div className="mt-2 pt-2 border-t border-border-panel/40 flex flex-col gap-2 animate-in fade-in zoom-in-95 duration-200">
 								<div className="flex flex-col gap-1">
 									<div className="relative flex items-center">
 										<input
 											className="w-full h-9 pl-3 pr-10 rounded-lg border border-input-border bg-input-background text-input-foreground placeholder:text-input-placeholder focus:outline-none focus:ring-2 focus:ring-lumi/30 focus:border-lumi text-sm transition-all duration-200"
-											onChange={handleNousKeyChange}
-											placeholder="Enter your API key..."
+											onChange={handleOpenRouterKeyChange}
+											placeholder="Enter your OpenRouter API key..."
 											type={showKey ? "text" : "password"}
-											value={nousKey}
+											value={openRouterKey}
 										/>
 										<button
 											className="absolute right-2 p-1 text-description hover:text-foreground bg-transparent border-none cursor-pointer focus:outline-none flex items-center justify-center"
@@ -262,14 +247,17 @@ const WelcomeView = memo(() => {
 											type="button">
 											{showKey ? (
 												<svg
+													aria-label="Hide API key"
 													className="size-4"
 													fill="none"
+													role="img"
 													stroke="currentColor"
 													strokeLinecap="round"
 													strokeLinejoin="round"
 													strokeWidth="2"
 													viewBox="0 0 24 24"
 													xmlns="http://www.w3.org/2000/svg">
+													<title>Hide API key</title>
 													<path d="M9.88 9.88a3 3 0 1 1 4.24 4.24" />
 													<path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
 													<path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
@@ -277,14 +265,17 @@ const WelcomeView = memo(() => {
 												</svg>
 											) : (
 												<svg
+													aria-label="Show API key"
 													className="size-4"
 													fill="none"
+													role="img"
 													stroke="currentColor"
 													strokeLinecap="round"
 													strokeLinejoin="round"
 													strokeWidth="2"
 													viewBox="0 0 24 24"
 													xmlns="http://www.w3.org/2000/svg">
+													<title>Show API key</title>
 													<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z" />
 													<circle cx="12" cy="12" r="3" />
 												</svg>
@@ -293,11 +284,11 @@ const WelcomeView = memo(() => {
 									</div>
 									<div className="flex justify-between items-center mt-1 px-1">
 										<p className="text-[10px] text-description m-0 leading-normal">
-											Stored locally on your machine.
+											Stored securely on your machine.
 										</p>
 										<a
 											className="text-[10px] text-link hover:text-link-hover hover:underline"
-											href="https://inference-api.nousresearch.com/"
+											href="https://openrouter.ai/keys"
 											rel="noopener noreferrer"
 											target="_blank">
 											Get an API key
@@ -321,7 +312,8 @@ const WelcomeView = memo(() => {
 					<div className="flex flex-col items-center justify-center gap-1 mt-1">
 						<button
 							className="text-xs text-description hover:text-foreground underline bg-transparent border-none cursor-pointer focus:outline-none"
-							onClick={handleSkip}>
+							onClick={handleSkip}
+							type="button">
 							Skip onboarding for now
 						</button>
 						<p className="text-[10px] text-description text-center m-0 leading-normal">

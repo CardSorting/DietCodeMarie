@@ -1,27 +1,11 @@
 import {
 	ApiConfiguration,
 	ApiProvider,
-	cerebrasDefaultModelId,
-	cerebrasModels,
-	clinePassDefaultModelId,
-	clinePassModels,
-	cloudflareDefaultModelId,
-	cloudflareModels,
-	codingZAiModels,
-	internationalZAiDefaultModelId,
-	internationalZAiModels,
 	ModelInfo,
-	mainlandZAiModels,
-	nousResearchDefaultModelId,
-	nousResearchModels,
 	openAiCodexDefaultModelId,
 	openAiCodexModels,
 	openRouterDefaultModelId,
 	openRouterDefaultModelInfo,
-	qwenTokenPlanDefaultModelId,
-	qwenTokenPlanModels,
-	xaiDefaultModelId,
-	xaiModels,
 } from "@shared/api"
 import { Mode } from "@shared/storage/types"
 import * as reasoningSupport from "@shared/utils/reasoning-support"
@@ -32,7 +16,7 @@ export function supportsReasoningEffortForModelId(modelId?: string, _allowShortO
 
 /**
  * Returns the static model list for a provider.
- * For providers with dynamic models (openrouter, dietcode, ollama, etc.), returns undefined.
+ * For providers with dynamic models (openrouter, etc.), returns undefined.
  */
 export function getModelsForProvider(
 	provider: ApiProvider,
@@ -40,23 +24,8 @@ export function getModelsForProvider(
 	_dynamicModels: { liteLlmModels?: Record<string, ModelInfo>; basetenModels?: Record<string, ModelInfo> } = {},
 ): Record<string, ModelInfo> | undefined {
 	switch (provider) {
-		case "cloudflare":
-			return cloudflareModels
-		case "cerebras":
-			return cerebrasModels
 		case "openai-codex":
 			return openAiCodexModels
-		case "nousResearch":
-			return nousResearchModels
-		case "cline-pass":
-			return clinePassModels
-		case "xai-oauth":
-			return xaiModels
-		case "qwen-token-plan":
-			return qwenTokenPlanModels
-		case "zai":
-			const line = _apiConfiguration?.zaiApiLine || "international"
-			return line === "coding" ? codingZAiModels : line === "china" ? mainlandZAiModels : internationalZAiModels
 		default:
 			return undefined
 	}
@@ -101,44 +70,8 @@ export function normalizeApiConfiguration(
 	}
 
 	switch (provider) {
-		case "cloudflare":
-			return getProviderData(cloudflareModels, cloudflareDefaultModelId)
-		case "cerebras":
-			return getProviderData(cerebrasModels, cerebrasDefaultModelId)
-		case "cline-pass":
-			return getProviderData(clinePassModels, clinePassDefaultModelId)
 		case "openai-codex":
 			return getProviderData(openAiCodexModels, openAiCodexDefaultModelId)
-		case "xai-oauth":
-			return getProviderData(xaiModels, xaiDefaultModelId)
-		case "qwen-token-plan":
-			return getProviderData(qwenTokenPlanModels, qwenTokenPlanDefaultModelId)
-		case "zai": {
-			const zaiLine = apiConfiguration?.zaiApiLine || "international"
-			const zaiModelsMap: Record<string, ModelInfo> =
-				zaiLine === "coding" ? codingZAiModels : zaiLine === "china" ? mainlandZAiModels : internationalZAiModels
-			if (modelId && modelId in zaiModelsMap) {
-				return {
-					selectedProvider: provider as ApiProvider,
-					selectedModelId: modelId,
-					selectedModelInfo: zaiModelsMap[modelId],
-				}
-			}
-			if (modelId) {
-				const contextWindow = modelId.includes("glm-5.2") ? 1_000_000 : 200_000
-				return {
-					selectedProvider: provider as ApiProvider,
-					selectedModelId: modelId,
-					selectedModelInfo: {
-						maxTokens: 128_000,
-						contextWindow,
-						supportsImages: false,
-						supportsPromptCache: true,
-					},
-				}
-			}
-			return getProviderData(zaiModelsMap, internationalZAiDefaultModelId)
-		}
 		case "openrouter":
 			const openRouterModelId =
 				currentMode === "plan" ? apiConfiguration?.planModeOpenRouterModelId : apiConfiguration?.actModeOpenRouterModelId
@@ -150,24 +83,6 @@ export function normalizeApiConfiguration(
 				selectedProvider: provider,
 				selectedModelId: openRouterModelId || openRouterDefaultModelId,
 				selectedModelInfo: openRouterModelInfo || openRouterDefaultModelInfo,
-			}
-		case "nousResearch":
-			const nousResearchModelId =
-				currentMode === "plan"
-					? apiConfiguration?.planModeNousResearchModelId
-					: apiConfiguration?.actModeNousResearchModelId
-			const nousResearchModelInfo =
-				currentMode === "plan"
-					? apiConfiguration?.planModeNousResearchModelInfo
-					: apiConfiguration?.actModeNousResearchModelInfo
-			return {
-				selectedProvider: provider,
-				selectedModelId: nousResearchModelId || nousResearchDefaultModelId,
-				selectedModelInfo:
-					nousResearchModelInfo ||
-					(nousResearchModelId && nousResearchModelId in nousResearchModels
-						? nousResearchModels[nousResearchModelId as keyof typeof nousResearchModels]
-						: nousResearchModels[nousResearchDefaultModelId]),
 			}
 		default:
 			return {
@@ -193,8 +108,6 @@ export function getModeSpecificFields(apiConfiguration: ApiConfiguration | undef
 
 			// Provider-specific model IDs
 			openRouterModelId: undefined,
-			nousResearchModelId: undefined,
-			clinePassModelId: undefined,
 
 			// Model info objects
 			openRouterModelInfo: undefined,
@@ -209,8 +122,6 @@ export function getModeSpecificFields(apiConfiguration: ApiConfiguration | undef
 		mode === "plan" ? apiConfiguration.planModeOpenRouterModelId : apiConfiguration.actModeOpenRouterModelId
 	const openRouterModelInfo =
 		mode === "plan" ? apiConfiguration.planModeOpenRouterModelInfo : apiConfiguration.actModeOpenRouterModelInfo
-	const clinePassModelId =
-		mode === "plan" ? apiConfiguration.planModeClinePassModelId : apiConfiguration.actModeClinePassModelId
 
 	return {
 		// Core fields
@@ -219,14 +130,9 @@ export function getModeSpecificFields(apiConfiguration: ApiConfiguration | undef
 
 		// Provider-specific model IDs
 		openRouterModelId,
-		nousResearchModelId:
-			mode === "plan" ? apiConfiguration.planModeNousResearchModelId : apiConfiguration.actModeNousResearchModelId,
-		clinePassModelId,
 
 		// Model info objects
 		openRouterModelInfo,
-		nousResearchModelInfo:
-			mode === "plan" ? apiConfiguration.planModeNousResearchModelInfo : apiConfiguration.actModeNousResearchModelInfo,
 
 		// Other mode-specific fields
 		thinkingBudgetTokens:
@@ -273,16 +179,6 @@ export async function syncModeConfigurations(
 			updates.actModeOpenRouterModelId = sourceFields.openRouterModelId
 			updates.planModeOpenRouterModelInfo = sourceFields.openRouterModelInfo
 			updates.actModeOpenRouterModelInfo = sourceFields.openRouterModelInfo
-			break
-		case "nousResearch":
-			updates.planModeNousResearchModelId = sourceFields.nousResearchModelId
-			updates.actModeNousResearchModelId = sourceFields.nousResearchModelId
-			updates.planModeNousResearchModelInfo = sourceFields.nousResearchModelInfo
-			updates.actModeNousResearchModelInfo = sourceFields.nousResearchModelInfo
-			break
-		case "cline-pass":
-			updates.planModeClinePassModelId = sourceFields.clinePassModelId
-			updates.actModeClinePassModelId = sourceFields.clinePassModelId
 			break
 		default:
 			updates.planModeApiModelId = sourceFields.apiModelId

@@ -33,7 +33,7 @@ const mockExtensionState = (apiConfiguration: Partial<ApiConfiguration>) => {
 		favoritedModelIds: [],
 		refreshOpenRouterModels: vi.fn(),
 		navigateToSettingsModelPicker: vi.fn(),
-	} as any)
+	} as unknown as ReturnType<typeof useExtensionState>)
 }
 
 describe("ApiOptions Component", () => {
@@ -70,11 +70,10 @@ describe("ApiOptions Component", () => {
 		expect(modelIdInput).toBeInTheDocument()
 	})
 
-	it("renders Cerebras credentials and model options", () => {
+	it("renders OpenAI Codex provider when selected", () => {
 		mockExtensionState({
-			planModeApiProvider: "cerebras",
-			actModeApiProvider: "cerebras",
-			cerebrasApiKey: "",
+			planModeApiProvider: "openai-codex",
+			actModeApiProvider: "openai-codex",
 		})
 
 		render(
@@ -83,8 +82,6 @@ describe("ApiOptions Component", () => {
 			</ExtensionStateContextProvider>,
 		)
 
-		expect(screen.getByText("Cerebras API Key")).toBeInTheDocument()
-		expect(screen.getByText("gemma-4-31b")).toBeInTheDocument()
-		expect(screen.getByText("zai-glm-4.7")).toBeInTheDocument()
+		expect(screen.getByText("Sign in to OpenAI Codex")).toBeInTheDocument()
 	})
 })

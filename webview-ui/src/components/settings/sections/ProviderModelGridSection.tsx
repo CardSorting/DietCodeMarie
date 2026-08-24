@@ -1,42 +1,16 @@
-import {
-	cerebrasModels,
-	clinePassModels,
-	cloudflareModels,
-	internationalZAiModels,
-	ModelInfo,
-	openAiCodexModels,
-	qwenTokenPlanModels,
-	nousResearchModels as staticNousResearchModels,
-	xaiModels,
-} from "@shared/api"
+import { ApiProvider, ModelInfo, openAiCodexModels } from "@shared/api"
 import { Search, Sparkles } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import styled from "styled-components"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { getModelBadges, isRecentModel, ModelFilterTabs, type ModelFilterType } from "../common/ModelTypeTab"
-import { CerebrasProvider } from "../providers/CerebrasProvider"
-import { ClinePassProvider } from "../providers/ClinePassProvider"
-import { CloudflareProvider } from "../providers/CloudflareProvider"
-import { NousResearchProvider } from "../providers/NousresearchProvider"
 import { OpenAiCodexProvider } from "../providers/OpenAiCodexProvider"
 import { OpenRouterProvider } from "../providers/OpenRouterProvider"
-import { QwenTokenPlanProvider } from "../providers/QwenTokenPlanProvider"
-import { XAIOauthProvider } from "../providers/XAIOauthProvider"
-import { ZAiProvider } from "../providers/ZAiProvider"
 import Section from "../Section"
 import { normalizeApiConfiguration } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
 
-export type SupportedProviderTabID =
-	| "provider-openrouter"
-	| "provider-openaicodex"
-	| "provider-nousresearch"
-	| "provider-cloudflare"
-	| "provider-cerebras"
-	| "provider-clinepass"
-	| "provider-xaioauth"
-	| "provider-qwen"
-	| "provider-zai"
+export type SupportedProviderTabID = "provider-openrouter" | "provider-openaicodex"
 
 export interface ProviderMeta {
 	id: SupportedProviderTabID
@@ -64,62 +38,6 @@ export const SUPPORTED_PROVIDERS: ProviderMeta[] = [
 		iconName: "Sparkles",
 		description: "ChatGPT Subscription & OpenAI Codex models",
 	},
-	{
-		id: "provider-nousresearch",
-		apiProviderValue: "nousResearch",
-		name: "NousResearch",
-		label: "NousResearch",
-		iconName: "Cpu",
-		description: "Nous Research high-performance inference API",
-	},
-	{
-		id: "provider-cloudflare",
-		apiProviderValue: "cloudflare",
-		name: "Cloudflare",
-		label: "Cloudflare Workers AI",
-		iconName: "Cloud",
-		description: "Cloudflare serverless AI inference network",
-	},
-	{
-		id: "provider-cerebras",
-		apiProviderValue: "cerebras",
-		name: "Cerebras",
-		label: "Cerebras",
-		iconName: "Zap",
-		description: "Ultra-fast Cerebras Wafer-Scale Engine inference",
-	},
-	{
-		id: "provider-clinepass",
-		apiProviderValue: "cline-pass",
-		name: "ClinePass",
-		label: "ClinePass",
-		iconName: "Key",
-		description: "ClinePass managed model access pass",
-	},
-	{
-		id: "provider-xaioauth",
-		apiProviderValue: "xai-oauth",
-		name: "Grok",
-		label: "Grok / xAI",
-		iconName: "Flame",
-		description: "xAI Grok reasoning & vision models",
-	},
-	{
-		id: "provider-qwen",
-		apiProviderValue: "qwen-token-plan",
-		name: "Qwen",
-		label: "Qwen Token Plan",
-		iconName: "Layers",
-		description: "Alibaba Qwen LLM & reasoning models",
-	},
-	{
-		id: "provider-zai",
-		apiProviderValue: "zai",
-		name: "Z AI",
-		label: "Z AI (GLM)",
-		iconName: "Boxes",
-		description: "Zhipu AI GLM series models",
-	},
 ]
 
 const ITEMS_PER_PAGE = 4
@@ -133,7 +51,7 @@ interface ProviderModelGridSectionProps {
  * Provider-Specific Credential Setup & Paginated Ultra-Compressed Model List Section
  */
 export const ProviderModelGridSection = ({ providerTabId, renderSectionHeader }: ProviderModelGridSectionProps) => {
-	const { apiConfiguration, openRouterModels, nousResearchModels } = useExtensionState()
+	const { apiConfiguration, openRouterModels } = useExtensionState()
 	const { handleModeFieldsChange } = useApiConfigurationHandlers()
 
 	const [activeFilter, setActiveFilter] = useState<ModelFilterType>("all")
@@ -141,10 +59,15 @@ export const ProviderModelGridSection = ({ providerTabId, renderSectionHeader }:
 	const [currentPage, setCurrentPage] = useState(1)
 	const [lastActivatedModelId, setLastActivatedModelId] = useState<string | null>(null)
 
-	// Reset pagination on filter or search change
-	useEffect(() => {
+	const handleSearchChange = (query: string) => {
+		setSearchQuery(query)
 		setCurrentPage(1)
-	}, [activeFilter, searchQuery])
+	}
+
+	const handleFilterChange = (filter: ModelFilterType) => {
+		setActiveFilter(filter)
+		setCurrentPage(1)
+	}
 
 	const providerMeta = useMemo(() => {
 		return SUPPORTED_PROVIDERS.find((p) => p.id === providerTabId) || SUPPORTED_PROVIDERS[0]
@@ -155,28 +78,12 @@ export const ProviderModelGridSection = ({ providerTabId, renderSectionHeader }:
 		switch (providerMeta.apiProviderValue) {
 			case "openrouter":
 				return openRouterModels && Object.keys(openRouterModels).length > 0 ? openRouterModels : {}
-			case "nousResearch":
-				return nousResearchModels && Object.keys(nousResearchModels).length > 0
-					? nousResearchModels
-					: staticNousResearchModels
 			case "openai-codex":
 				return openAiCodexModels
-			case "xai-oauth":
-				return xaiModels
-			case "cloudflare":
-				return cloudflareModels
-			case "cerebras":
-				return cerebrasModels
-			case "cline-pass":
-				return clinePassModels
-			case "qwen-token-plan":
-				return qwenTokenPlanModels
-			case "zai":
-				return internationalZAiModels
 			default:
 				return {}
 		}
-	}, [providerMeta, openRouterModels, nousResearchModels])
+	}, [providerMeta, openRouterModels])
 
 	// Active configuration
 	const currentConfig = useMemo(() => normalizeApiConfiguration(apiConfiguration, "plan"), [apiConfiguration])
@@ -228,25 +135,6 @@ export const ProviderModelGridSection = ({ providerTabId, renderSectionHeader }:
 				{ apiProvider: "openrouter", openRouterModelId: modelId, openRouterModelInfo: modelInfo },
 				"act",
 			)
-		} else if (pVal === "nousResearch") {
-			handleModeFieldsChange(
-				{
-					apiProvider: { plan: "planModeApiProvider", act: "actModeApiProvider" },
-					nousResearchModelId: { plan: "planModeNousResearchModelId", act: "actModeNousResearchModelId" },
-					nousResearchModelInfo: { plan: "planModeNousResearchModelInfo", act: "actModeNousResearchModelInfo" },
-				},
-				{ apiProvider: "nousResearch", nousResearchModelId: modelId, nousResearchModelInfo: modelInfo },
-				"plan",
-			)
-			handleModeFieldsChange(
-				{
-					apiProvider: { plan: "planModeApiProvider", act: "actModeApiProvider" },
-					nousResearchModelId: { plan: "planModeNousResearchModelId", act: "actModeNousResearchModelId" },
-					nousResearchModelInfo: { plan: "planModeNousResearchModelInfo", act: "actModeNousResearchModelInfo" },
-				},
-				{ apiProvider: "nousResearch", nousResearchModelId: modelId, nousResearchModelInfo: modelInfo },
-				"act",
-			)
 		} else {
 			// Generic provider model selection
 			handleModeFieldsChange(
@@ -254,7 +142,7 @@ export const ProviderModelGridSection = ({ providerTabId, renderSectionHeader }:
 					apiProvider: { plan: "planModeApiProvider", act: "actModeApiProvider" },
 					apiModelId: { plan: "planModeApiModelId", act: "actModeApiModelId" },
 				},
-				{ apiProvider: pVal as any, apiModelId: modelId },
+				{ apiProvider: pVal as ApiProvider, apiModelId: modelId },
 				"plan",
 			)
 			handleModeFieldsChange(
@@ -262,7 +150,7 @@ export const ProviderModelGridSection = ({ providerTabId, renderSectionHeader }:
 					apiProvider: { plan: "planModeApiProvider", act: "actModeApiProvider" },
 					apiModelId: { plan: "planModeApiModelId", act: "actModeApiModelId" },
 				},
-				{ apiProvider: pVal as any, apiModelId: modelId },
+				{ apiProvider: pVal as ApiProvider, apiModelId: modelId },
 				"act",
 			)
 		}
@@ -277,20 +165,6 @@ export const ProviderModelGridSection = ({ providerTabId, renderSectionHeader }:
 				return <OpenRouterProvider currentMode="plan" isPopup={false} showModelOptions={false} />
 			case "openai-codex":
 				return <OpenAiCodexProvider currentMode="plan" isPopup={false} showModelOptions={false} />
-			case "nousResearch":
-				return <NousResearchProvider currentMode="plan" isPopup={false} showModelOptions={false} />
-			case "cloudflare":
-				return <CloudflareProvider currentMode="plan" isPopup={false} showModelOptions={false} />
-			case "cerebras":
-				return <CerebrasProvider currentMode="plan" isPopup={false} showModelOptions={false} />
-			case "cline-pass":
-				return <ClinePassProvider currentMode="plan" isPopup={false} showModelOptions={false} />
-			case "xai-oauth":
-				return <XAIOauthProvider currentMode="plan" isPopup={false} showModelOptions={false} />
-			case "qwen-token-plan":
-				return <QwenTokenPlanProvider currentMode="plan" isPopup={false} showModelOptions={false} />
-			case "zai":
-				return <ZAiProvider currentMode="plan" isPopup={false} showModelOptions={false} />
 			default:
 				return null
 		}
@@ -300,108 +174,110 @@ export const ProviderModelGridSection = ({ providerTabId, renderSectionHeader }:
 		<div>
 			{renderSectionHeader?.(providerTabId)}
 
-			<Section style={{ padding: "0 2px" }}>
-				{/* Provider Banner */}
-				<ProviderHeaderCard>
-					<div className="header-info">
-						<h3>{providerMeta.label}</h3>
-						<p>{providerMeta.description}</p>
-					</div>
-					<div className="model-count-badge">{Object.keys(providerModelsRecord).length} Models</div>
-				</ProviderHeaderCard>
+			{/* Top Credentials & Settings Block */}
+			<CredentialsCardWrapper>
+				<div style={{ marginBottom: 12 }}>
+					<SectionTitleRow>
+						<h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--vscode-foreground)" }}>
+							{providerMeta.name} Authentication & Configuration
+						</h3>
+					</SectionTitleRow>
+					<p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--vscode-descriptionForeground)" }}>
+						{providerMeta.description}
+					</p>
+				</div>
+				{renderProviderCredentials()}
+			</CredentialsCardWrapper>
 
-				{/* Provider API Key & Credentials Setup */}
-				<CredentialsBox>
-					<CredentialsLabel>PROVIDER CREDENTIALS & KEYS</CredentialsLabel>
-					{renderProviderCredentials()}
-				</CredentialsBox>
+			{/* Models Grid & Model Discovery Block */}
+			<Section style={{ marginTop: 16 }}>
+				<HeaderContainer>
+					<TitleWrapper>
+						<Sparkles className="size-4 text-lumi shrink-0" />
+						<TitleText>{providerMeta.name} Model Catalog</TitleText>
+					</TitleWrapper>
+					<BadgeText>{filteredGridModels.length} models available</BadgeText>
+				</HeaderContainer>
 
-				{/* Search & Filter Pills */}
-				<SearchInputWrapper>
-					<Search className="search-icon" size={12} />
-					<input
-						onChange={(e) => setSearchQuery(e.target.value)}
-						placeholder={`Search ${providerMeta.name} models...`}
-						type="text"
-						value={searchQuery}
-					/>
-					{searchQuery && (
-						<button className="clear-btn" onClick={() => setSearchQuery("")} type="button">
-							×
-						</button>
-					)}
-				</SearchInputWrapper>
+				{/* Search & Recency Filter Bar */}
+				<FilterSearchRow>
+					<SearchInputWrapper>
+						<Search className="size-3.5 text-description absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+						<StyledSearchInput
+							onChange={(e) => handleSearchChange(e.target.value)}
+							placeholder={`Search ${providerMeta.name} models...`}
+							type="text"
+							value={searchQuery}
+						/>
+					</SearchInputWrapper>
+				</FilterSearchRow>
 
-				<ModelFilterTabs activeTab={activeFilter} models={providerModelsRecord} onTabChange={setActiveFilter} />
+				<ModelFilterTabs activeTab={activeFilter} models={providerModelsRecord} onTabChange={handleFilterChange} />
 
-				{/* Ultra-Compressed Paginated Model List */}
+				{/* Models Compact Table */}
 				{filteredGridModels.length === 0 ? (
-					<EmptyState>
-						<Sparkles size={16} />
-						<p>No models found for {providerMeta.name}.</p>
-						<button
-							onClick={() => {
-								setSearchQuery("")
-								setActiveFilter("all")
-							}}
-							type="button">
-							Reset Filters
-						</button>
-					</EmptyState>
+					<EmptyStateWrapper>
+						<p style={{ margin: 0, fontSize: 12, color: "var(--vscode-descriptionForeground)" }}>
+							No models found matching "{searchQuery}"
+						</p>
+					</EmptyStateWrapper>
 				) : (
-					<>
-						<CompactModelList>
-							{paginatedGridModels.map(([id, info]) => {
-								const isActive = currentConfig.selectedModelId === id
-								const isJustActivated = lastActivatedModelId === id
-								const badges = getModelBadges(id, info)
+					<ModelGridContainer>
+						{paginatedGridModels.map(([modelId, modelInfo]) => {
+							const isCurrentActive =
+								currentConfig.selectedProvider === providerMeta.apiProviderValue &&
+								currentConfig.selectedModelId === modelId
+							const isRecentlyActivated = lastActivatedModelId === modelId
+							const badges = getModelBadges(modelId, modelInfo)
 
-								return (
-									<CompactRowItem isActive={isActive} key={id}>
-										<RowLeftInfo>
-											{badges.length > 0 && <BadgeChip className="new">NEW</BadgeChip>}
-											<ModelTitle title={id}>{info.name || id}</ModelTitle>
-										</RowLeftInfo>
+							return (
+								<CompactModelRow
+									$isActive={isCurrentActive}
+									key={modelId}
+									onClick={() => handleSelectModel(modelId)}>
+									<RowContentLeft>
+										<ModelNameTitle $isActive={isCurrentActive}>{modelInfo.name || modelId}</ModelNameTitle>
+										<ModelIdSubtitle>{modelId}</ModelIdSubtitle>
+										{badges.length > 0 && (
+											<BadgeRow>
+												{badges.map((b) => (
+													<CompactBadge key={b}>{b}</CompactBadge>
+												))}
+											</BadgeRow>
+										)}
+									</RowContentLeft>
+									<RowContentRight>
+										{isRecentlyActivated ? (
+											<ActiveIndicatorLabel style={{ color: "var(--vscode-testing-iconPassed)" }}>
+												Activated!
+											</ActiveIndicatorLabel>
+										) : isCurrentActive ? (
+											<ActiveIndicatorLabel>Active</ActiveIndicatorLabel>
+										) : (
+											<SelectButtonLabel>Use</SelectButtonLabel>
+										)}
+									</RowContentRight>
+								</CompactModelRow>
+							)
+						})}
+					</ModelGridContainer>
+				)}
 
-										<RowRightMeta>
-											<MetaText>
-												{info.contextWindow ? `${Math.round(info.contextWindow / 1000)}K` : "128K"}
-											</MetaText>
-											<SelectButton
-												isActive={isActive}
-												isSuccess={isJustActivated}
-												onClick={() => handleSelectModel(id)}
-												type="button">
-												{isJustActivated ? "Active!" : isActive ? "Selected" : "Select"}
-											</SelectButton>
-										</RowRightMeta>
-									</CompactRowItem>
-								)
-							})}
-						</CompactModelList>
-
-						{totalPages > 1 && (
-							<PaginationBar>
-								<button
-									className="page-btn"
-									disabled={currentPage === 1}
-									onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-									type="button">
-									‹ Prev
-								</button>
-								<span className="page-info">
-									{currentPage} / {totalPages} ({filteredGridModels.length})
-								</span>
-								<button
-									className="page-btn"
-									disabled={currentPage >= totalPages}
-									onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-									type="button">
-									Next ›
-								</button>
-							</PaginationBar>
-						)}
-					</>
+				{/* Pagination Controls */}
+				{totalPages > 1 && (
+					<PaginationControlsRow>
+						<PaginationButton disabled={currentPage === 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>
+							Prev
+						</PaginationButton>
+						<PaginationInfoText>
+							Page {currentPage} of {totalPages}
+						</PaginationInfoText>
+						<PaginationButton
+							disabled={currentPage === totalPages}
+							onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>
+							Next
+						</PaginationButton>
+					</PaginationControlsRow>
 				)}
 			</Section>
 		</div>
@@ -410,242 +286,203 @@ export const ProviderModelGridSection = ({ providerTabId, renderSectionHeader }:
 
 export default ProviderModelGridSection
 
-const ProviderHeaderCard = styled.div`
+const CredentialsCardWrapper = styled.div`
+	background: var(--vscode-sideBar-background);
+	border: 1px solid var(--vscode-sideBar-border, rgba(255, 255, 255, 0.08));
+	border-radius: 8px;
+	padding: 14px;
+	margin-top: 8px;
+`
+
+const SectionTitleRow = styled.div`
+	display: flex;
+	align-items: center;
+	gap: 6px;
+`
+
+const HeaderContainer = styled.div`
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	background: var(--vscode-sideBar-background, rgba(0, 0, 0, 0.04));
-	border: 1px solid var(--vscode-panel-border);
-	border-radius: 5px;
-	padding: 5px 8px;
-	margin-bottom: 5px;
-
-	.header-info {
-		h3 {
-			margin: 0;
-			font-size: 11.5px;
-			font-weight: 600;
-			color: var(--vscode-foreground);
-		}
-		p {
-			margin: 1px 0 0 0;
-			font-size: 9px;
-			color: var(--vscode-descriptionForeground);
-		}
-	}
-
-	.model-count-badge {
-		font-size: 8.5px;
-		font-weight: 700;
-		padding: 1.5px 5px;
-		border-radius: 9999px;
-		background: var(--vscode-badge-background, rgba(128, 128, 128, 0.2));
-		color: var(--vscode-badge-foreground, var(--vscode-foreground));
-		flex-shrink: 0;
-	}
+	margin-bottom: 10px;
 `
 
-const CredentialsBox = styled.div`
-	background: var(--vscode-editor-background);
-	border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
-	border-radius: 5px;
-	padding: 6px 8px;
-	margin-bottom: 6px;
+const TitleWrapper = styled.div`
+	display: flex;
+	align-items: center;
+	gap: 6px;
 `
 
-const CredentialsLabel = styled.div`
-	font-size: 8px;
-	font-weight: 700;
-	letter-spacing: 0.5px;
+const TitleText = styled.h3`
+	font-size: 13px;
+	font-weight: 600;
+	margin: 0;
+	color: var(--vscode-foreground);
+`
+
+const BadgeText = styled.span`
+	font-size: 10px;
 	color: var(--vscode-descriptionForeground);
-	margin-bottom: 4px;
+	background: rgba(255, 255, 255, 0.05);
+	padding: 2px 6px;
+	border-radius: 4px;
+`
+
+const FilterSearchRow = styled.div`
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
 `
 
 const SearchInputWrapper = styled.div`
 	position: relative;
 	width: 100%;
-	margin-bottom: 3px;
+`
 
-	.search-icon {
-		position: absolute;
-		left: 7px;
-		top: 50%;
-		transform: translateY(-50%);
-		color: var(--vscode-descriptionForeground);
-	}
+const StyledSearchInput = styled.input`
+	width: 100%;
+	height: 28px;
+	padding: 0 8px 0 28px;
+	border-radius: 6px;
+	font-size: 11px;
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	border: 1px solid var(--vscode-input-border, rgba(255, 255, 255, 0.1));
 
-	input {
-		width: 100%;
-		height: 22px;
-		padding: 2px 18px 2px 22px;
-		background: var(--vscode-input-background);
-		color: var(--vscode-input-foreground);
-		border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-		border-radius: 3px;
-		font-size: 10px;
+	&:focus {
 		outline: none;
-
-		&:focus {
-			border-color: var(--vscode-focusBorder);
-		}
-	}
-
-	.clear-btn {
-		position: absolute;
-		right: 5px;
-		top: 50%;
-		transform: translateY(-50%);
-		background: none;
-		border: none;
-		color: var(--vscode-descriptionForeground);
-		font-size: 11px;
-		cursor: pointer;
+		border-color: var(--vscode-focusBorder);
 	}
 `
 
-const CompactModelList = styled.div`
+const ModelGridContainer = styled.div`
 	display: flex;
 	flex-direction: column;
-	gap: 3px;
-	margin-top: 3px;
+	gap: 6px;
+	margin-top: 8px;
 `
 
-const CompactRowItem = styled.div<{ isActive?: boolean }>`
-	background: var(--vscode-editor-background);
-	border: 1px solid ${(props) => (props.isActive ? "var(--vscode-focusBorder)" : "var(--vscode-widget-border, var(--vscode-panel-border))")};
-	border-radius: 3px;
-	padding: 3px 6px;
+const CompactModelRow = styled.div<{ $isActive: boolean }>`
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 6px;
-	height: 24px;
-	transition: all 0.12s ease;
+	padding: 8px 10px;
+	background: ${({ $isActive }) => ($isActive ? "rgba(99, 102, 160, 0.12)" : "rgba(255, 255, 255, 0.02)")};
+	border: 1px solid ${({ $isActive }) => ($isActive ? "var(--vscode-focusBorder)" : "rgba(255, 255, 255, 0.05)")};
+	border-radius: 6px;
+	cursor: pointer;
+	transition: all 0.15s ease;
 
 	&:hover {
-		border-color: var(--vscode-focusBorder);
-		background: var(--vscode-list-hoverBackground);
+		background: rgba(255, 255, 255, 0.06);
+		border-color: rgba(255, 255, 255, 0.15);
 	}
 `
 
-const RowLeftInfo = styled.div`
+const RowContentLeft = styled.div`
 	display: flex;
-	align-items: center;
-	gap: 4px;
-	min-width: 0;
-	flex: 1;
+	flex-direction: column;
+	gap: 2px;
+	overflow: hidden;
 `
 
-const RowRightMeta = styled.div`
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	flex-shrink: 0;
-`
-
-const ModelTitle = styled.span`
-	font-size: 9.5px;
-	font-weight: 600;
-	color: var(--vscode-foreground);
+const ModelNameTitle = styled.span<{ $isActive: boolean }>`
+	font-size: 12px;
+	font-weight: 500;
+	color: ${({ $isActive }) => ($isActive ? "var(--vscode-foreground)" : "var(--vscode-foreground)")};
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 `
 
-const BadgeChip = styled.span`
-	font-size: 7px;
-	font-weight: 700;
-	padding: 0 3px;
-	border-radius: 2px;
-	flex-shrink: 0;
-
-	&.new {
-		background: rgba(234, 88, 12, 0.15);
-		color: #ea580c;
-	}
-`
-
-const MetaText = styled.span`
-	font-size: 8px;
-	font-weight: 500;
+const ModelIdSubtitle = styled.span`
+	font-size: 10px;
 	color: var(--vscode-descriptionForeground);
+	font-family: var(--vscode-editor-font-family);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 `
 
-const SelectButton = styled.button<{ isActive?: boolean; isSuccess?: boolean }>`
-	display: inline-flex;
+const BadgeRow = styled.div`
+	display: flex;
 	align-items: center;
-	justify-content: center;
-	padding: 1px 6px;
-	font-size: 8.5px;
-	font-weight: 600;
-	border-radius: 2.5px;
-	cursor: pointer;
-	border: none;
-	height: 16px;
+	gap: 4px;
+	margin-top: 2px;
+`
 
-	background: ${(props) =>
-		props.isSuccess
-			? "#2ea043"
-			: props.isActive
-				? "var(--vscode-badge-background, #388bfd)"
-				: "var(--vscode-button-background)"};
-	color: var(--vscode-button-foreground);
+const CompactBadge = styled.span<{ $variant?: string }>`
+	font-size: 9px;
+	padding: 1px 4px;
+	border-radius: 3px;
+	background: ${({ $variant }) =>
+		$variant === "recency"
+			? "rgba(34, 197, 94, 0.15)"
+			: $variant === "thinking"
+				? "rgba(168, 85, 247, 0.15)"
+				: "rgba(255, 255, 255, 0.06)"};
+	color: ${({ $variant }) =>
+		$variant === "recency"
+			? "var(--vscode-testing-iconPassed)"
+			: $variant === "thinking"
+				? "#c084fc"
+				: "var(--vscode-descriptionForeground)"};
+`
+
+const RowContentRight = styled.div`
+	margin-left: 8px;
+	shrink: 0;
+`
+
+const ActiveIndicatorLabel = styled.span`
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--vscode-focusBorder);
+`
+
+const SelectButtonLabel = styled.span`
+	font-size: 10px;
+	padding: 3px 8px;
+	border-radius: 4px;
+	background: rgba(255, 255, 255, 0.05);
+	color: var(--vscode-foreground);
+	border: 1px solid rgba(255, 255, 255, 0.1);
 
 	&:hover {
-		opacity: 0.9;
+		background: rgba(255, 255, 255, 0.1);
 	}
 `
 
-const PaginationBar = styled.div`
+const PaginationControlsRow = styled.div`
 	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	margin-top: 4px;
-	padding: 2px 4px;
-	background: var(--vscode-sideBar-background, rgba(0, 0, 0, 0.03));
-	border: 1px solid var(--vscode-panel-border);
-	border-radius: 3px;
-
-	.page-btn {
-		background: var(--vscode-button-background);
-		color: var(--vscode-button-foreground);
-		border: none;
-		border-radius: 2.5px;
-		padding: 1px 6px;
-		font-size: 8.5px;
-		font-weight: 600;
-		cursor: pointer;
-
-		&:disabled {
-			opacity: 0.4;
-			cursor: not-allowed;
-		}
-	}
-
-	.page-info {
-		font-size: 8px;
-		font-weight: 500;
-		color: var(--vscode-descriptionForeground);
-	}
-`
-
-const EmptyState = styled.div`
-	display: flex;
-	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	padding: 12px 8px;
-	color: var(--vscode-descriptionForeground);
-	gap: 3px;
-	font-size: 9.5px;
+	gap: 12px;
+	margin-top: 10px;
+`
 
-	button {
-		background: var(--vscode-button-background);
-		color: var(--vscode-button-foreground);
-		border: none;
-		border-radius: 2.5px;
-		padding: 1.5px 6px;
-		font-size: 9px;
-		cursor: pointer;
+const PaginationButton = styled.button`
+	font-size: 10px;
+	padding: 3px 8px;
+	border-radius: 4px;
+	background: var(--vscode-button-secondaryBackground, rgba(255, 255, 255, 0.05));
+	color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	cursor: pointer;
+
+	&:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
 	}
+`
+
+const PaginationInfoText = styled.span`
+	font-size: 10px;
+	color: var(--vscode-descriptionForeground);
+`
+
+const EmptyStateWrapper = styled.div`
+	padding: 24px;
+	text-align: center;
 `

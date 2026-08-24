@@ -3,24 +3,17 @@ import { KeyValuePair } from "@shared/proto/dietcode/common"
 import { ResetStateRequest } from "@shared/proto/dietcode/state"
 import { UserOrganization } from "@shared/proto/index.dietcode"
 import {
-	Boxes,
 	CheckCheck,
-	Cloud,
-	Cpu,
-	Flame,
 	FlaskConical,
 	Globe,
 	HardDriveDownload,
 	Info,
-	Key,
-	Layers,
 	type LucideIcon,
 	Search,
 	Sparkles,
 	SquareMousePointer,
 	SquareTerminal,
 	Wrench,
-	Zap,
 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useEvent } from "react-use"
@@ -79,55 +72,6 @@ export const SETTINGS_TABS: SettingsTab[] = [
 		tooltipText: "ChatGPT & OpenAI models grid",
 		headerText: "ChatGPT / OpenAI Models",
 		icon: Sparkles,
-	},
-	{
-		id: "provider-nousresearch",
-		name: "NousResearch",
-		tooltipText: "NousResearch models grid",
-		headerText: "NousResearch Models",
-		icon: Cpu,
-	},
-	{
-		id: "provider-cloudflare",
-		name: "Cloudflare",
-		tooltipText: "Cloudflare Workers AI models grid",
-		headerText: "Cloudflare Models",
-		icon: Cloud,
-	},
-	{
-		id: "provider-cerebras",
-		name: "Cerebras",
-		tooltipText: "Cerebras models grid",
-		headerText: "Cerebras Models",
-		icon: Zap,
-	},
-	{
-		id: "provider-clinepass",
-		name: "ClinePass",
-		tooltipText: "ClinePass models grid",
-		headerText: "ClinePass Models",
-		icon: Key,
-	},
-	{
-		id: "provider-xaioauth",
-		name: "Grok",
-		tooltipText: "Grok / xAI models grid",
-		headerText: "Grok / xAI Models",
-		icon: Flame,
-	},
-	{
-		id: "provider-qwen",
-		name: "Qwen",
-		tooltipText: "Qwen Token Plan models grid",
-		headerText: "Qwen Models",
-		icon: Layers,
-	},
-	{
-		id: "provider-zai",
-		name: "Z AI",
-		tooltipText: "Z AI (GLM) models grid",
-		headerText: "Z AI (GLM) Models",
-		icon: Boxes,
 	},
 	{
 		id: "features",
@@ -191,26 +135,16 @@ export const SETTINGS_TABS: SettingsTab[] = [
 	},
 ]
 
-const OpenRouterGridSection = (props: any) => <ProviderModelGridSection providerTabId="provider-openrouter" {...props} />
-const OpenAiCodexGridSection = (props: any) => <ProviderModelGridSection providerTabId="provider-openaicodex" {...props} />
-const NousResearchGridSection = (props: any) => <ProviderModelGridSection providerTabId="provider-nousresearch" {...props} />
-const CloudflareGridSection = (props: any) => <ProviderModelGridSection providerTabId="provider-cloudflare" {...props} />
-const CerebrasGridSection = (props: any) => <ProviderModelGridSection providerTabId="provider-cerebras" {...props} />
-const ClinePassGridSection = (props: any) => <ProviderModelGridSection providerTabId="provider-clinepass" {...props} />
-const XAiGridSection = (props: any) => <ProviderModelGridSection providerTabId="provider-xaioauth" {...props} />
-const QwenGridSection = (props: any) => <ProviderModelGridSection providerTabId="provider-qwen" {...props} />
-const ZAiGridSection = (props: any) => <ProviderModelGridSection providerTabId="provider-zai" {...props} />
+const OpenRouterGridSection = (props: Record<string, unknown>) => (
+	<ProviderModelGridSection providerTabId="provider-openrouter" {...(props as any)} />
+)
+const OpenAiCodexGridSection = (props: Record<string, unknown>) => (
+	<ProviderModelGridSection providerTabId="provider-openaicodex" {...(props as any)} />
+)
 
 const TAB_KEYWORDS: Record<SettingsTabID, string[]> = {
 	"provider-openrouter": ["openrouter", "models", "claude", "gpt", "gemini", "deepseek"],
 	"provider-openaicodex": ["chatgpt", "openai", "gpt-4o", "o1", "o3", "codex"],
-	"provider-nousresearch": ["nous", "nousresearch", "hermes", "deephermes"],
-	"provider-cloudflare": ["cloudflare", "workers ai", "llama", "deepseek"],
-	"provider-cerebras": ["cerebras", "fast", "wafer", "llama3.3"],
-	"provider-clinepass": ["clinepass", "pass"],
-	"provider-xaioauth": ["grok", "xai", "x.ai"],
-	"provider-qwen": ["qwen", "alibaba", "qwq"],
-	"provider-zai": ["zai", "zhipu", "glm"],
 	features: ["preferences", "behavior", "subagents", "think together", "tool calls", "plan", "auto-compact", "parallel"],
 	skills: ["skills", "mcp", "tools", "plugins", "marketplace"],
 	browser: ["browser", "chrome", "viewport", "screenshot", "web"],
@@ -221,17 +155,7 @@ const TAB_KEYWORDS: Record<SettingsTabID, string[]> = {
 	debug: ["debug", "reset", "state", "test", "developer"],
 }
 
-const AI_SEARCH_TABS: string[] = [
-	"provider-openrouter",
-	"provider-openaicodex",
-	"provider-nousresearch",
-	"provider-cloudflare",
-	"provider-cerebras",
-	"provider-clinepass",
-	"provider-xaioauth",
-	"provider-qwen",
-	"provider-zai",
-]
+const AI_SEARCH_TABS: string[] = ["provider-openrouter", "provider-openaicodex"]
 const BEHAVIOR_TABS: string[] = ["features", "skills"]
 const INTEGRATION_TABS: string[] = ["browser", "terminal"]
 const GENERAL_TABS: string[] = ["general", "about"]
@@ -266,13 +190,6 @@ const SettingsView = ({ targetSection }: SettingsViewProps) => {
 		() => ({
 			"provider-openrouter": OpenRouterGridSection,
 			"provider-openaicodex": OpenAiCodexGridSection,
-			"provider-nousresearch": NousResearchGridSection,
-			"provider-cloudflare": CloudflareGridSection,
-			"provider-cerebras": CerebrasGridSection,
-			"provider-clinepass": ClinePassGridSection,
-			"provider-xaioauth": XAiGridSection,
-			"provider-qwen": QwenGridSection,
-			"provider-zai": ZAiGridSection,
 			general: GeneralSettingsSection,
 			features: FeatureSettingsSection,
 			skills: SkillsSettingsSection,
@@ -283,7 +200,7 @@ const SettingsView = ({ targetSection }: SettingsViewProps) => {
 			debug: DebugSection,
 		}),
 		[],
-	) // Empty deps - these imports never change
+	) // Empty deps - these imports never change // Empty deps - these imports never change
 
 	const { version, settingsInitialModelTab } = useExtensionState()
 	const { activeOrganization } = useDietCodeAuth()

@@ -10,15 +10,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { VscIcon } from "@/components/ui/vsc-icon"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { DROPDOWN_Z_INDEX, DropdownContainer } from "./constants"
-import { CerebrasProvider } from "./providers/CerebrasProvider"
-import { ClinePassProvider } from "./providers/ClinePassProvider"
-import { CloudflareProvider } from "./providers/CloudflareProvider"
-import { NousResearchProvider } from "./providers/NousresearchProvider"
 import { OpenAiCodexProvider } from "./providers/OpenAiCodexProvider"
 import { OpenRouterProvider } from "./providers/OpenRouterProvider"
-import { QwenTokenPlanProvider } from "./providers/QwenTokenPlanProvider"
-import { XAIOauthProvider } from "./providers/XAIOauthProvider"
-import { ZAiProvider } from "./providers/ZAiProvider"
 import { useApiConfigurationHandlers } from "./utils/useApiConfigurationHandlers"
 
 interface ApiOptionsProps {
@@ -31,7 +24,6 @@ interface ApiOptionsProps {
 }
 
 // This is necessary to ensure dropdown opens downward, important for when this is used in popup.
-// Canonical home is ./constants; re-exported here for backward compatibility.
 export { DROPDOWN_Z_INDEX }
 
 // DropdownContainer lives in the ./constants leaf to break the ApiOptions ↔
@@ -62,12 +54,7 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, is
 		if (remoteProviders.length > 0) {
 			providers = providers.filter(
 				(option) =>
-					remoteProviders.includes(option.value) ||
-					option.value === "xai-oauth" ||
-					option.value === "openai-codex" ||
-					option.value === "cline-pass" ||
-					option.value === "qwen-token-plan" ||
-					option.value === "zai",
+					remoteProviders.includes(option.value) || option.value === "openai-codex" || option.value === "openrouter",
 			)
 		}
 
@@ -265,39 +252,12 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, is
 				</ProviderDropdownWrapper>
 			</DropdownContainer>
 
-			{apiConfiguration && selectedProvider === "cloudflare" && (
-				<CloudflareProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
-			)}
-
-			{apiConfiguration && selectedProvider === "cerebras" && (
-				<CerebrasProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
-			)}
-
 			{apiConfiguration && selectedProvider === "openai-codex" && (
 				<OpenAiCodexProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
 			)}
 
 			{apiConfiguration && selectedProvider === "openrouter" && (
 				<OpenRouterProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
-			)}
-
-			{apiConfiguration && selectedProvider === "nousResearch" && (
-				<NousResearchProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
-			)}
-
-			{apiConfiguration && selectedProvider === "cline-pass" && (
-				<ClinePassProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
-			)}
-			{apiConfiguration && selectedProvider === "xai-oauth" && (
-				<XAIOauthProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
-			)}
-
-			{apiConfiguration && selectedProvider === "qwen-token-plan" && (
-				<QwenTokenPlanProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
-			)}
-
-			{apiConfiguration && selectedProvider === "zai" && (
-				<ZAiProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
 			)}
 
 			{apiErrorMessage && (

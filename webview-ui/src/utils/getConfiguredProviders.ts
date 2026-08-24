@@ -14,38 +14,17 @@ export function getConfiguredProviders(
 	if (remoteConfig?.remoteConfiguredProviders?.length) {
 		configured.push(...remoteConfig.remoteConfiguredProviders)
 	} else if (apiConfiguration) {
-		if (apiConfiguration.cloudflareAccountId && apiConfiguration.cloudflareApiToken) {
-			configured.push("cloudflare")
-		}
-
 		if (apiConfiguration.openRouterApiKey) {
 			configured.push("openrouter")
 		}
-
-		if (apiConfiguration.cerebrasApiKey) {
-			configured.push("cerebras")
-		}
-
-		if (apiConfiguration.nousResearchApiKey) {
-			configured.push("nousResearch")
-		}
 	}
 
-	// Always ensure local / subscription-based providers are allowed/configured
+	// Always ensure OpenAI Codex and OpenRouter are available
 	if (!configured.includes("openai-codex")) {
 		configured.push("openai-codex")
 	}
-	if (!configured.includes("cline-pass")) {
-		configured.push("cline-pass")
-	}
-	if (!configured.includes("xai-oauth")) {
-		configured.push("xai-oauth")
-	}
-	if (!configured.includes("qwen-token-plan")) {
-		configured.push("qwen-token-plan")
-	}
-	if (!configured.includes("zai")) {
-		configured.push("zai")
+	if (!configured.includes("openrouter")) {
+		configured.push("openrouter")
 	}
 
 	return configured

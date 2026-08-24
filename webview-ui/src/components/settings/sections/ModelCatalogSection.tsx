@@ -16,16 +16,16 @@ interface ModelCatalogSectionProps {
  * Sidebar-Optimized Model Catalog with Recency Sorting & Dynamic Facets
  */
 export const ModelCatalogSection = ({ renderSectionHeader }: ModelCatalogSectionProps) => {
-	const { apiConfiguration, openRouterModels, nousResearchModels } = useExtensionState()
+	const { apiConfiguration, openRouterModels } = useExtensionState()
 	const { handleModeFieldsChange } = useApiConfigurationHandlers()
 
 	const [activeFilter, setActiveFilter] = useState<ModelFilterType>("recent")
 	const [searchQuery, setSearchQuery] = useState("")
 	const [lastActivatedModelId, setLastActivatedModelId] = useState<string | null>(null)
 
-	// Consolidate models from OpenRouter and NousResearch
+	// Consolidate models from OpenRouter
 	const combinedModels = useMemo(() => {
-		const combined: Record<string, { info: ModelInfo; provider: "openrouter" | "nousResearch" }> = {}
+		const combined: Record<string, { info: ModelInfo; provider: "openrouter" }> = {}
 
 		if (openRouterModels) {
 			for (const [id, info] of Object.entries(openRouterModels)) {
@@ -33,16 +33,8 @@ export const ModelCatalogSection = ({ renderSectionHeader }: ModelCatalogSection
 			}
 		}
 
-		if (nousResearchModels) {
-			for (const [id, info] of Object.entries(nousResearchModels)) {
-				if (!combined[id]) {
-					combined[id] = { info, provider: "nousResearch" }
-				}
-			}
-		}
-
 		return combined
-	}, [openRouterModels, nousResearchModels])
+	}, [openRouterModels])
 
 	const rawModelsRecord = useMemo(() => {
 		const rec: Record<string, ModelInfo> = {}
@@ -73,7 +65,7 @@ export const ModelCatalogSection = ({ renderSectionHeader }: ModelCatalogSection
 		return entries
 	}, [combinedModels, searchQuery, activeFilter])
 
-	const handleSelectModel = (modelId: string, provider: "openrouter" | "nousResearch") => {
+	const handleSelectModel = (modelId: string, provider: "openrouter") => {
 		const modelInfo = combinedModels[modelId]?.info
 
 		if (provider === "openrouter") {
@@ -100,33 +92,6 @@ export const ModelCatalogSection = ({ renderSectionHeader }: ModelCatalogSection
 					apiProvider: "openrouter",
 					openRouterModelId: modelId,
 					openRouterModelInfo: modelInfo,
-				},
-				"act",
-			)
-		} else if (provider === "nousResearch") {
-			handleModeFieldsChange(
-				{
-					apiProvider: { plan: "planModeApiProvider", act: "actModeApiProvider" },
-					nousResearchModelId: { plan: "planModeNousResearchModelId", act: "actModeNousResearchModelId" },
-					nousResearchModelInfo: { plan: "planModeNousResearchModelInfo", act: "actModeNousResearchModelInfo" },
-				},
-				{
-					apiProvider: "nousResearch",
-					nousResearchModelId: modelId,
-					nousResearchModelInfo: modelInfo,
-				},
-				"plan",
-			)
-			handleModeFieldsChange(
-				{
-					apiProvider: { plan: "planModeApiProvider", act: "actModeApiProvider" },
-					nousResearchModelId: { plan: "planModeNousResearchModelId", act: "actModeNousResearchModelId" },
-					nousResearchModelInfo: { plan: "planModeNousResearchModelInfo", act: "actModeNousResearchModelInfo" },
-				},
-				{
-					apiProvider: "nousResearch",
-					nousResearchModelId: modelId,
-					nousResearchModelInfo: modelInfo,
 				},
 				"act",
 			)
