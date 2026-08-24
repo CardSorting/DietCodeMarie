@@ -1,4 +1,9 @@
-import { LanguageModelChatSelector } from "vscode"
+export interface LanguageModelChatSelector {
+	vendor?: string
+	family?: string
+	version?: string
+	id?: string
+}
 
 export const SELECTOR_SEPARATOR = "/"
 

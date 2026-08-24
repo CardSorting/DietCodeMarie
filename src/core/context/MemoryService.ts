@@ -1,7 +1,9 @@
 import { nanoid } from "nanoid"
 import { Logger } from "@/shared/services/Logger"
 import { getDb } from "../../infrastructure/db/Config"
-import { GeminiHandler } from "../api/providers/gemini"
+export interface EmbeddingProvider {
+	embedText(text: string): Promise<number[] | undefined>
+}
 
 export interface CognitiveSnapshot {
 	id: string
@@ -14,15 +16,15 @@ export interface CognitiveSnapshot {
 
 export class MemoryService {
 	private static instance: MemoryService | null = null
-	private geminiHandler: GeminiHandler
+	private embeddingProvider: EmbeddingProvider
 
-	private constructor(geminiHandler: GeminiHandler) {
-		this.geminiHandler = geminiHandler
+	private constructor(embeddingProvider: EmbeddingProvider) {
+		this.embeddingProvider = embeddingProvider
 	}
 
-	public static async getInstance(geminiHandler: GeminiHandler): Promise<MemoryService> {
+	public static async getInstance(embeddingProvider: EmbeddingProvider): Promise<MemoryService> {
 		if (!MemoryService.instance) {
-			MemoryService.instance = new MemoryService(geminiHandler)
+			MemoryService.instance = new MemoryService(embeddingProvider)
 		}
 		return MemoryService.instance
 	}
@@ -32,7 +34,7 @@ export class MemoryService {
 	 */
 	async createSnapshot(streamId: string, content: string, metadata?: any): Promise<CognitiveSnapshot | null> {
 		try {
-			const embedding = await this.geminiHandler.embedText(content)
+			const embedding = await this.embeddingProvider.embedText(content)
 			if (!embedding) {
 				Logger.warn("[MemoryService] Failed to generate embedding for snapshot")
 				return null
@@ -76,7 +78,7 @@ export class MemoryService {
 		limit = 5,
 	): Promise<(CognitiveSnapshot & { similarity: number })[]> {
 		try {
-			const queryEmbedding = await this.geminiHandler.embedText(queryText)
+			const queryEmbedding = await this.embeddingProvider.embedText(queryText)
 			if (!queryEmbedding) return []
 
 			const db = await getDb()

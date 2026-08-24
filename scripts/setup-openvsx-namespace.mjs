@@ -19,11 +19,21 @@ const packageJsonPath = path.join(repoRoot, "package.json")
 const NAMESPACE_CLAIM_ISSUE = "https://github.com/EclipseFdn/open-vsx.org/issues"
 
 function runOvsx(args) {
-	execFileSync("ovsx", args, { stdio: "inherit", cwd: repoRoot })
+	try {
+		const bin = process.platform === "win32" ? "ovsx.cmd" : "ovsx"
+		execFileSync(bin, args, { stdio: "inherit", cwd: repoRoot })
+	} catch (err) {
+		execFileSync("npx", ["ovsx", ...args], { stdio: "inherit", cwd: repoRoot })
+	}
 }
 
 function runOvsxCapture(args) {
-	return execFileSync("ovsx", args, { encoding: "utf8", cwd: repoRoot }).trim()
+	try {
+		const bin = process.platform === "win32" ? "ovsx.cmd" : "ovsx"
+		return execFileSync(bin, args, { encoding: "utf8", cwd: repoRoot }).trim()
+	} catch (err) {
+		return execFileSync("npx", ["ovsx", ...args], { encoding: "utf8", cwd: repoRoot }).trim()
+	}
 }
 
 function main() {

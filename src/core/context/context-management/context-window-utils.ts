@@ -1,5 +1,4 @@
 import { ApiHandler } from "@core/api"
-import { OpenAiHandler } from "@core/api/providers/openai"
 import type { CompactionTier, ContextWindowSafetyProfile, TokenSafetyProfile } from "./ContextCompactionTypes"
 
 const DEFAULT_CONTEXT_WINDOW = 128_000
@@ -18,7 +17,7 @@ export function getContextWindowInfo(api: ApiHandler): ContextWindowSafetyProfil
 
 	// OpenAI-compatible DeepSeek configurations have historically reported the
 	// generic default rather than the provider's effective window.
-	if (api instanceof OpenAiHandler && api.getModel().id.toLowerCase().includes("deepseek")) {
+	if (api.getModel().id?.toLowerCase().includes("deepseek")) {
 		contextWindow = 128_000
 	}
 

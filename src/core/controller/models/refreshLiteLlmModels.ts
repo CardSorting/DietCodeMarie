@@ -1,10 +1,58 @@
 import type { ModelInfo } from "@shared/api"
 import { OpenRouterCompatibleModelInfo } from "@shared/proto/dietcode/models"
-import { fetchLiteLlmModelsInfo } from "@/core/api/providers/litellm"
 import { StateManager } from "@/core/storage/StateManager"
+import { buildExternalBasicHeaders } from "@/services/EnvUtils"
+import { fetch } from "@/shared/net"
 import { toProtobufModels } from "@/shared/proto-conversions/models/typeConversion"
 import { Logger } from "@/shared/services/Logger"
 import { sendLiteLlmModelsEvent } from "./subscribeToLiteLlmModels"
+
+interface LiteLlmModelInfoResponse {
+	data: Array<{
+		model_name: string
+		litellm_params: {
+			model: string
+			[key: string]: any
+		}
+		model_info: {
+			input_cost_per_token: number
+			output_cost_per_token: number
+			max_output_tokens?: number
+			max_tokens?: number
+			max_input_tokens?: number
+			cache_creation_input_token_cost?: number
+			cache_read_input_token_cost?: number
+			supports_prompt_caching?: boolean
+			supports_vision?: boolean
+			supports_reasoning?: boolean
+			[key: string]: any
+		}
+	}>
+}
+
+async function fetchLiteLlmModelsInfo(baseUrl: string, apiKey: string): Promise<LiteLlmModelInfoResponse | undefined> {
+	const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`
+	const url = `${normalizedBaseUrl}/model/info`
+
+	try {
+		const response = await fetch(url, {
+			method: "GET",
+			headers: {
+				accept: "application/json",
+				"x-litellm-api-key": apiKey,
+				...buildExternalBasicHeaders(),
+			},
+		})
+
+		if (response.ok) {
+			const data: LiteLlmModelInfoResponse = await response.json()
+			return data
+		}
+		return undefined
+	} catch {
+		return undefined
+	}
+}
 
 /**
  * Core function: Refreshes the LiteLLM models and returns application types

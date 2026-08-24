@@ -2,16 +2,9 @@ import { ApiConfiguration } from "@shared/api"
 import { Mode } from "@shared/storage/types"
 import { isE2ETestMode } from "@/shared/e2e-mode"
 import { Logger } from "@/shared/services/Logger"
-import { CerebrasHandler } from "./providers/cerebras"
-import { ClinePassHandler } from "./providers/clinepass"
-import { CloudflareHandler } from "./providers/cloudflare"
 import { E2EMockOpenRouterHandler } from "./providers/e2e-mock-openrouter"
-import { NousResearchHandler } from "./providers/nousresearch"
 import { OpenAiCodexHandler } from "./providers/openai-codex"
 import { OpenRouterHandler } from "./providers/openrouter"
-import { QwenTokenPlanHandler } from "./providers/qwen-token-plan"
-import { XAIOauthHandler } from "./providers/xai-oauth"
-import { ZAiHandler } from "./providers/zai"
 import { ApiHandler, ApiHandlerModel, ApiProviderInfo, CommonApiHandlerOptions, SingleCompletionHandler } from "./types"
 
 // Re-export the API handler contract for backward compatibility.
@@ -24,81 +17,13 @@ function createHandlerForProvider(
 	mode: Mode,
 ): ApiHandler {
 	switch (apiProvider) {
-		case "openrouter":
-			if (isE2ETestMode()) {
-				return new E2EMockOpenRouterHandler({
-					onRetryAttempt: options.onRetryAttempt,
-					openRouterModelId: mode === "plan" ? options.planModeOpenRouterModelId : options.actModeOpenRouterModelId,
-					openRouterModelInfo:
-						mode === "plan" ? options.planModeOpenRouterModelInfo : options.actModeOpenRouterModelInfo,
-				})
-			}
-			return new OpenRouterHandler({
-				onRetryAttempt: options.onRetryAttempt,
-				openRouterApiKey: options.openRouterApiKey,
-				openRouterModelId: mode === "plan" ? options.planModeOpenRouterModelId : options.actModeOpenRouterModelId,
-				openRouterModelInfo: mode === "plan" ? options.planModeOpenRouterModelInfo : options.actModeOpenRouterModelInfo,
-				openRouterProviderSorting: options.openRouterProviderSorting,
-				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
-				thinkingBudgetTokens:
-					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
-			})
 		case "openai-codex":
 			return new OpenAiCodexHandler({
 				onRetryAttempt: options.onRetryAttempt,
 				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
 				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
 			})
-		case "cloudflare":
-			return new CloudflareHandler({
-				onRetryAttempt: options.onRetryAttempt,
-				cloudflareAccountId: options.cloudflareAccountId,
-				cloudflareApiToken: options.cloudflareApiToken,
-				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
-			})
-		case "cerebras":
-			return new CerebrasHandler({
-				onRetryAttempt: options.onRetryAttempt,
-				cerebrasApiKey: options.cerebrasApiKey,
-				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
-			})
-		case "nousResearch":
-			return new NousResearchHandler({
-				onRetryAttempt: options.onRetryAttempt,
-				nousResearchApiKey: options.nousResearchApiKey,
-				nousResearchModelId: mode === "plan" ? options.planModeNousResearchModelId : options.actModeNousResearchModelId,
-				nousResearchModelInfo:
-					mode === "plan" ? options.planModeNousResearchModelInfo : options.actModeNousResearchModelInfo,
-				apiModelId: mode === "plan" ? options.planModeNousResearchModelId : options.actModeNousResearchModelId,
-			})
-		case "cline-pass":
-			return new ClinePassHandler({
-				onRetryAttempt: options.onRetryAttempt,
-				clineApiKey: options.clineApiKey,
-				apiModelId: mode === "plan" ? options.planModeClinePassModelId : options.actModeClinePassModelId,
-				thinkingBudgetTokens:
-					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
-				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
-			})
-		case "xai-oauth":
-			return new XAIOauthHandler({
-				onRetryAttempt: options.onRetryAttempt,
-				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
-				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
-			})
-		case "qwen-token-plan":
-			return new QwenTokenPlanHandler({
-				onRetryAttempt: options.onRetryAttempt,
-				qwenTokenPlanApiKey: options.qwenTokenPlanApiKey,
-				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
-			})
-		case "zai":
-			return new ZAiHandler({
-				onRetryAttempt: options.onRetryAttempt,
-				zaiApiKey: options.zaiApiKey,
-				zaiApiLine: options.zaiApiLine,
-				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
-			})
+		case "openrouter":
 		default:
 			if (isE2ETestMode()) {
 				return new E2EMockOpenRouterHandler({

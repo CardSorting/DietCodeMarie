@@ -13,7 +13,8 @@ import { convertVsCodeNativeModelsToProtoModels } from "../../../shared/proto-co
  */
 export async function getVsCodeLmModels(_controller: Controller, _request: EmptyRequest): Promise<VsCodeLmModelsArray> {
 	try {
-		const models = await vscode.lm.selectChatModels({})
+		const lm = (vscode as any).lm
+		const models = lm ? await lm.selectChatModels({}) : []
 
 		const protoModels = convertVsCodeNativeModelsToProtoModels(models || [])
 

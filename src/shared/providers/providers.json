@@ -7,34 +7,6 @@
 		{
 			"value": "openai-codex",
 			"label": "ChatGPT Subscription"
-		},
-		{
-			"value": "nousResearch",
-			"label": "NousResearch"
-		},
-		{
-			"value": "cloudflare",
-			"label": "Cloudflare Workers AI"
-		},
-		{
-			"value": "cerebras",
-			"label": "Cerebras"
-		},
-		{
-			"value": "cline-pass",
-			"label": "ClinePass"
-		},
-		{
-			"value": "xai-oauth",
-			"label": "Grok/X Subscription"
-		},
-		{
-			"value": "qwen-token-plan",
-			"label": "Qwen Token Plan"
-		},
-		{
-			"value": "zai",
-			"label": "Z AI (GLM)"
 		}
 	]
 }
