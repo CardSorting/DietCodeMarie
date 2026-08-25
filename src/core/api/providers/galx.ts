@@ -41,7 +41,7 @@ export class GalxHandler implements ApiHandler {
 					baseURL,
 					apiKey: this.options.galxApiKey,
 					defaultHeaders: {
-						"X-GALX-Client": "LUMI/12.4.1",
+						"X-GALX-Client": "LUMI/12.5.0",
 						"X-GALX-Client-ID": "lumi-ide",
 						"X-OpenRouter-Title": "LUMI",
 					},
