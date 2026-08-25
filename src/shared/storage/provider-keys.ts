@@ -9,6 +9,7 @@ import {
 	clinePassDefaultModelId,
 	deepSeekDefaultModelId,
 	fireworksDefaultModelId,
+	galxDefaultModelId,
 	geminiDefaultModelId,
 	groqDefaultModelId,
 	huaweiCloudMaasDefaultModelId,
@@ -29,6 +30,7 @@ import {
 
 const ProviderKeyMap: Partial<Record<ApiProvider, string>> = {
 	openrouter: "OpenRouterModelId",
+	galx: "GalxModelId",
 	"cline-pass": "ClinePassModelId",
 	dietcode: "DietCodeModelId",
 	openai: "OpenAiModelId",
@@ -51,6 +53,7 @@ const ProviderKeyMap: Partial<Record<ApiProvider, string>> = {
 } as const
 
 export const ProviderToApiKeyMap: Partial<Record<ApiProvider, keyof Secrets | (keyof Secrets)[]>> = {
+	galx: "galxApiKey",
 	"cline-pass": "clineApiKey",
 	dietcode: ["dietcodeApiKey", "dietcodeAccountId"],
 	anthropic: "apiKey",
@@ -94,6 +97,7 @@ export const ProviderToApiKeyMap: Partial<Record<ApiProvider, keyof Secrets | (k
 } as const
 
 const ProviderDefaultModelMap: Partial<Record<ApiProvider, string>> = {
+	galx: galxDefaultModelId,
 	anthropic: anthropicDefaultModelId,
 	openrouter: openRouterDefaultModelId,
 	"cline-pass": clinePassDefaultModelId,

@@ -14,6 +14,7 @@ import {
 	SquareMousePointer,
 	SquareTerminal,
 	Wrench,
+	Zap,
 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useEvent } from "react-use"
@@ -59,6 +60,13 @@ interface SettingsTab {
 }
 
 export const SETTINGS_TABS: SettingsTab[] = [
+	{
+		id: "provider-galx",
+		name: "GALXAI",
+		tooltipText: "GALXAI Wholesale Compute Clearinghouse",
+		headerText: "GALXAI Models",
+		icon: Zap,
+	},
 	{
 		id: "provider-openrouter",
 		name: "OpenRouter",
@@ -135,14 +143,20 @@ export const SETTINGS_TABS: SettingsTab[] = [
 	},
 ]
 
-const OpenRouterGridSection = (props: Record<string, unknown>) => (
-	<ProviderModelGridSection providerTabId="provider-openrouter" {...(props as any)} />
+interface ProviderSectionProps {
+	renderSectionHeader?: (tabId: string) => JSX.Element | null
+}
+
+const GalxGridSection = (props: ProviderSectionProps) => <ProviderModelGridSection providerTabId="provider-galx" {...props} />
+const OpenRouterGridSection = (props: ProviderSectionProps) => (
+	<ProviderModelGridSection providerTabId="provider-openrouter" {...props} />
 )
-const OpenAiCodexGridSection = (props: Record<string, unknown>) => (
-	<ProviderModelGridSection providerTabId="provider-openaicodex" {...(props as any)} />
+const OpenAiCodexGridSection = (props: ProviderSectionProps) => (
+	<ProviderModelGridSection providerTabId="provider-openaicodex" {...props} />
 )
 
 const TAB_KEYWORDS: Record<SettingsTabID, string[]> = {
+	"provider-galx": ["galx", "galxai", "wholesale", "gpt-5.6", "sol", "terra", "luna", "compute"],
 	"provider-openrouter": ["openrouter", "models", "claude", "gpt", "gemini", "deepseek"],
 	"provider-openaicodex": ["chatgpt", "openai", "gpt-4o", "o1", "o3", "codex"],
 	features: ["preferences", "behavior", "subagents", "think together", "tool calls", "plan", "auto-compact", "parallel"],
@@ -155,7 +169,7 @@ const TAB_KEYWORDS: Record<SettingsTabID, string[]> = {
 	debug: ["debug", "reset", "state", "test", "developer"],
 }
 
-const AI_SEARCH_TABS: string[] = ["provider-openrouter", "provider-openaicodex"]
+const AI_SEARCH_TABS: string[] = ["provider-galx", "provider-openrouter", "provider-openaicodex"]
 const BEHAVIOR_TABS: string[] = ["features", "skills"]
 const INTEGRATION_TABS: string[] = ["browser", "terminal"]
 const GENERAL_TABS: string[] = ["general", "about"]
@@ -188,6 +202,7 @@ const SettingsView = ({ targetSection }: SettingsViewProps) => {
 	// biome-ignore lint/suspicious/noExplicitAny: Components in map take different props
 	const TAB_CONTENT_MAP: Record<SettingsTabID, React.ComponentType<any>> = useMemo(
 		() => ({
+			"provider-galx": GalxGridSection,
 			"provider-openrouter": OpenRouterGridSection,
 			"provider-openaicodex": OpenAiCodexGridSection,
 			general: GeneralSettingsSection,

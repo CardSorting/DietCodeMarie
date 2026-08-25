@@ -105,8 +105,9 @@ message Secrets {
   optional string vertex_api_key = 58;
   optional string cline_api_key = 96;
   optional string qwen_token_plan_api_key = 112;
-  optional string openai_codex_oauth_credentials = 125;
-  optional string xai_oauth_credentials = 126;
+  optional string galx_api_key = 127;
+  optional string openai_codex_oauth_credentials = 130;
+  optional string xai_oauth_credentials = 131;
 }
 
 // NOTE: Add new fields under API_HANDLER_SETTINGS_FIELDS or USER_SETTINGS_FIELDS
@@ -309,7 +310,12 @@ message Settings {
   optional string mod_outcome = 344;
   optional OpenRouterModelInfo plan_mode_nous_research_model_info = 346;
   optional OpenRouterModelInfo act_mode_nous_research_model_info = 347;
-  map<string, string> open_ai_headers = 348;
+  optional string galx_base_url = 349;
+  optional string plan_mode_galx_model_id = 350;
+  optional OpenRouterModelInfo plan_mode_galx_model_info = 351;
+  optional string act_mode_galx_model_id = 352;
+  optional OpenRouterModelInfo act_mode_galx_model_info = 353;
+  map<string, string> open_ai_headers = 354;
 }
 
 message State {

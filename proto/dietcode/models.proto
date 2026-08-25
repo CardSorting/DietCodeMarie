@@ -478,6 +478,7 @@ enum ApiProvider {
   CLINE_PASS = 43;
   XAI_OAUTH = 44;
   QWEN_TOKEN_PLAN = 45;
+  GALX = 46;
 }
 
 enum ApiFormat {
@@ -624,6 +625,8 @@ message ModelsApiConfiguration {
   optional string cloudflare_api_token = 92;
   optional string cline_api_key = 93;
   optional string qwen_token_plan_api_key = 94;
+  optional string galx_api_key = 95;
+  optional string galx_base_url = 96;
 
   // Plan mode configurations
   optional ApiProvider plan_mode_api_provider = 100;
@@ -671,6 +674,8 @@ message ModelsApiConfiguration {
   optional OpenRouterModelInfo plan_mode_dietcode_model_info = 141;
   optional string plan_mode_cline_pass_model_id = 142;
   optional OpenRouterModelInfo plan_mode_cline_pass_model_info = 143;
+  optional string plan_mode_galx_model_id = 145;
+  optional OpenRouterModelInfo plan_mode_galx_model_info = 146;
 
   // Act mode configurations
   optional ApiProvider act_mode_api_provider = 200;
@@ -718,4 +723,6 @@ message ModelsApiConfiguration {
   optional OpenRouterModelInfo act_mode_dietcode_model_info = 241;
   optional string act_mode_cline_pass_model_id = 242;
   optional OpenRouterModelInfo act_mode_cline_pass_model_info = 243;
+  optional string act_mode_galx_model_id = 245;
+  optional OpenRouterModelInfo act_mode_galx_model_info = 246;
 }

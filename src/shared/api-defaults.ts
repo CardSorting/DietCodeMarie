@@ -33,3 +33,18 @@ export const requestyDefaultModelInfo: ModelInfo = {
 	cacheReadsPrice: 0.3,
 	description: "Anthropic's most intelligent model. Highest level of intelligence and capability.",
 }
+
+export const galxDefaultModelId = "gpt-5.6-sol"
+export const galxDefaultModelInfo: ModelInfo = {
+	name: "OpenAI Codex GPT-5.6 Sol (Flagship SOTA)",
+	maxTokens: 128_000,
+	contextWindow: 900_000,
+	supportsImages: true,
+	supportsPromptCache: true,
+	supportsReasoning: true,
+	inputPrice: 3.75,
+	outputPrice: 15.0,
+	cacheReadsPrice: 1.25,
+	description:
+		"Flagship coding, deep mathematics, algorithmic reasoning, and multi-file architecture with 25% wholesale discount and 75% prompt cache pass-through.",
+}

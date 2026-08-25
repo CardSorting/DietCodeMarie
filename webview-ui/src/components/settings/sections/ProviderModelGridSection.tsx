@@ -1,16 +1,17 @@
-import { ApiProvider, ModelInfo, openAiCodexModels } from "@shared/api"
+import { ApiProvider, galxModels, ModelInfo, openAiCodexModels } from "@shared/api"
 import { Search, Sparkles } from "lucide-react"
 import { useMemo, useState } from "react"
 import styled from "styled-components"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { getModelBadges, isRecentModel, ModelFilterTabs, type ModelFilterType } from "../common/ModelTypeTab"
+import { GalxProvider } from "../providers/GalxProvider"
 import { OpenAiCodexProvider } from "../providers/OpenAiCodexProvider"
 import { OpenRouterProvider } from "../providers/OpenRouterProvider"
 import Section from "../Section"
 import { filterOpenRouterModelIds, normalizeApiConfiguration } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
 
-export type SupportedProviderTabID = "provider-openrouter" | "provider-openaicodex"
+export type SupportedProviderTabID = "provider-openrouter" | "provider-openaicodex" | "provider-galx"
 
 export interface ProviderMeta {
 	id: SupportedProviderTabID
@@ -22,6 +23,14 @@ export interface ProviderMeta {
 }
 
 export const SUPPORTED_PROVIDERS: ProviderMeta[] = [
+	{
+		id: "provider-galx",
+		apiProviderValue: "galx",
+		name: "GALXAI",
+		label: "GALXAI Wholesale",
+		iconName: "Zap",
+		description: "Wholesale AI Compute Clearinghouse (25%–40% discount, 75% prompt cache pass-through)",
+	},
 	{
 		id: "provider-openrouter",
 		apiProviderValue: "openrouter",
@@ -76,6 +85,8 @@ export const ProviderModelGridSection = ({ providerTabId, renderSectionHeader }:
 	// Get models record for this specific provider
 	const providerModelsRecord: Record<string, ModelInfo> = useMemo(() => {
 		switch (providerMeta.apiProviderValue) {
+			case "galx":
+				return galxModels
 			case "openrouter": {
 				if (!openRouterModels || Object.keys(openRouterModels).length === 0) {
 					return {}
@@ -172,6 +183,8 @@ export const ProviderModelGridSection = ({ providerTabId, renderSectionHeader }:
 
 	const renderProviderCredentials = () => {
 		switch (providerMeta.apiProviderValue) {
+			case "galx":
+				return <GalxProvider currentMode="plan" isPopup={false} showModelOptions={false} />
 			case "openrouter":
 				return <OpenRouterProvider currentMode="plan" isPopup={false} showModelOptions={false} />
 			case "openai-codex":

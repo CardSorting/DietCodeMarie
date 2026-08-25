@@ -3,6 +3,7 @@ import { Mode } from "@shared/storage/types"
 import { isE2ETestMode } from "@/shared/e2e-mode"
 import { Logger } from "@/shared/services/Logger"
 import { E2EMockOpenRouterHandler } from "./providers/e2e-mock-openrouter"
+import { GalxHandler } from "./providers/galx"
 import { OpenAiCodexHandler } from "./providers/openai-codex"
 import { OpenRouterHandler } from "./providers/openrouter"
 import { ApiHandler, ApiHandlerModel, ApiProviderInfo, CommonApiHandlerOptions, SingleCompletionHandler } from "./types"
@@ -17,6 +18,17 @@ function createHandlerForProvider(
 	mode: Mode,
 ): ApiHandler {
 	switch (apiProvider) {
+		case "galx":
+			return new GalxHandler({
+				onRetryAttempt: options.onRetryAttempt,
+				galxApiKey: options.galxApiKey,
+				galxBaseUrl: options.galxBaseUrl,
+				galxModelId: mode === "plan" ? options.planModeGalxModelId : options.actModeGalxModelId,
+				galxModelInfo: mode === "plan" ? options.planModeGalxModelInfo : options.actModeGalxModelInfo,
+				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
+				thinkingBudgetTokens:
+					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
+			})
 		case "openai-codex":
 			return new OpenAiCodexHandler({
 				onRetryAttempt: options.onRetryAttempt,

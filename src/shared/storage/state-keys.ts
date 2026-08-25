@@ -152,6 +152,7 @@ const API_HANDLER_SETTINGS_FIELDS = {
 	aihubmixBaseUrl: { default: undefined as string | undefined },
 	aihubmixAppCode: { default: undefined as string | undefined },
 	cloudflareAccountId: { default: undefined as string | undefined },
+	galxBaseUrl: { default: undefined as string | undefined },
 
 	// Embedding configuration
 	embeddingProvider: { default: DEFAULT_API_PROVIDER as ApiProvider },
@@ -204,6 +205,8 @@ const API_HANDLER_SETTINGS_FIELDS = {
 	planModeNousResearchModelInfo: { default: undefined as ModelInfo | undefined },
 	planModeVercelAiGatewayModelId: { default: undefined as string | undefined },
 	planModeVercelAiGatewayModelInfo: { default: undefined as ModelInfo | undefined },
+	planModeGalxModelId: { default: undefined as string | undefined },
+	planModeGalxModelInfo: { default: undefined as ModelInfo | undefined },
 
 	// Act mode configurations
 	actModeApiModelId: { default: undefined as string | undefined },
@@ -251,6 +254,8 @@ const API_HANDLER_SETTINGS_FIELDS = {
 	actModeNousResearchModelInfo: { default: undefined as ModelInfo | undefined },
 	actModeVercelAiGatewayModelId: { default: undefined as string | undefined },
 	actModeVercelAiGatewayModelInfo: { default: undefined as ModelInfo | undefined },
+	actModeGalxModelId: { default: undefined as string | undefined },
+	actModeGalxModelInfo: { default: undefined as ModelInfo | undefined },
 
 	// Model-specific settings
 	planModeApiProvider: { default: DEFAULT_API_PROVIDER as ApiProvider },
@@ -347,6 +352,7 @@ const SECRETS_KEYS = [
 	"dietcode:googleAuthInfo",
 	"dietcode:googleOAuthState",
 	"openRouterApiKey",
+	"galxApiKey",
 	"awsAccessKey",
 	"awsSecretKey",
 	"awsSessionToken",
