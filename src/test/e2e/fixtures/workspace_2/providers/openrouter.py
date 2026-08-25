@@ -7,7 +7,7 @@ client = OpenAI(
 
 completion = client.chat.completions.create(
   extra_headers={
-    "HTTP-Referer": "https://mariecoder.com", # Required. Site URL for rankings on openrouter.ai.
+    "HTTP-Referer": "https://open-vsx.org/extension/CardSorting/lumi", # Required. Site URL for rankings on openrouter.ai.
     "X-OpenRouter-Title": "LUMI", # App display name in rankings and analytics.
     "X-OpenRouter-Categories": "ide-extension", # Marketplace category (up to 2 per request).
   },

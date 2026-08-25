@@ -24,7 +24,7 @@ export function buildExternalBasicHeaders(): Record<string, string> {
 /** OpenRouter app attribution headers for rankings and analytics. */
 export function buildOpenRouterAttributionHeaders(): Record<string, string> {
 	return {
-		"HTTP-Referer": "https://mariecoder.com",
+		"HTTP-Referer": "https://open-vsx.org/extension/CardSorting/lumi",
 		"X-OpenRouter-Title": "LUMI",
 		"X-OpenRouter-Categories": "ide-extension",
 	}

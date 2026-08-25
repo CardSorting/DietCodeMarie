@@ -18,11 +18,9 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 	const {
 		navigateToHistory,
 		navigateToSettings,
-		navigateToMcp,
 		navigateToChat,
 		navigateToWorktrees,
 		showHistory,
-		showMcp,
 		showSettings,
 		showWorktrees,
 		setExpandTaskHeader,
@@ -31,17 +29,16 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 	const { density } = useDensity()
 
 	const isSubViewActive = useMemo(() => {
-		return showHistory || showMcp || showSettings || showWorktrees
-	}, [showHistory, showMcp, showSettings, showWorktrees])
+		return showHistory || showSettings || showWorktrees
+	}, [showHistory, showSettings, showWorktrees])
 
 	const activePanel = useMemo((): ChatNavItemId | null => {
 		if (showHistory) return "history"
-		if (showMcp) return "tools"
 		if (showSettings) return "settings"
 		if (showWorktrees) return "worktrees"
 		if (!isSubViewActive) return "chat"
 		return null
-	}, [showHistory, showMcp, showSettings, showWorktrees, isSubViewActive])
+	}, [showHistory, showSettings, showWorktrees, isSubViewActive])
 
 	const visibleToolbarItems = useMemo(() => {
 		const items = CHAT_NAV_ITEMS.filter((item) => item.id !== "newChat" && item.id !== "chat")
@@ -49,7 +46,7 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 			return items
 		}
 		if (density === "compact") {
-			return items.filter((item) => item.id === "history" || item.id === "tools" || item.id === "settings")
+			return items.filter((item) => item.id === "history" || item.id === "settings")
 		}
 		return items.filter((item) => item.id === "history")
 	}, [density])
@@ -82,10 +79,6 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 					collapseTaskDetails()
 					navigateToHistory()
 					break
-				case "tools":
-					collapseTaskDetails()
-					navigateToMcp()
-					break
 				case "worktrees":
 					collapseTaskDetails()
 					navigateToWorktrees()
@@ -96,25 +89,16 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 					break
 			}
 		},
-		[
-			collapseTaskDetails,
-			handleBackToChat,
-			navigateToHistory,
-			navigateToMcp,
-			navigateToSettings,
-			navigateToWorktrees,
-			onRequestNewChat,
-		],
+		[collapseTaskDetails, handleBackToChat, navigateToHistory, navigateToSettings, navigateToWorktrees, onRequestNewChat],
 	)
 
 	const newChatItem = CHAT_NAV_BY_ID.newChat
 	const centerLabel = useMemo(() => {
 		if (showHistory) return CHAT_NAV_BY_ID.history?.label || "Chat history"
-		if (showMcp) return CHAT_NAV_BY_ID.tools?.label || "Plugins & tools"
 		if (showSettings) return CHAT_NAV_BY_ID.settings?.label || "Settings"
 		if (showWorktrees) return CHAT_NAV_BY_ID.worktrees?.label || "Branch workspaces"
 		return conversationTitle?.trim() || "Chat"
-	}, [showHistory, showMcp, showSettings, showWorktrees, conversationTitle])
+	}, [showHistory, showSettings, showWorktrees, conversationTitle])
 
 	return (
 		<header className="z-10 flex-none border-b border-border/40 bg-background select-none">

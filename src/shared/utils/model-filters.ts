@@ -41,6 +41,14 @@ export function filterOpenRouterModelIds(
 		})
 	}
 
-	// For OpenRouter and Vercel AI Gateway providers: exclude DietCode-specific models
+	if (provider === "openrouter") {
+		// For OpenRouter provider: display only :free models
+		return modelIds.filter((id) => {
+			const normalizedModelId = normalizeModelId(id)
+			return !id.startsWith("dietcode/") && (normalizedModelId.endsWith(":free") || normalizedModelId.includes(":free"))
+		})
+	}
+
+	// For other providers (e.g. Vercel AI Gateway): exclude DietCode-specific models
 	return modelIds.filter((id) => !id.startsWith("dietcode/"))
 }

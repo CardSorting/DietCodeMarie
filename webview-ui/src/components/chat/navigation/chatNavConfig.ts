@@ -1,4 +1,4 @@
-export type ChatNavItemId = "newChat" | "chat" | "history" | "tools" | "settings" | "worktrees"
+export type ChatNavItemId = "newChat" | "chat" | "history" | "settings" | "worktrees"
 
 export interface ChatNavItem {
 	id: ChatNavItemId
@@ -47,17 +47,6 @@ export const CHAT_NAV_ITEMS: ChatNavItem[] = [
 		showInToolbar: true,
 		shortcutMac: "⌥⇧H",
 		shortcutWin: "Alt+Shift+H",
-	},
-	{
-		id: "tools",
-		label: "Plugins & tools",
-		shortLabel: "Tools",
-		description: "Connect external APIs, databases, and integrations",
-		tooltip: "Plugins & tools (Alt+Shift+3 or Alt+Shift+T)",
-		icon: "server",
-		showInToolbar: false,
-		shortcutMac: "⌥⇧T",
-		shortcutWin: "Alt+Shift+T",
 	},
 	{
 		id: "worktrees",

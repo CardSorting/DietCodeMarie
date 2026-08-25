@@ -17,7 +17,7 @@ import {
 	requestyDefaultModelInfo,
 } from "../../../src/shared/api-defaults"
 import { Environment } from "../../../src/shared/config-types"
-import type { McpMarketplaceCatalog, McpServer, McpViewTab } from "../../../src/shared/mcp"
+import type { McpMarketplaceCatalog, McpServer } from "../../../src/shared/mcp"
 import { DEFAULT_PLATFORM } from "../../../src/shared/platform-default"
 import { convertModelResponse, loadModelsServiceClient } from "../services/model-grpc-loader"
 import { useExtensionGrpcSubscriptions } from "./useExtensionGrpcSubscriptions"
@@ -45,8 +45,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	availableTerminalProfiles: TerminalProfile[]
 
 	// View state
-	showMcp: boolean
-	mcpTab?: McpViewTab
 	showSettings: boolean
 	settingsTargetSection?: string
 	settingsInitialModelTab?: "recommended" | "free"
@@ -90,12 +88,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	refreshNousResearchModels: () => void
 	setUserInfo: (userInfo?: UserInfo) => void
 
-	// Navigation state setters
-	setShowMcp: (value: boolean) => void
-	setMcpTab: (tab?: McpViewTab) => void
-
 	// Navigation functions
-	navigateToMcp: (tab?: McpViewTab) => void
 	navigateToSettings: (targetSection?: string) => void
 	navigateToSettingsModelPicker: (opts: { targetSection?: string; initialModelTab?: "recommended" | "free" }) => void
 	navigateToHistory: () => void
@@ -107,7 +100,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	hideHistory: () => void
 	hideWorktrees: () => void
 	hideAnnouncement: () => void
-	closeMcpView: () => void
 
 	// Event callbacks
 	onRelinquishControl: (callback: () => void) => () => void
@@ -124,8 +116,6 @@ export const ExtensionStateContextProvider: React.FC<{
 	children: React.ReactNode
 }> = ({ children }) => {
 	// UI view state
-	const [showMcp, setShowMcp] = useState(false)
-	const [mcpTab, setMcpTab] = useState<McpViewTab | undefined>(undefined)
 	const [showSettings, setShowSettings] = useState(false)
 	const [settingsTargetSection, setSettingsTargetSection] = useState<string | undefined>(undefined)
 	const [settingsInitialModelTab, setSettingsInitialModelTab] = useState<"recommended" | "free" | undefined>(undefined)
@@ -133,12 +123,6 @@ export const ExtensionStateContextProvider: React.FC<{
 	const [showWorktrees, setShowWorktrees] = useState(false)
 	const [showAnnouncement, setShowAnnouncement] = useState(false)
 	const [showNewChatConfirm, setShowNewChatConfirm] = useState(false)
-
-	// Helper for MCP view
-	const closeMcpView = useCallback(() => {
-		setShowMcp(false)
-		setMcpTab(undefined)
-	}, [])
 
 	// Hide functions
 	const hideSettings = useCallback(() => {
@@ -151,60 +135,42 @@ export const ExtensionStateContextProvider: React.FC<{
 	const hideAnnouncement = useCallback(() => setShowAnnouncement(false), [])
 
 	// Navigation functions
-	const navigateToMcp = useCallback((tab?: McpViewTab) => {
-		setShowSettings(false)
+	const navigateToSettings = useCallback((targetSection?: string) => {
 		setShowHistory(false)
 		setShowWorktrees(false)
-		if (tab) {
-			setMcpTab(tab)
-		}
-		setShowMcp(true)
+		setSettingsTargetSection(targetSection)
+		setSettingsInitialModelTab(undefined)
+		setShowSettings(true)
 	}, [])
-
-	const navigateToSettings = useCallback(
-		(targetSection?: string) => {
-			setShowHistory(false)
-			closeMcpView()
-			setShowWorktrees(false)
-			setSettingsTargetSection(targetSection)
-			setSettingsInitialModelTab(undefined)
-			setShowSettings(true)
-		},
-		[closeMcpView],
-	)
 
 	const navigateToSettingsModelPicker = useCallback(
 		(opts: { targetSection?: string; initialModelTab?: "recommended" | "free" }) => {
 			setShowHistory(false)
-			closeMcpView()
 			setShowWorktrees(false)
 			setSettingsTargetSection(opts.targetSection)
 			setSettingsInitialModelTab(opts.initialModelTab)
 			setShowSettings(true)
 		},
-		[closeMcpView],
+		[],
 	)
 
 	const navigateToHistory = useCallback(() => {
 		setShowSettings(false)
-		closeMcpView()
 		setShowWorktrees(false)
 		setShowHistory(true)
-	}, [closeMcpView])
+	}, [])
 
 	const navigateToWorktrees = useCallback(() => {
 		setShowSettings(false)
-		closeMcpView()
 		setShowHistory(false)
 		setShowWorktrees(true)
-	}, [closeMcpView])
+	}, [])
 
 	const navigateToChat = useCallback(() => {
 		setShowSettings(false)
-		closeMcpView()
 		setShowHistory(false)
 		setShowWorktrees(false)
-	}, [closeMcpView])
+	}, [])
 
 	const [state, setState] = useState<ExtensionState>({
 		version: "",
@@ -339,7 +305,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		setAvailableTerminalProfiles,
 		isStateHydrated: didHydrateState,
 		relinquishControlCallbacks,
-		navigateToMcp,
 		navigateToHistory,
 		navigateToChat,
 		navigateToSettings,
@@ -515,8 +480,6 @@ export const ExtensionStateContextProvider: React.FC<{
 			mcpMarketplaceCatalog,
 			totalTasksSize,
 			availableTerminalProfiles,
-			showMcp,
-			mcpTab,
 			showSettings,
 			settingsTargetSection,
 			settingsInitialModelTab,
@@ -537,7 +500,6 @@ export const ExtensionStateContextProvider: React.FC<{
 			currentFocusChainChecklist: state.currentFocusChainChecklist,
 
 			// Navigation functions
-			navigateToMcp,
 			navigateToSettings,
 			navigateToSettingsModelPicker,
 			navigateToHistory,
@@ -563,8 +525,6 @@ export const ExtensionStateContextProvider: React.FC<{
 			setBasetenModels: (models: Record<string, ModelInfo>) => setBasetenModels(models),
 			setHuggingFaceModels: (models: Record<string, ModelInfo>) => setHuggingFaceModels(models),
 			setMcpMarketplaceCatalog: (catalog: McpMarketplaceCatalog) => setMcpMarketplaceCatalog(catalog),
-			setShowMcp,
-			closeMcpView,
 			setGlobalDietCodeRulesToggles: (toggles) =>
 				setState((prevState) => ({
 					...prevState,
@@ -620,7 +580,6 @@ export const ExtensionStateContextProvider: React.FC<{
 					...prevState,
 					remoteWorkflowToggles: toggles,
 				})),
-			setMcpTab,
 			setTotalTasksSize,
 			refreshDietCodeModels,
 			refreshOpenRouterModels,
@@ -652,8 +611,6 @@ export const ExtensionStateContextProvider: React.FC<{
 			mcpMarketplaceCatalog,
 			totalTasksSize,
 			availableTerminalProfiles,
-			showMcp,
-			mcpTab,
 			showSettings,
 			settingsTargetSection,
 			settingsInitialModelTab,
@@ -661,7 +618,6 @@ export const ExtensionStateContextProvider: React.FC<{
 			showWorktrees,
 			showAnnouncement,
 			showNewChatConfirm,
-			navigateToMcp,
 			navigateToSettings,
 			navigateToSettingsModelPicker,
 			navigateToHistory,
@@ -671,7 +627,6 @@ export const ExtensionStateContextProvider: React.FC<{
 			hideHistory,
 			hideWorktrees,
 			hideAnnouncement,
-			closeMcpView,
 			refreshDietCodeModels,
 			refreshOpenRouterModels,
 			refreshVercelAiGatewayModels,

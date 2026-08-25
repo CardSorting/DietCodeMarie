@@ -9,7 +9,6 @@ import { TaskServiceClient, UiServiceClient } from "./services/core-grpc-client"
 // Keep the first paint small. Secondary surfaces and their dependencies are fetched
 // only when needed instead of being parsed on every webview launch.
 const ChatView = lazy(() => import("./components/chat/ChatView"))
-const McpView = lazy(() => import("./components/mcp/configuration/McpConfigurationView"))
 const SettingsView = lazy(() => import("./components/settings/SettingsView"))
 const WelcomeView = lazy(() => import("./components/welcome/WelcomeView"))
 const WorktreesView = lazy(() => import("./components/worktrees/WorktreesView"))
@@ -41,8 +40,6 @@ const AppContent = () => {
 		shouldShowAnnouncement,
 		showWelcome,
 		showHistory,
-		showMcp,
-		mcpTab,
 		showSettings,
 		settingsTargetSection,
 		showWorktrees,
@@ -52,12 +49,10 @@ const AppContent = () => {
 		setShowAnnouncement,
 		setShowNewChatConfirm,
 		setShouldShowAnnouncement,
-		closeMcpView,
 		hideSettings,
 		hideWorktrees,
 		hideAnnouncement,
 		navigateToHistory,
-		navigateToMcp,
 		navigateToSettings,
 		navigateToChat,
 		navigateToWorktrees,
@@ -107,25 +102,18 @@ const AppContent = () => {
 		const handleKeyDown = (event: KeyboardEvent) => {
 			if (event.defaultPrevented || showNewChatConfirm || showWelcome) return
 
-			if (
-				event.key === "Escape" &&
-				(showHistory || showMcp || showSettings || showWorktrees) &&
-				!isEditableTarget(event.target)
-			) {
+			if (event.key === "Escape" && (showHistory || showSettings || showWorktrees) && !isEditableTarget(event.target)) {
 				event.preventDefault()
 				navigateToChat()
 				return
 			}
 
-			// Alt + Shift + H / T / S / A / C / N / 1-5
+			// Alt + Shift + H / S / W / C / N / 1, 2, 5, 6
 			if (event.altKey && event.shiftKey) {
 				const key = event.key.toLowerCase()
 				if (key === "h" || key === "2") {
 					event.preventDefault()
 					navigateToHistory()
-				} else if (key === "t" || key === "3") {
-					event.preventDefault()
-					navigateToMcp()
 				} else if (key === "s" || key === "5") {
 					event.preventDefault()
 					navigateToSettings()
@@ -149,12 +137,10 @@ const AppContent = () => {
 	}, [
 		showWelcome,
 		showHistory,
-		showMcp,
 		showSettings,
 		showWorktrees,
 		showNewChatConfirm,
 		navigateToHistory,
-		navigateToMcp,
 		navigateToSettings,
 		navigateToChat,
 		navigateToWorktrees,
@@ -195,11 +181,10 @@ const AppContent = () => {
 					<div className="relative min-h-0 w-full flex-1 overflow-hidden" id="lumi-main-content" tabIndex={-1}>
 						<Suspense fallback={<AppLoadingState label="Loading view…" />}>
 							{showSettings && <SettingsView onDone={hideSettings} targetSection={settingsTargetSection} />}
-							{showMcp && <McpView initialTab={mcpTab} onDone={closeMcpView} />}
 							{showWorktrees && <WorktreesView onDone={hideWorktrees} />}
 							<ChatView
 								hideAnnouncement={hideAnnouncement}
-								isHidden={showSettings || showMcp || showWorktrees}
+								isHidden={showSettings || showWorktrees}
 								showAnnouncement={showAnnouncement}
 								showHistoryView={navigateToHistory}
 							/>

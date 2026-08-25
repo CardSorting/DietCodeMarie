@@ -5,7 +5,7 @@ import styled from "styled-components"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { getModelBadges, isRecentModel, ModelFilterTabs, type ModelFilterType } from "../common/ModelTypeTab"
 import Section from "../Section"
-import { normalizeApiConfiguration } from "../utils/providerUtils"
+import { filterOpenRouterModelIds, normalizeApiConfiguration } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
 
 interface ModelCatalogSectionProps {
@@ -28,8 +28,11 @@ export const ModelCatalogSection = ({ renderSectionHeader }: ModelCatalogSection
 		const combined: Record<string, { info: ModelInfo; provider: "openrouter" }> = {}
 
 		if (openRouterModels) {
-			for (const [id, info] of Object.entries(openRouterModels)) {
-				combined[id] = { info, provider: "openrouter" }
+			const filteredIds = filterOpenRouterModelIds(Object.keys(openRouterModels), "openrouter")
+			for (const id of filteredIds) {
+				if (openRouterModels[id]) {
+					combined[id] = { info: openRouterModels[id], provider: "openrouter" }
+				}
 			}
 		}
 

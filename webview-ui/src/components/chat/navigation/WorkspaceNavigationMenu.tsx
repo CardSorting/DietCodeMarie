@@ -115,7 +115,7 @@ export const WorkspaceNavigationMenu = ({ activePanel, onNavigate, menuItems }: 
 				sideOffset={5}>
 				{(() => {
 					const chatSection = menuItems.filter((item) => ["newChat", "chat", "history"].includes(item.id))
-					const devSection = menuItems.filter((item) => ["tools", "worktrees"].includes(item.id))
+					const devSection = menuItems.filter((item) => ["worktrees"].includes(item.id))
 					const prefSection = menuItems.filter((item) => ["account", "settings"].includes(item.id))
 
 					const renderSection = (title: string, itemsList: typeof menuItems) => {

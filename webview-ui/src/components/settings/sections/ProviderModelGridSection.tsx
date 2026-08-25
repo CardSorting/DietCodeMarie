@@ -7,7 +7,7 @@ import { getModelBadges, isRecentModel, ModelFilterTabs, type ModelFilterType } 
 import { OpenAiCodexProvider } from "../providers/OpenAiCodexProvider"
 import { OpenRouterProvider } from "../providers/OpenRouterProvider"
 import Section from "../Section"
-import { normalizeApiConfiguration } from "../utils/providerUtils"
+import { filterOpenRouterModelIds, normalizeApiConfiguration } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
 
 export type SupportedProviderTabID = "provider-openrouter" | "provider-openaicodex"
@@ -28,7 +28,7 @@ export const SUPPORTED_PROVIDERS: ProviderMeta[] = [
 		name: "OpenRouter",
 		label: "OpenRouter",
 		iconName: "Globe",
-		description: "Unified API for 300+ SOTA AI models",
+		description: "Free AI models available on OpenRouter",
 	},
 	{
 		id: "provider-openaicodex",
@@ -76,8 +76,19 @@ export const ProviderModelGridSection = ({ providerTabId, renderSectionHeader }:
 	// Get models record for this specific provider
 	const providerModelsRecord: Record<string, ModelInfo> = useMemo(() => {
 		switch (providerMeta.apiProviderValue) {
-			case "openrouter":
-				return openRouterModels && Object.keys(openRouterModels).length > 0 ? openRouterModels : {}
+			case "openrouter": {
+				if (!openRouterModels || Object.keys(openRouterModels).length === 0) {
+					return {}
+				}
+				const filteredIds = filterOpenRouterModelIds(Object.keys(openRouterModels), "openrouter")
+				const result: Record<string, ModelInfo> = {}
+				for (const id of filteredIds) {
+					if (openRouterModels[id]) {
+						result[id] = openRouterModels[id]
+					}
+				}
+				return result
+			}
 			case "openai-codex":
 				return openAiCodexModels
 			default:

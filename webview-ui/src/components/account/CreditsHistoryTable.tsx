@@ -1,8 +1,8 @@
 import type { PaymentTransaction, UsageTransaction } from "@shared/DietCodeAccount"
 import { VSCodeDataGrid, VSCodeDataGridCell, VSCodeDataGridRow } from "@vscode/webview-ui-toolkit/react"
 import { memo, useState } from "react"
+import { TabButton } from "@/components/common/TabButton"
 import { formatDollars, formatTimestamp } from "@/utils/format"
-import { TabButton } from "../mcp/configuration/McpConfigurationView"
 
 interface CreditsHistoryTableProps {
 	isLoading: boolean

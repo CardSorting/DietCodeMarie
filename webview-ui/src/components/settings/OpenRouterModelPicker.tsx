@@ -114,6 +114,16 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 		return filterOpenRouterModelIds(unfilteredModelIds, "openrouter")
 	}, [openRouterModels])
 
+	const filteredModels = useMemo(() => {
+		const result: Record<string, (typeof openRouterModels)[string]> = {}
+		for (const id of modelIds) {
+			if (openRouterModels[id]) {
+				result[id] = openRouterModels[id]
+			}
+		}
+		return result
+	}, [modelIds, openRouterModels])
+
 	const searchableItems = useMemo(() => {
 		return modelIds.map((id) => ({
 			id,
@@ -145,13 +155,13 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 			: searchableItems.filter((item) => !favoritedModelIds.includes(item.id))
 
 		if (activeFilter === "recent") {
-			favoritedModels = favoritedModels.filter((item) => isRecentModel(item.id, openRouterModels[item.id]))
-			searchResults = searchResults.filter((item) => isRecentModel(item.id, openRouterModels[item.id]))
+			favoritedModels = favoritedModels.filter((item) => isRecentModel(item.id, filteredModels[item.id]))
+			searchResults = searchResults.filter((item) => isRecentModel(item.id, filteredModels[item.id]))
 		}
 
 		// Combine favorited models with search results
 		return [...favoritedModels, ...searchResults]
-	}, [searchableItems, searchTerm, fuse, favoritedModelIds, activeFilter, openRouterModels])
+	}, [searchableItems, searchTerm, fuse, favoritedModelIds, activeFilter, filteredModels])
 
 	const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
 		if (!isDropdownVisible) {
@@ -250,7 +260,7 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 					<span style={{ fontWeight: 500 }}>Model</span>
 				</label>
 
-				<ModelFilterTabs activeTab={activeFilter} models={openRouterModels} onTabChange={setActiveFilter} />
+				<ModelFilterTabs activeTab={activeFilter} models={filteredModels} onTabChange={setActiveFilter} />
 
 				<DropdownWrapper ref={dropdownRef}>
 					<VSCodeTextField
@@ -381,17 +391,13 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 						marginTop: 0,
 						color: "var(--vscode-descriptionForeground)",
 					}}>
-					The extension automatically fetches the latest list of models available on{" "}
-					<VSCodeLink href="https://openrouter.ai/models" style={{ display: "inline", fontSize: "inherit" }}>
-						OpenRouter.
-					</VSCodeLink>
-					If you're unsure which model to choose, LUMI works best with{" "}
+					The extension automatically fetches free models available on{" "}
 					<VSCodeLink
-						onClick={() => handleModelChange("anthropic/claude-sonnet-4.6")}
+						href="https://openrouter.ai/models?max_price=0"
 						style={{ display: "inline", fontSize: "inherit" }}>
-						anthropic/claude-sonnet-4.6.
-					</VSCodeLink>
-					You can also try searching "free" for no-cost options currently available.
+						OpenRouter.
+					</VSCodeLink>{" "}
+					Select any model ending in <code>:free</code> from the dropdown above.
 				</p>
 			)}
 		</div>

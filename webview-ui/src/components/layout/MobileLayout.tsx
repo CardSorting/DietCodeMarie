@@ -1,17 +1,16 @@
-import { Box, History, MessageSquare, Settings, User } from "lucide-react"
+import { History, MessageSquare, Settings, User } from "lucide-react"
 import React from "react"
 
 interface MobileLayoutProps {
 	children: React.ReactNode
-	activeTab: "chat" | "history" | "mcp" | "account" | "settings"
-	onTabChange: (tab: "chat" | "history" | "mcp" | "account" | "settings") => void
+	activeTab: "chat" | "history" | "account" | "settings"
+	onTabChange: (tab: "chat" | "history" | "account" | "settings") => void
 }
 
 const MobileLayout: React.FC<MobileLayoutProps> = ({ children, activeTab, onTabChange }) => {
 	const tabs = [
 		{ id: "chat", icon: MessageSquare, label: "Chat" },
 		{ id: "history", icon: History, label: "History" },
-		{ id: "mcp", icon: Box, label: "MCP" },
 		{ id: "account", icon: User, label: "Account" },
 		{ id: "settings", icon: Settings, label: "Settings" },
 	] as const

@@ -37,7 +37,6 @@ export interface ExtensionGrpcSubscriptionsParams {
 	setAvailableTerminalProfiles: (value: TerminalProfile[]) => void
 	isStateHydrated: boolean
 	relinquishControlCallbacks: MutableRefObject<Set<() => void>>
-	navigateToMcp: () => void
 	navigateToHistory: () => void
 	navigateToChat: () => void
 	navigateToSettings: () => void
@@ -58,7 +57,6 @@ export function useExtensionGrpcSubscriptions(params: ExtensionGrpcSubscriptions
 		setAvailableTerminalProfiles,
 		isStateHydrated,
 		relinquishControlCallbacks,
-		navigateToMcp,
 		navigateToHistory,
 		navigateToChat,
 		navigateToSettings,
@@ -276,7 +274,7 @@ export function useExtensionGrpcSubscriptions(params: ExtensionGrpcSubscriptions
 		subscribe: UiServiceClient.subscribeToMcpButtonClicked.bind(UiServiceClient),
 		request: EMPTY_UI_REQUEST,
 		staleAfterMs: null,
-		onMessage: () => navigateToMcp(),
+		onMessage: () => {},
 	})
 	useGrpcSubscription({
 		key: "historyButtonClicked",

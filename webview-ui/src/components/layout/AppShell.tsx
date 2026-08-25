@@ -1,19 +1,6 @@
 import { StringArrayRequest, StringRequest } from "@shared/proto/dietcode/common"
 import { TaskFavoriteRequest } from "@shared/proto/dietcode/task"
-import {
-	GitBranch,
-	History,
-	Menu,
-	MessageSquare,
-	MoreHorizontal,
-	Plus,
-	Search,
-	Server,
-	Settings,
-	Star,
-	Trash2,
-	X,
-} from "lucide-react"
+import { GitBranch, History, Menu, MessageSquare, MoreHorizontal, Plus, Search, Settings, Star, Trash2, X } from "lucide-react"
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useExtensionState } from "@/context/ExtensionStateContext"
@@ -46,11 +33,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onRequestNewChat }
 		currentTaskItem,
 		workspaceRoots,
 		navigateToHistory,
-		navigateToMcp,
 		navigateToSettings,
 		navigateToWorktrees,
 		showHistory,
-		showMcp,
 		showSettings,
 		showWorktrees,
 		navigateToChat,
@@ -124,22 +109,20 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onRequestNewChat }
 	// Determine current view tab
 	const activeTab = useMemo(() => {
 		if (showHistory) return "history"
-		if (showMcp) return "tools"
 		if (showSettings) return "settings"
 		if (showWorktrees) return "worktrees"
 		return "chat"
-	}, [showHistory, showMcp, showSettings, showWorktrees])
+	}, [showHistory, showSettings, showWorktrees])
 
 	const handleNav = useCallback(
-		(tab: "chat" | "history" | "tools" | "worktrees" | "settings") => {
+		(tab: "chat" | "history" | "worktrees" | "settings") => {
 			if (tab === "chat") navigateToChat()
 			else if (tab === "history") navigateToHistory()
-			else if (tab === "tools") navigateToMcp()
 			else if (tab === "worktrees") navigateToWorktrees()
 			else if (tab === "settings") navigateToSettings()
 			setIsMobileSidebarOpen(false)
 		},
-		[navigateToChat, navigateToHistory, navigateToMcp, navigateToWorktrees, navigateToSettings],
+		[navigateToChat, navigateToHistory, navigateToWorktrees, navigateToSettings],
 	)
 
 	const renderSidebarContent = () => (
@@ -352,20 +335,6 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onRequestNewChat }
 							title="Chat history"
 							type="button">
 							<History className="size-4" />
-						</button>
-
-						{/* Plugins & tools */}
-						<button
-							className={cn(
-								"flex size-9 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-lumi",
-								activeTab === "tools"
-									? "bg-[#20202a] text-[#faf9f7]"
-									: "text-[#8a8996]/85 hover:bg-[#20202a]/60 hover:text-[#faf9f7]",
-							)}
-							onClick={() => handleNav("tools")}
-							title="Plugins & tools"
-							type="button">
-							<Server className="size-4" />
 						</button>
 
 						{/* Worktrees / Branches */}
