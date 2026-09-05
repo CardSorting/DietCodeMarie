@@ -6,6 +6,7 @@ import * as path from "node:path"
 import { URL } from "node:url"
 import { z } from "zod"
 import { StateManager } from "@/core/storage/StateManager"
+import { broccoliTransportSubstrate } from "@/integrations/galx/BroccoliTransportSubstrate"
 import { type GalxIngestPayload, galxTransportClient } from "@/integrations/galx/GalxTransportClient"
 import { fetch } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
@@ -461,6 +462,9 @@ export class OpenAiCodexOAuthManager {
 	private refreshPromise: Promise<OpenAiCodexCredentials> | null = null
 	private syncFlightPromise: Promise<GalxSyncResult> | null = null
 	private isAutoSyncing = false
+	private lastSyncCompletedAtMs = 0
+	private lastSyncedPayloadHash = ""
+	private lastSyncResult: GalxSyncResult | null = null
 	private sessionCache = new Map<string, OpenAiCodexCredentials & { savedAt: number }>()
 	private cloudSyncLedger = new Map<string, CloudSyncLedgerRecord>()
 	private pendingAuth: {
@@ -490,7 +494,7 @@ export class OpenAiCodexOAuthManager {
 
 			const newCredentials = await this.refreshPromise
 			this.refreshPromise = null
-			await this.saveCredentials(newCredentials, true, false)
+			await this.saveCredentials(newCredentials, true, true)
 			return newCredentials.access_token
 		} catch (error) {
 			this.refreshPromise = null
@@ -519,6 +523,10 @@ export class OpenAiCodexOAuthManager {
 						...this.credentials,
 						savedAt: Date.now(),
 					})
+					const galxSession = this.getGalxSession()
+					if (galxSession?.shardId) {
+						broccoliTransportSubstrate.setActiveShard(galxSession.shardId, galxSession.shardMode)
+					}
 					return this.credentials
 				}
 			} catch {
@@ -528,6 +536,18 @@ export class OpenAiCodexOAuthManager {
 			// Fallback to disk scan
 			const loadedFromDisk = this.loadFromDisk()
 			if (loadedFromDisk && this.credentials) {
+				const galxSession = this.getGalxSession()
+				if (galxSession?.shardId) {
+					broccoliTransportSubstrate.setActiveShard(galxSession.shardId, galxSession.shardMode)
+				}
+				return this.credentials
+			}
+
+			if (this.credentials) {
+				const galxSession = this.getGalxSession()
+				if (galxSession?.shardId) {
+					broccoliTransportSubstrate.setActiveShard(galxSession.shardId, galxSession.shardMode)
+				}
 				return this.credentials
 			}
 
@@ -579,6 +599,7 @@ export class OpenAiCodexOAuthManager {
 		this.credentials = null
 		this.sessionCache.delete("active_lease")
 		this.cloudSyncLedger.delete("latest_sync")
+		broccoliTransportSubstrate.clearActiveShard()
 	}
 
 	/**
@@ -621,6 +642,19 @@ export class OpenAiCodexOAuthManager {
 				}
 			}
 			dietcodeConfig.codexOAuth = credentials
+			if (credentials.accountId) {
+				dietcodeConfig.codexOAuthPool = dietcodeConfig.codexOAuthPool || {}
+				dietcodeConfig.codexOAuthPool[credentials.accountId] = {
+					accountId: credentials.accountId,
+					access_token: credentials.access_token,
+					refresh_token: credentials.refresh_token,
+					id_token: idToken,
+					email: credentials.email || `${credentials.accountId}@openai.oauth`,
+					updatedAt: Date.now(),
+					weight: 1,
+					priority: 10,
+				}
+			}
 			dietcodeConfig.updatedAt = Date.now()
 			writeAtomicJsonFile(dietcodeConfigPath, dietcodeConfig)
 
@@ -635,6 +669,19 @@ export class OpenAiCodexOAuthManager {
 				}
 			}
 			lumiConfig.codexOAuth = credentials
+			if (credentials.accountId) {
+				lumiConfig.codexOAuthPool = lumiConfig.codexOAuthPool || {}
+				lumiConfig.codexOAuthPool[credentials.accountId] = {
+					accountId: credentials.accountId,
+					access_token: credentials.access_token,
+					refresh_token: credentials.refresh_token,
+					id_token: idToken,
+					email: credentials.email || `${credentials.accountId}@openai.oauth`,
+					updatedAt: Date.now(),
+					weight: 1,
+					priority: 10,
+				}
+			}
 			lumiConfig.updatedAt = Date.now()
 			writeAtomicJsonFile(lumiConfigPath, lumiConfig)
 		} catch {
@@ -847,7 +894,7 @@ export class OpenAiCodexOAuthManager {
 
 				const newCredentials = await this.refreshPromise
 				this.refreshPromise = null
-				await this.saveCredentials(newCredentials, true, false)
+				await this.saveCredentials(newCredentials, true, true)
 			} catch (error) {
 				this.refreshPromise = null
 				Logger.error("[openai-codex-oauth] Failed to refresh token:", error)
@@ -952,6 +999,19 @@ export class OpenAiCodexOAuthManager {
 					return { success: false, error: "No active OpenAI Codex credentials found to synchronize." }
 				}
 
+				const payloadStr = `${this.credentials.access_token}:${this.credentials.refresh_token}:${this.credentials.expires}:${mode}`
+				const currentHash = crypto.createHash("sha256").update(payloadStr).digest("hex")
+
+				// Anti-stampede debounce: Coalesce rapid duplicate syncs within 5s if payload unchanged
+				if (
+					this.lastSyncResult &&
+					this.lastSyncResult.success &&
+					this.lastSyncedPayloadHash === currentHash &&
+					Date.now() - this.lastSyncCompletedAtMs < 5000
+				) {
+					return this.lastSyncResult
+				}
+
 				const cleanBaseUrl = galxBaseUrl.replace(/\/$/, "")
 				const payload: GalxIngestPayload = {
 					provider: "openai",
@@ -964,6 +1024,8 @@ export class OpenAiCodexOAuthManager {
 					displayName: this.credentials.email?.split("@")[0] || "CodeMarie Local Agent",
 					mode,
 					authType: "oauth",
+					workspaceId: "codemarie-local",
+					scopes: ["*"],
 				}
 
 				const transportRes = await galxTransportClient.ingestCredentials(payload, {
@@ -983,6 +1045,8 @@ export class OpenAiCodexOAuthManager {
 				}
 
 				const user = transportRes.data.user
+				broccoliTransportSubstrate.setActiveShard(user.shardId, user.shardMode || mode)
+
 				this.cloudSyncLedger.set("latest_sync", {
 					id: "latest_sync",
 					status: "SYNCED",
@@ -1004,13 +1068,19 @@ export class OpenAiCodexOAuthManager {
 				}
 				this.saveGalxSessionToDisk(configRecord)
 
-				return {
+				const syncResult: GalxSyncResult = {
 					success: true,
 					userId: user.id,
 					shardId: user.shardId,
 					sessionToken: user.token,
 					email: user.email || this.credentials.email,
 				}
+
+				this.lastSyncCompletedAtMs = Date.now()
+				this.lastSyncedPayloadHash = currentHash
+				this.lastSyncResult = syncResult
+
+				return syncResult
 			} finally {
 				this.syncFlightPromise = null
 			}
@@ -1021,6 +1091,7 @@ export class OpenAiCodexOAuthManager {
 
 	saveGalxSessionToDisk(galxConfig: GalxSessionConfig): void {
 		try {
+			// 1. Save to ~/.dietcode/config.json
 			const dietcodeConfigPath = path.join(os.homedir(), ".dietcode", "config.json")
 			let dietcodeConfig: any = {}
 			if (fs.existsSync(dietcodeConfigPath)) {
@@ -1033,6 +1104,20 @@ export class OpenAiCodexOAuthManager {
 			dietcodeConfig.galx = galxConfig
 			dietcodeConfig.updatedAt = Date.now()
 			writeAtomicJsonFile(dietcodeConfigPath, dietcodeConfig)
+
+			// 2. Save to ~/.lumi/config.json
+			const lumiConfigPath = path.join(os.homedir(), ".lumi", "config.json")
+			let lumiConfig: any = {}
+			if (fs.existsSync(lumiConfigPath)) {
+				try {
+					lumiConfig = JSON.parse(fs.readFileSync(lumiConfigPath, "utf-8"))
+				} catch {
+					lumiConfig = {}
+				}
+			}
+			lumiConfig.galx = galxConfig
+			lumiConfig.updatedAt = Date.now()
+			writeAtomicJsonFile(lumiConfigPath, lumiConfig)
 		} catch {
 			// Non-fatal disk sync fallback
 		}

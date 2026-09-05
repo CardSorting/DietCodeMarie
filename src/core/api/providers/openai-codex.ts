@@ -5,6 +5,7 @@ import type { ChatCompletionTool } from "openai/resources/chat/completions"
 import * as os from "os"
 import { MessageEvent as UndiciMessageEvent, WebSocket as UndiciWebSocket } from "undici"
 import { v7 as uuidv7 } from "uuid"
+import { broccoliTransportSubstrate } from "@/integrations/galx/BroccoliTransportSubstrate"
 import { openAiCodexOAuthManager } from "@/integrations/openai-codex/oauth"
 import { buildExternalBasicHeaders } from "@/services/EnvUtils"
 import { featureFlagsService } from "@/services/feature-flags"
@@ -209,12 +210,15 @@ export class OpenAiCodexHandler implements ApiHandler {
 			// Get ChatGPT account ID for organization subscriptions
 			const accountId = await openAiCodexOAuthManager.getAccountId()
 
+			const activeShardId = broccoliTransportSubstrate.getActiveShardId()
+
 			// Build Codex-specific headers
 			const codexHeaders: Record<string, string> = {
 				originator: "dietcode",
 				session_id: this.sessionId,
 				"User-Agent": `dietcode/${process.env.npm_package_version || "1.0.0"} (${os.platform()} ${os.release()}; ${os.arch()}) node/${process.version.slice(1)}`,
 				...(accountId ? { "ChatGPT-Account-Id": accountId } : {}),
+				...(activeShardId ? { "X-Galx-Shard-Id": activeShardId } : {}),
 				...buildExternalBasicHeaders(),
 			}
 
@@ -307,7 +311,7 @@ export class OpenAiCodexHandler implements ApiHandler {
 		if (hadPreviousResponseId && errorCode === "previous_response_not_found") {
 			return true
 		}
-		if (errorCode === "websocket_closed" || errorCode === "websocket_error") {
+		if (errorCode === "websocket_closed" || errorCode === "websocket_error" || errorCode === "codex_websocket_idle_timeout") {
 			return true
 		}
 		return false
@@ -389,8 +393,27 @@ export class OpenAiCodexHandler implements ApiHandler {
 			next?.()
 		}
 
+		// Intra-chunk activity timer (45s) per ADR 0112 to prevent hanging streams
+		let chunkTimer: NodeJS.Timeout | undefined
+		const resetChunkTimer = () => {
+			if (chunkTimer) {
+				clearTimeout(chunkTimer)
+			}
+			chunkTimer = setTimeout(() => {
+				if (!completed) {
+					const error: Error & { code?: string } = new Error("Codex Responses websocket idle timeout (45s silence)")
+					error.code = "codex_websocket_idle_timeout"
+					failure = error
+					completed = true
+					wake()
+				}
+			}, 45_000)
+		}
+		resetChunkTimer()
+
 		const handleMessage = (evt: UndiciMessageEvent) => {
 			try {
+				resetChunkTimer()
 				const data = typeof evt.data === "string" ? evt.data : new TextDecoder().decode(evt.data as any)
 				const event = JSON.parse(data)
 				eventQueue.push(event)
@@ -404,6 +427,7 @@ export class OpenAiCodexHandler implements ApiHandler {
 		}
 
 		const handleError = (evt: any) => {
+			if (chunkTimer) clearTimeout(chunkTimer)
 			const error: Error & { code?: string } = new Error("Codex Responses websocket error")
 			error.code = "websocket_error"
 			failure = error
@@ -412,6 +436,7 @@ export class OpenAiCodexHandler implements ApiHandler {
 		}
 
 		const handleClose = (evt: any) => {
+			if (chunkTimer) clearTimeout(chunkTimer)
 			if (!completed) {
 				const error: Error & { code?: string } = new Error("Codex Responses websocket closed unexpectedly")
 				error.code = "websocket_closed"
@@ -451,6 +476,9 @@ export class OpenAiCodexHandler implements ApiHandler {
 				throw failure
 			}
 		} finally {
+			if (chunkTimer) {
+				clearTimeout(chunkTimer)
+			}
 			ws.removeEventListener("message", handleMessage)
 			ws.removeEventListener("error", handleError)
 			ws.removeEventListener("close", handleClose)
@@ -463,6 +491,7 @@ export class OpenAiCodexHandler implements ApiHandler {
 
 		// Get ChatGPT account ID for organization subscriptions
 		const accountId = await openAiCodexOAuthManager.getAccountId()
+		const activeShardId = broccoliTransportSubstrate.getActiveShardId()
 
 		// Build headers with required Codex-specific fields
 		const headers: Record<string, string> = {
@@ -476,6 +505,11 @@ export class OpenAiCodexHandler implements ApiHandler {
 		// Add ChatGPT-Account-Id if available
 		if (accountId) {
 			headers["ChatGPT-Account-Id"] = accountId
+		}
+
+		// Add X-Galx-Shard-Id if active shard affinity is pinned
+		if (activeShardId) {
+			headers["X-Galx-Shard-Id"] = activeShardId
 		}
 
 		try {

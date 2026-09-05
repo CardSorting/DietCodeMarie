@@ -3,7 +3,7 @@ import * as crypto from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { BroccoliTransportSubstrate } from "../src/integrations/galx/BroccoliTransportSubstrate"
+import { BroccoliTransportSubstrate, broccoliTransportSubstrate } from "../src/integrations/galx/BroccoliTransportSubstrate"
 import { GalxTransportClient } from "../src/integrations/galx/GalxTransportClient"
 import {
 	isTokenExpired,
@@ -54,6 +54,7 @@ async function main(): Promise<void> {
 		console.log("[Suite 2/20] Validating Single-Flight In-Flight Refresh Mutex...")
 		const manager = new OpenAiCodexOAuthManager()
 		manager.syncCredentialsToDisk = () => {}
+		manager.triggerSilentBackgroundSync = () => {}
 		let networkCallCount = 0
 
 		const mockAccessToken = "ey-new-access-token-rotated"
@@ -239,7 +240,11 @@ async function main(): Promise<void> {
 
 					const bodyObj = JSON.parse(String(init?.body || "{}"))
 					const expectedDigest = `sha-256=${crypto.createHash("sha256").update(String(init?.body)).digest("base64")}`
-					assert.equal(receivedDigest, expectedDigest, "RFC 9530 SHA-256 Digest header must match body digest")
+					assert.equal(
+						headers.Digest || headers.digest,
+						expectedDigest,
+						"RFC 9530 SHA-256 Digest header must match body digest",
+					)
 
 					return {
 						ok: true,
@@ -444,6 +449,8 @@ async function main(): Promise<void> {
 				assert.equal(res.success, true)
 				assert.equal(res.data?.user?.id, "usr_transport_verified")
 				assert.equal(res.idempotentReplay, true)
+				assert.equal(res.shardId, "shard_us_east_4")
+				assert.equal(broccoliTransportSubstrate.getActiveShardId(), "shard_us_east_4")
 				assert.ok(transportCapturedSignature.startsWith("sig1=:"), "Signature header must be present")
 				assert.ok(transportCapturedDigest.startsWith("sha-256="), "Digest header must be present")
 				assert.ok(transportCapturedIdempotency.length > 0, "Idempotency-Key must be present")
@@ -646,8 +653,164 @@ async function main(): Promise<void> {
 		assert.equal(flushWorkerExecuted, true, "Background outbox worker must trigger flush when items are pending")
 		console.log("  [✓] Self-healing background outbox auto-flush worker lifecycle verified.")
 
+		// -------------------------------------------------------------------------
+		// [Suite 21/21] Dual-Channel Shard Capture & 429 Anti-Pinning Eviction
+		// -------------------------------------------------------------------------
+		console.log("[Suite 21/21] Validating Dual-Channel Shard Capture & 429 Eviction...")
+		broccoliTransportSubstrate.clearActiveShard()
+		assert.equal(broccoliTransportSubstrate.getActiveShardId(), undefined)
+
+		// 1. Set active shard and verify pinning
+		broccoliTransportSubstrate.setActiveShard("shard_authority_01", "pooled")
+		assert.equal(broccoliTransportSubstrate.getActiveShardId(), "shard_authority_01")
+		assert.equal(broccoliTransportSubstrate.getActiveShardMode(), "pooled")
+
+		// 2. HTTP 429 Rate Limit response unpins active shard
+		await mockFetchForTesting(
+			(async () => {
+				return {
+					ok: false,
+					status: 429,
+					text: async () => JSON.stringify({ error: { message: "Quota exceeded" } }),
+					headers: {
+						get: () => null,
+					},
+				} as unknown as Response
+			}) as typeof globalThis.fetch,
+			async () => {
+				await hardenedTransport.post("/responses", { prompt: "test" })
+				assert.equal(
+					broccoliTransportSubstrate.getActiveShardId(),
+					undefined,
+					"HTTP 429 must unpin active shard to prevent blackholing",
+				)
+			},
+		)
+		console.log("  [✓] Dual-channel shard capture & 429 anti-pinning eviction verified.")
+
+		// -------------------------------------------------------------------------
+		// [Suite 22/24] Transactional Outbox Replay without WAL Amplification
+		// -------------------------------------------------------------------------
+		console.log("[Suite 22/24] Validating Transactional Outbox Replay without WAL Duplication...")
+		const preReplayCount = broccoliTransportSubstrate.getPendingOutboxEntries().length
+		const replayEntry = broccoliTransportSubstrate.enqueueOutbox("/api/auth/ingest", {
+			provider: "openai",
+			replay_test: "token_for_replay_test",
+		})
+		const activePendingBefore = broccoliTransportSubstrate.getPendingOutboxEntries().length
+		assert.equal(activePendingBefore, preReplayCount + 1, "Pending count must increment by exactly 1")
+
+		await mockFetchForTesting(
+			(async () => {
+				return {
+					ok: true,
+					status: 200,
+					text: async () => "",
+					json: async () => ({
+						success: true,
+						user: {
+							id: "usr_replay_verified",
+							shardId: "shard_replayed_01",
+							token: "galx_session_replay",
+						},
+					}),
+					headers: {
+						get: (name: string) => (name.toLowerCase() === "x-galx-shard-id" ? "shard_replayed_01" : null),
+					},
+				} as unknown as Response
+			}) as typeof globalThis.fetch,
+			async () => {
+				const flushResult = await hardenedTransport.flushPendingOutbox()
+				assert.ok(flushResult.succeeded >= 1, "At least 1 outbox entry must succeed")
+
+				const updatedEntry = broccoliTransportSubstrate.getEntry(replayEntry.id)
+				assert.ok(updatedEntry, "Replayed entry must exist")
+				assert.equal(updatedEntry.status, "COMMITTED", "Replayed entry status must transition to COMMITTED")
+
+				// Verify WAL did NOT amplify or create duplicate entries
+				const pendingAfter = broccoliTransportSubstrate.getPendingOutboxEntries()
+				assert.equal(pendingAfter.length, 0, "All pending entries must be settled without WAL multiplication")
+			},
+		)
+		console.log("  [✓] Transactional outbox replay de-duplication verified (0 duplicate WAL entries).")
+
+		// -------------------------------------------------------------------------
+		// [Suite 23/24] Zero-Trust At-Rest Encryption & Committed Entry Scrubbing
+		// -------------------------------------------------------------------------
+		console.log("[Suite 23/24] Validating Zero-Trust Machine-Bound Encryption & Scrubbing...")
+		const committedRecord = broccoliTransportSubstrate.getEntry(replayEntry.id)
+		assert.ok(committedRecord, "Committed record must exist")
+		assert.equal(committedRecord.payload._redacted, true, "Committed payload must be redacted")
+		assert.equal(committedRecord.payload.replay_test, undefined, "Sensitive field must be scrubbed")
+
+		// Stage a queued item with sensitive tokens and verify disk encryption
+		const sensitiveQueued = broccoliTransportSubstrate.enqueueOutbox("/api/auth/ingest", {
+			accessToken: "sk-super-secret-sensitive-bearer-token",
+			refreshToken: "rt-super-secret-sensitive-refresh-token",
+		})
+
+		const walDiskPath = (broccoliTransportSubstrate as any).ledgerFilePath as string
+		assert.ok(fs.existsSync(walDiskPath), "WAL file must exist on disk")
+		const rawDiskContent = fs.readFileSync(walDiskPath, "utf-8")
+
+		// Invariant: Raw plaintext tokens must NEVER appear in the WAL on disk
+		assert.equal(
+			rawDiskContent.includes("sk-super-secret-sensitive-bearer-token"),
+			false,
+			"Plaintext access token must NOT exist on disk in WAL",
+		)
+		assert.equal(
+			rawDiskContent.includes("rt-super-secret-sensitive-refresh-token"),
+			false,
+			"Plaintext refresh token must NOT exist on disk in WAL",
+		)
+
+		// Invariant: Transparent hydration recovers queued entry with machine-bound key
+		const zeroTrustHydratedSubstrate = new BroccoliTransportSubstrate((broccoliTransportSubstrate as any).storageDir)
+		const recoveredQueued = zeroTrustHydratedSubstrate.getEntry(sensitiveQueued.id)
+		assert.ok(recoveredQueued, "Queued entry must be hydrated")
+		assert.equal(
+			recoveredQueued.payload.accessToken,
+			"sk-super-secret-sensitive-bearer-token",
+			"Queued entry must decrypt transparently on host machine",
+		)
+		console.log("  [✓] Zero-trust at-rest machine-bound envelope encryption & scrubbing verified.")
+
+		// -------------------------------------------------------------------------
+		// [Suite 24/24] Broadened Shard Eviction on 401/403/404/410
+		// -------------------------------------------------------------------------
+		console.log("[Suite 24/24] Validating Broadened Shard Eviction on 401/403/404/410...")
+		const testErrorStatuses = [401, 403, 404, 410]
+
+		for (const errStatus of testErrorStatuses) {
+			broccoliTransportSubstrate.setActiveShard(`shard_test_evict_${errStatus}`, "pooled")
+			assert.equal(broccoliTransportSubstrate.getActiveShardId(), `shard_test_evict_${errStatus}`)
+
+			await mockFetchForTesting(
+				(async () => {
+					return {
+						ok: false,
+						status: errStatus,
+						text: async () => JSON.stringify({ error: { message: `Simulated error ${errStatus}` } }),
+						headers: {
+							get: () => null,
+						},
+					} as unknown as Response
+				}) as typeof globalThis.fetch,
+				async () => {
+					await hardenedTransport.post("/responses", { prompt: `test_${errStatus}` })
+					assert.equal(
+						broccoliTransportSubstrate.getActiveShardId(),
+						undefined,
+						`HTTP ${errStatus} must trigger shard affinity eviction`,
+					)
+				},
+			)
+		}
+		console.log("  [✓] Broadened shard eviction on 401/403/404/410 verified.")
+
 		console.log("\n================================================================")
-		console.log("   ALL 20 WORLD-CLASS TRANSPORT, DPOP & BROCCOLIDB SUITES PASSED!")
+		console.log("   ALL 24 WORLD-CLASS TRANSPORT, DPOP & BROCCOLIDB SUITES PASSED!")
 		console.log("================================================================\n")
 	} finally {
 		try {

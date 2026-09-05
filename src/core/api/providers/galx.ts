@@ -1,6 +1,7 @@
 import { galxDefaultModelId, galxDefaultModelInfo, galxModels, ModelInfo } from "@shared/api"
 import OpenAI from "openai"
 import type { ChatCompletionTool as OpenAITool } from "openai/resources/chat/completions"
+import { broccoliTransportSubstrate } from "@/integrations/galx/BroccoliTransportSubstrate"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
@@ -37,6 +38,7 @@ export class GalxHandler implements ApiHandler {
 			}
 			try {
 				const baseURL = (this.options.galxBaseUrl || "https://galx.ai/v1").replace(/\/$/, "")
+				const activeShardId = broccoliTransportSubstrate.getActiveShardId()
 				this.client = createOpenAIClient({
 					baseURL,
 					apiKey: this.options.galxApiKey,
@@ -44,6 +46,7 @@ export class GalxHandler implements ApiHandler {
 						"X-GALX-Client": "LUMI/12.5.0",
 						"X-GALX-Client-ID": "lumi-ide",
 						"X-OpenRouter-Title": "LUMI",
+						...(activeShardId ? { "X-Galx-Shard-Id": activeShardId } : {}),
 					},
 				})
 			} catch (error: any) {
@@ -78,11 +81,21 @@ export class GalxHandler implements ApiHandler {
 			;(requestParams as unknown as Record<string, unknown>).reasoning_effort = this.options.reasoningEffort
 		}
 
+		const activeShardId = broccoliTransportSubstrate.getActiveShardId()
+		const requestHeaders: Record<string, string> = {
+			...(activeShardId ? { "X-Galx-Shard-Id": activeShardId } : {}),
+		}
+
 		let stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>
 		try {
-			stream = await client.chat.completions.create(requestParams)
+			stream = await client.chat.completions.create(requestParams, {
+				headers: requestHeaders,
+			})
 		} catch (error: unknown) {
-			const err = error as Error
+			const err = error as any
+			if (err?.status === 429 || err?.statusCode === 429) {
+				broccoliTransportSubstrate.clearActiveShard()
+			}
 			Logger.error(`GALXAI API Request Error: ${err.message}`, err)
 			throw error
 		}

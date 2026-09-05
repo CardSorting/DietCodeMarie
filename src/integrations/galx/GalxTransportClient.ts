@@ -37,6 +37,8 @@ export interface GalxIngestPayload {
 	displayName?: string
 	mode?: "pooled" | "private" | (string & {})
 	authType?: "oauth" | "api_key" | (string & {})
+	workspaceId?: string
+	scopes?: string[]
 	[key: string]: unknown
 }
 
@@ -51,6 +53,8 @@ export interface GalxTransportResponse<T = unknown> {
 	attempts: number
 	serverTiming?: string
 	shardId?: string
+	shardMode?: string
+	sessionToken?: string
 	edgeRegion?: string
 	dpopProof?: string
 	traceId?: string
@@ -328,6 +332,12 @@ export class GalxTransportClient {
 			candidatePaths?: string[]
 			idempotencyKey?: string
 			timeoutMs?: number
+			shardId?: string
+			shardMode?: string
+			accountId?: string
+			sessionId?: string
+			bearerToken?: string
+			existingWalId?: string
 		} = {},
 	): Promise<GalxTransportResponse<T>> {
 		const startTime = performance.now()
@@ -337,13 +347,21 @@ export class GalxTransportClient {
 		const correlationId = `corr_${Date.now().toString(36)}_${crypto.randomBytes(4).toString("hex")}`
 		const traceCtx = broccoliTransportSubstrate.generateTraceContext()
 
-		// 1. Stage in BroccoliDB Write-Ahead Ledger & Outbox
-		const walEntry = broccoliTransportSubstrate.enqueueOutbox(path, payload, {
-			correlationId,
-			idempotencyKey,
-			traceId: traceCtx.traceId,
-			spanId: traceCtx.spanId,
-		})
+		// 1. Stage in BroccoliDB Write-Ahead Ledger or reuse existing entry on replay
+		let walEntry = options.existingWalId ? broccoliTransportSubstrate.getEntry(options.existingWalId) : undefined
+		if (!walEntry) {
+			walEntry = broccoliTransportSubstrate.enqueueOutbox(path, payload, {
+				correlationId,
+				idempotencyKey,
+				traceId: traceCtx.traceId,
+				spanId: traceCtx.spanId,
+			})
+		} else {
+			broccoliTransportSubstrate.updateEntry(walEntry.id, {
+				status: "IN_FLIGHT",
+				updatedAtMs: Date.now(),
+			})
+		}
 
 		if (!this.checkCircuitBreaker()) {
 			const breakerError = `GalxTransport circuit breaker is OPEN. Cooldown active. Last error: ${this.circuitState.lastError}`
@@ -443,10 +461,23 @@ export class GalxTransportClient {
 							tracestate: traceCtx.tracestate,
 						}
 
-						// Inject cached shard affinity if available
-						const cachedShard = broccoliTransportSubstrate.getActiveShardId()
-						if (cachedShard) {
-							requestHeaders["X-Target-Shard-Id"] = cachedShard
+						// Inject targeted or cached shard affinity if available
+						const effectiveTargetShard = options.shardId || broccoliTransportSubstrate.getActiveShardId()
+						if (effectiveTargetShard) {
+							requestHeaders["X-Galx-Shard-Id"] = effectiveTargetShard
+							requestHeaders["x-galx-shard-id"] = effectiveTargetShard
+							requestHeaders["X-Target-Shard-Id"] = effectiveTargetShard
+						}
+						const effectiveTargetAccount = options.accountId || (payload as any).accountId
+						if (effectiveTargetAccount) {
+							requestHeaders["ChatGPT-Account-Id"] = String(effectiveTargetAccount)
+							requestHeaders["x-galx-account-id"] = String(effectiveTargetAccount)
+						}
+						if (options.sessionId) {
+							requestHeaders["X-Galx-Session-Id"] = options.sessionId
+						}
+						if (options.bearerToken) {
+							requestHeaders["Authorization"] = `Bearer ${options.bearerToken}`
 						}
 
 						const response = await fetch(targetUrl, {
@@ -458,15 +489,17 @@ export class GalxTransportClient {
 
 						clearTimeout(timeoutId)
 
-						if (response.status === 404) {
-							// Fall through to next candidate endpoint
-							continue
-						}
-
 						const idempotentReplay = response.headers?.get?.("idempotent-replay") === "true"
 						const serverTiming = response.headers?.get?.("server-timing") || undefined
-						const resShardId =
-							response.headers?.get?.("x-galx-shard-id") || response.headers?.get?.("x-shard-id") || undefined
+						const headerShardId =
+							response.headers?.get?.("x-galx-shard-id") ||
+							response.headers?.get?.("X-Galx-Shard-Id") ||
+							response.headers?.get?.("x-shard-id") ||
+							undefined
+						const headerShardMode =
+							response.headers?.get?.("x-galx-shard-mode") ||
+							response.headers?.get?.("X-Galx-Shard-Mode") ||
+							undefined
 						const resEdgeRegion =
 							response.headers?.get?.("cf-ray") || response.headers?.get?.("x-edge-region") || undefined
 
@@ -474,6 +507,26 @@ export class GalxTransportClient {
 							const errText = await response.text()
 							lastStatus = response.status
 							lastError = `HTTP ${response.status}: ${errText || response.statusText}`
+
+							// Broadened shard eviction: HTTP 429 quota exhaustion, or 401, 403, 404, 410 shard invalidation
+							const isShardEvictionStatus =
+								response.status === 429 ||
+								response.status === 401 ||
+								response.status === 403 ||
+								response.status === 404 ||
+								response.status === 410
+
+							if (isShardEvictionStatus) {
+								Logger.warn(
+									`[GalxTransport] HTTP ${response.status} received. Evicting active shard affinity to permit smooth pool failover.`,
+								)
+								broccoliTransportSubstrate.clearActiveShard()
+							}
+
+							if (response.status === 404) {
+								// Fall through to next candidate endpoint
+								continue
+							}
 
 							// If rate limited or overloaded with Retry-After, inspect header and adjust AIMD
 							if (response.status === 429 || response.status === 503) {
@@ -500,13 +553,15 @@ export class GalxTransportClient {
 									durationMs: Math.round(performance.now() - startTime),
 									attempts,
 									serverTiming,
-									shardId: resShardId,
+									shardId: headerShardId,
+									shardMode: headerShardMode,
 									edgeRegion: resEdgeRegion,
 									dpopProof: lastDPoPProof,
 									traceId: traceCtx.traceId,
 								}
 								broccoliTransportSubstrate.sealReceipt(walEntry.id, clientErrorRes, {
-									shardId: resShardId,
+									shardId: headerShardId,
+									shardMode: headerShardMode,
 									edgeRegion: resEdgeRegion,
 									traceId: traceCtx.traceId,
 								})
@@ -522,6 +577,32 @@ export class GalxTransportClient {
 							responseData = {}
 						}
 
+						const bodyShardId =
+							(responseData as any)?.user?.shardId ||
+							(responseData as any)?.shardId ||
+							(responseData as any)?.data?.shardId ||
+							(responseData as any)?.data?.user?.shardId ||
+							undefined
+
+						const bodyShardMode =
+							(responseData as any)?.user?.shardMode ||
+							(responseData as any)?.shardMode ||
+							(responseData as any)?.data?.shardMode ||
+							undefined
+
+						const resSessionToken =
+							(responseData as any)?.user?.token ||
+							(responseData as any)?.token ||
+							(responseData as any)?.sessionToken ||
+							undefined
+
+						const effectiveShardId = headerShardId || bodyShardId
+						const effectiveShardMode = headerShardMode || bodyShardMode
+
+						if (effectiveShardId) {
+							broccoliTransportSubstrate.setActiveShard(effectiveShardId, effectiveShardMode)
+						}
+
 						this.recordSuccess()
 						const successResponse: GalxTransportResponse<T> = {
 							success: true,
@@ -532,14 +613,17 @@ export class GalxTransportClient {
 							durationMs: Math.round(performance.now() - startTime),
 							attempts,
 							serverTiming,
-							shardId: resShardId,
+							shardId: effectiveShardId,
+							shardMode: effectiveShardMode,
+							sessionToken: resSessionToken,
 							edgeRegion: resEdgeRegion,
 							dpopProof: lastDPoPProof,
 							traceId: traceCtx.traceId,
 						}
 						// Cryptographically seal delivery receipt in BroccoliDB Merkle hash chain
 						broccoliTransportSubstrate.sealReceipt(walEntry.id, successResponse, {
-							shardId: resShardId,
+							shardId: effectiveShardId,
+							shardMode: effectiveShardMode,
 							edgeRegion: resEdgeRegion,
 							traceId: traceCtx.traceId,
 						})
@@ -599,14 +683,22 @@ export class GalxTransportClient {
 			}
 		}
 
-		return this.post<{ user?: { id: string; shardId: string; token: string; email?: string; shardMode?: string } }>(
-			"/api/auth/ingest",
-			bodyPayload,
-			{
-				overrideBaseUrl: options?.overrideBaseUrl,
-				candidatePaths: ["/api/auth/ingest", "/api/auth/openai", "/api/ingest"],
-			},
-		)
+		const res = await this.post<{
+			user?: { id: string; shardId: string; token: string; email?: string; shardMode?: string }
+		}>("/api/auth/ingest", bodyPayload, {
+			overrideBaseUrl: options?.overrideBaseUrl,
+			candidatePaths: ["/api/auth/ingest", "/api/auth/openai", "/api/ingest"],
+			accountId: payload.accountId,
+		})
+
+		if (res.success && res.data?.user?.shardId) {
+			broccoliTransportSubstrate.setActiveShard(
+				res.data.user.shardId,
+				res.data.user.shardMode || (payload.mode as string) || "pooled",
+			)
+		}
+
+		return res
 	}
 
 	/**
@@ -619,10 +711,14 @@ export class GalxTransportClient {
 
 		for (const entry of pending) {
 			const res = await this.post(entry.path, entry.payload, {
+				existingWalId: entry.id,
 				idempotencyKey: entry.idempotencyKey,
 			})
 			if (res.success) {
 				succeeded++
+				if (res.shardId) {
+					broccoliTransportSubstrate.setActiveShard(res.shardId, res.shardMode)
+				}
 			} else {
 				failed++
 			}

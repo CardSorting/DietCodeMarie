@@ -20,6 +20,7 @@ export interface BroccoliTransportEntry {
 	serverTiming?: string
 	receiptHash?: string
 	shardId?: string
+	shardMode?: string
 	edgeRegion?: string
 	traceId?: string
 	spanId?: string
@@ -35,6 +36,7 @@ export interface BroccoliDeliveryReceipt {
 	timestampMs: number
 	durationMs: number
 	shardId?: string
+	shardMode?: string
 	edgeRegion?: string
 	traceId?: string
 }
@@ -88,6 +90,7 @@ export class BroccoliTransportSubstrate {
 	private readonly latencyHistory: number[] = []
 	private lastReceiptHash = "0000000000000000000000000000000000000000000000000000000000000000"
 	private activeShardId?: string
+	private activeShardMode?: string
 	private activeEdgeRegion?: string
 	private workerTimer: NodeJS.Timeout | null = null
 
@@ -280,7 +283,7 @@ export class BroccoliTransportSubstrate {
 	public sealReceipt(
 		entryId: string,
 		response: GalxTransportResponse,
-		routingMeta: { shardId?: string; edgeRegion?: string; traceId?: string } = {},
+		routingMeta: { shardId?: string; shardMode?: string; edgeRegion?: string; traceId?: string } = {},
 	): BroccoliDeliveryReceipt {
 		const entry = this.inMemoryEntries.get(entryId)
 		const now = Date.now()
@@ -289,6 +292,9 @@ export class BroccoliTransportSubstrate {
 		// Update active shard affinity cache
 		if (routingMeta.shardId) {
 			this.activeShardId = routingMeta.shardId
+		}
+		if (routingMeta.shardMode) {
+			this.activeShardMode = routingMeta.shardMode
 		}
 		if (routingMeta.edgeRegion) {
 			this.activeEdgeRegion = routingMeta.edgeRegion
@@ -322,6 +328,7 @@ export class BroccoliTransportSubstrate {
 			timestampMs: now,
 			durationMs,
 			shardId: routingMeta.shardId || this.activeShardId,
+			shardMode: routingMeta.shardMode || this.activeShardMode,
 			edgeRegion: routingMeta.edgeRegion || this.activeEdgeRegion,
 			traceId: routingMeta.traceId || entry?.traceId,
 		}
@@ -334,14 +341,40 @@ export class BroccoliTransportSubstrate {
 			entry.serverTiming = response.serverTiming
 			entry.receiptHash = receiptHash
 			entry.shardId = receipt.shardId
+			entry.shardMode = receipt.shardMode
 			entry.edgeRegion = receipt.edgeRegion
-			if (!response.success) {
+			if (response.success) {
+				// Zero-trust hygiene: Scrub sensitive credential fields from committed entries
+				entry.payload = {
+					_redacted: true,
+					payloadHash: entry.payloadHash,
+					scrubbedAtMs: now,
+				}
+			} else {
 				entry.lastError = response.error
 			}
 		}
 
 		this.persistLedgerToDisk()
 		return receipt
+	}
+
+	/**
+	 * Retrieve a specific entry by ID
+	 */
+	public getEntry(id: string): BroccoliTransportEntry | undefined {
+		return this.inMemoryEntries.get(id)
+	}
+
+	/**
+	 * Update an existing entry in the Write-Ahead Ledger
+	 */
+	public updateEntry(id: string, patch: Partial<BroccoliTransportEntry>): void {
+		const entry = this.inMemoryEntries.get(id)
+		if (entry) {
+			Object.assign(entry, patch, { updatedAtMs: Date.now() })
+			this.persistLedgerToDisk()
+		}
 	}
 
 	/**
@@ -414,18 +447,57 @@ export class BroccoliTransportSubstrate {
 	}
 
 	/**
+	 * Derive machine-bound secret key using HKDF over host metadata + storage directory
+	 */
+	public deriveMachineBoundKey(): string {
+		const machineSeed = `${os.hostname()}:${os.userInfo().username}:${os.homedir()}:${this.storageDir}`
+		return crypto.createHmac("sha256", "galx_machine_bound_transport_key").update(machineSeed).digest("hex")
+	}
+
+	/**
 	 * Persist the active Write-Ahead Ledger to disk atomically with 0o600 permissions
+	 * Zero-Trust Protection: Committed entries are scrubbed; queued entries are machine-bound encrypted.
 	 */
 	private persistLedgerToDisk(): void {
 		try {
 			this.ensureDirs()
+			const machineKey = this.deriveMachineBoundKey()
+
+			const sanitizedEntries = Array.from(this.inMemoryEntries.values())
+				.slice(-200)
+				.map((entry) => {
+					if (entry.status === "COMMITTED" || entry.status === "REPLAYED") {
+						return {
+							...entry,
+							payload: {
+								_redacted: true,
+								payloadHash: entry.payloadHash,
+								scrubbedAtMs: entry.updatedAtMs || Date.now(),
+							},
+						}
+					}
+					if (entry.status === "QUEUED" || entry.status === "IN_FLIGHT") {
+						if (!entry.payload._envelope) {
+							const envelope = this.encryptEnvelope(entry.payload, machineKey, "machine-bound-wal-v1")
+							return {
+								...entry,
+								payload: {
+									_envelope: envelope,
+								},
+							}
+						}
+					}
+					return entry
+				})
+
 			const serializable = {
-				version: 2,
+				version: 3,
 				lastReceiptHash: this.lastReceiptHash,
 				activeShardId: this.activeShardId,
+				activeShardMode: this.activeShardMode,
 				activeEdgeRegion: this.activeEdgeRegion,
 				updatedAt: Date.now(),
-				entries: Array.from(this.inMemoryEntries.values()).slice(-200), // Retain last 200 WAL entries
+				entries: sanitizedEntries,
 				receipts: Array.from(this.deliveryReceipts.values()).slice(-200),
 			}
 
@@ -438,7 +510,7 @@ export class BroccoliTransportSubstrate {
 	}
 
 	/**
-	 * Hydrate ledger and receipt chain from disk on startup
+	 * Hydrate ledger and receipt chain from disk on startup with automatic machine-bound envelope decryption
 	 */
 	private hydrateFromDisk(): void {
 		try {
@@ -454,12 +526,25 @@ export class BroccoliTransportSubstrate {
 				this.activeShardId = data.activeShardId
 			}
 
+			if (data.activeShardMode) {
+				this.activeShardMode = data.activeShardMode
+			}
+
 			if (data.activeEdgeRegion) {
 				this.activeEdgeRegion = data.activeEdgeRegion
 			}
 
 			if (Array.isArray(data.entries)) {
+				const machineKey = this.deriveMachineBoundKey()
 				for (const entry of data.entries) {
+					if (entry.payload?._envelope) {
+						try {
+							const decrypted = this.decryptEnvelope(entry.payload._envelope as BroccoliEnvelopePayload, machineKey)
+							entry.payload = decrypted
+						} catch {
+							// If machine key mismatch, preserve entry with envelope
+						}
+					}
 					this.inMemoryEntries.set(entry.id, entry)
 				}
 			}
@@ -532,6 +617,33 @@ export class BroccoliTransportSubstrate {
 	 */
 	public getActiveShardId(): string | undefined {
 		return this.activeShardId
+	}
+
+	/**
+	 * Get active cached shard isolation mode ('pooled' | 'private')
+	 */
+	public getActiveShardMode(): string | undefined {
+		return this.activeShardMode
+	}
+
+	/**
+	 * Set active cached shard affinity with optional mode and immediate atomic WAL persistence
+	 */
+	public setActiveShard(shardId: string, shardMode?: string): void {
+		this.activeShardId = shardId
+		if (shardMode) {
+			this.activeShardMode = shardMode
+		}
+		this.persistLedgerToDisk()
+	}
+
+	/**
+	 * Clear active cached shard affinity upon logout, credential rotation, or quota 429 backoff
+	 */
+	public clearActiveShard(): void {
+		this.activeShardId = undefined
+		this.activeShardMode = undefined
+		this.persistLedgerToDisk()
 	}
 
 	/**
