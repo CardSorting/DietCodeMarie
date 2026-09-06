@@ -34,6 +34,7 @@ export const requestyDefaultModelInfo: ModelInfo = {
 	description: "Anthropic's most intelligent model. Highest level of intelligence and capability.",
 }
 
+export const galxDefaultBaseUrl = "https://galx.ai/v1"
 export const galxDefaultModelId = "gpt-5.6-sol"
 export const galxDefaultModelInfo: ModelInfo = {
 	name: "OpenAI Codex GPT-5.6 Sol (Flagship SOTA)",

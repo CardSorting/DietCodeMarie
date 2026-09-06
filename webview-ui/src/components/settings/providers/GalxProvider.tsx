@@ -15,6 +15,9 @@ interface GalxProviderProps {
 
 /**
  * GALXAI Provider Configuration Component
+ *
+ * GALXAI operates as a managed Cloudflare Anycast edge compute clearinghouse (https://galx.ai/v1).
+ * There is no local endpoint or server to configure — users only need to provide their API key.
  */
 export const GalxProvider = ({
 	showModelOptions: _showModelOptions,
@@ -65,27 +68,47 @@ export const GalxProvider = ({
 				</p>
 			</div>
 
-			<div>
-				<DebouncedTextField
-					initialValue={apiConfiguration?.galxBaseUrl || ""}
-					onChange={(value) => handleFieldChange("galxBaseUrl", value)}
-					placeholder="https://galx.ai/v1"
-					style={{ width: "100%" }}
-					type="text">
-					<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-						<span style={{ fontWeight: 500 }}>Base URL (Optional)</span>
-						<span style={{ fontSize: "11px", color: "var(--vscode-descriptionForeground)" }}>
-							Default: https://galx.ai/v1
-						</span>
-					</div>
-				</DebouncedTextField>
+			{/* Managed Cloud Endpoint Details */}
+			<div
+				style={{
+					display: "flex",
+					flexDirection: "column",
+					gap: "6px",
+					padding: "10px 12px",
+					borderRadius: "6px",
+					backgroundColor: "var(--vscode-editor-inactiveSelectionBackground, rgba(255, 255, 255, 0.04))",
+					border: "1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.08))",
+					fontSize: "11px",
+				}}>
+				<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+					<span style={{ fontWeight: 600, color: "var(--vscode-foreground)", display: "flex", alignItems: "center", gap: "6px" }}>
+						<span
+							style={{
+								width: "7px",
+								height: "7px",
+								borderRadius: "50%",
+								backgroundColor: "#10b981",
+								display: "inline-block",
+							}}
+						/>
+						Managed Cloud Clearinghouse
+					</span>
+					<code
+						style={{
+							fontSize: "10px",
+							color: "var(--vscode-descriptionForeground)",
+							fontFamily: "var(--vscode-editor-font-family, monospace)",
+						}}>
+						https://galx.ai/v1
+					</code>
+				</div>
 				<p
 					style={{
-						fontSize: "12px",
-						marginTop: "5px",
+						margin: 0,
 						color: "var(--vscode-descriptionForeground)",
+						lineHeight: "1.4",
 					}}>
-					Override for local development or enterprise proxy endpoints.
+					Fully managed Anycast edge gateway (300+ PoPs). No local endpoint or proxy setup required — zero per-token anxiety, 75% prompt cache rebate, and automatic 429 quota cycling.
 				</p>
 			</div>
 		</div>

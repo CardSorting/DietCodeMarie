@@ -266,6 +266,7 @@
 								"group": "Cloud Providers",
 								"pages": [
 									"provider-config/README",
+									"provider-config/galx",
 									"provider-config/openrouter",
 									"provider-config/anthropic",
 									"provider-config/asksage",

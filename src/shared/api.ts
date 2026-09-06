@@ -5,6 +5,7 @@ export type ApiProvider = "openrouter" | "openai-codex" | "galx" | (string & {})
 
 export {
 	DEFAULT_API_PROVIDER,
+	galxDefaultBaseUrl,
 	galxDefaultModelId,
 	galxDefaultModelInfo,
 	openRouterDefaultModelId,

@@ -1,0 +1,74 @@
+---
+title: "GALXAI Wholesale"
+sidebarTitle: "GALXAI"
+description: "Connect to the GALXAI Wholesale Compute Clearinghouse for OpenAI flagship models with 25%–36% discounts, 75% prompt cache pass-through, and zero local setup."
+---
+
+GALXAI is a high-throughput **Wholesale Compute Clearinghouse** that pools frontier AI capacity and delivers direct real-wire execution across OpenAI models (`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`) with **25%–36% wholesale discounts** and **75% prompt cache rebates**.
+
+**Website:** [https://galx.ai](https://galx.ai)  
+**Edge Gateway:** `https://galx.ai/v1` (Cloudflare Global Anycast — 300+ Edge PoPs)
+
+<Tip>
+**Zero Local Setup Required:** GALX operates entirely via its managed global edge clearinghouse. There is no local endpoint or proxy daemon for users to configure — simply enter your API key to begin.
+</Tip>
+
+## Getting an API Key
+
+1. Navigate to the [GALXAI Keys Dashboard](https://galx.ai/keys).
+2. Sign in with your account.
+3. Click **Create API Key** and copy your live key (`galx_live_...`).
+
+## Configuration in LUMI
+
+<Steps>
+  <Step title="Open LUMI Settings">
+    Click the settings gear icon in the top-right corner of the LUMI extension.
+  </Step>
+  <Step title="Select GALXAI Provider">
+    Choose **"GALXAI Wholesale"** from the "API Provider" dropdown menu.
+  </Step>
+  <Step title="Enter Your API Key">
+    Paste your `galx_live_...` key into the **"GALXAI API Key"** field. The key is securely stored in VS Code SecretStorage.
+  </Step>
+  <Step title="Select Your Model">
+    Choose your desired model from the model grid or dropdown (e.g. `gpt-5.6-sol`).
+  </Step>
+</Steps>
+
+## Supported Models
+
+GALX routes directly across OpenAI flagship models with full streaming SSE support, reasoning effort controls, and wholesale rates:
+
+| Model ID | Specialization | Context Window | Max Output | Input / 1M | Output / 1M | Cached Input / 1M | Wholesale Discount |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`gpt-5.6-sol`** | Flagship SOTA: Coding, deep mathematics, multi-file architecture | 900,000 | 128,000 | **$3.75** | **$15.00** | **$1.25** | **25% OFF** |
+| **`gpt-5.6-terra`** | Balanced Frontier: High-throughput reasoning & general intelligence | 900,000 | 64,000 | **$2.25** | **$9.00** | **$0.75** | **25% OFF** |
+| **`gpt-5.6-luna`** | High-Velocity: Sub-15ms completions, intent routing, autocomplete | 900,000 | 32,000 | **$0.95** | **$3.80** | **$0.30** | **36% OFF** |
+
+## Core Architectural Advantages
+
+### 1. 75% Prompt Cache Pass-Through Rebate
+Whenever conversations reuse large prefix blocks (such as system prompts, project rules, and file trees), GALXAI automatically detects cached token hits and passes through a **75% discount** ($1.25/1M vs $3.75/1M on `gpt-5.6-sol`).
+
+### 2. Zero Data Retention (ZDR v10.0)
+Requests routed through the GALX gateway are processed under strict Zero Data Retention guarantees:
+- **Zero Prompt Training**: Upstream frontier providers never train on your source code or prompts.
+- **Instant Memory Flush**: Ephemeral flights are zeroized upon stream closure.
+- **Compliance**: Enterprise SOC2 Type II / HIPAA / GDPR standard alignment.
+
+### 3. Smooth Weighted Round-Robin (SWRR) & 429 Isolation
+GALX automatically balances requests across upstream capacity using 3-hour sliding-window request meters. If an upstream lease encounters an HTTP 429 rate limit, the gateway isolates the shard and fails over transparently with zero dropped tokens and sub-15ms failover overhead.
+
+### 4. Intra-Chunk Activity Timers
+Deep code synthesis tasks that generate thousands of tokens can take 40–80+ seconds. LUMI's GALX adapter uses intra-chunk activity resets (`refreshChunkTimer`) to ensure long generations never hit premature socket timeouts.
+
+## Troubleshooting
+
+### "GALXAI API key is required" Error
+- Make sure you entered your `galx_live_...` key in LUMI Settings under GALXAI Wholesale.
+- If the key was recently revoked or rotated, obtain a fresh key from [https://galx.ai/keys](https://galx.ai/keys).
+
+### HTTP 429 Quota Cooldown
+- The LUMI adapter automatically purges the saturated shard affinity and rotates to the next available capacity pool.
+- Wait a few moments for the sliding window to replenish, or check quota status at [https://galx.ai](https://galx.ai).

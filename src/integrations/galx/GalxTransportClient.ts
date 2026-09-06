@@ -130,7 +130,7 @@ export class GalxTransportClient {
 		this.maxRetries = options.maxRetries ?? 3
 		this.circuitBreakerThreshold = options.circuitBreakerThreshold ?? 5
 		this.circuitBreakerCooldownMs = options.circuitBreakerCooldownMs ?? 30_000
-		this.clientVersion = options.clientVersion ?? "codemarie/12.5.0"
+		this.clientVersion = options.clientVersion ?? "codemarie/12.5.1"
 		this.keyId = options.keyId ?? "codemarie-v12"
 		this.sharedSecret = options.sharedSecret ?? "galx_transport_substrate_salt"
 		this.currentConcurrencyLimit = options.maxConcurrentRequests ?? 20

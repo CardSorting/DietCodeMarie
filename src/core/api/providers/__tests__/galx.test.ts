@@ -1,8 +1,13 @@
-import "should"
-import { galxDefaultModelId, galxDefaultModelInfo } from "@shared/api"
+import { galxDefaultBaseUrl, galxDefaultModelId, galxDefaultModelInfo } from "@shared/api"
 import type OpenAI from "openai"
+import should from "should"
 import sinon from "sinon"
+import * as net from "@/shared/net"
 import { GalxHandler } from "../galx"
+
+interface GalxHandlerPrivate {
+	ensureClient: () => OpenAI
+}
 
 describe("GalxHandler", () => {
 	afterEach(() => {
@@ -15,13 +20,49 @@ describe("GalxHandler", () => {
 		},
 	})
 
+	it("should have https://galx.ai/v1 as default base URL", () => {
+		should(galxDefaultBaseUrl).equal("https://galx.ai/v1")
+	})
+
 	it("should return default model if none specified", () => {
 		const handler = new GalxHandler({
 			galxApiKey: "galx_live_test_key",
 		})
 		const model = handler.getModel()
-		model.id.should.equal(galxDefaultModelId)
-		model.info.should.deepEqual(galxDefaultModelInfo)
+		should(model.id).equal(galxDefaultModelId)
+		should(model.info).deepEqual(galxDefaultModelInfo)
+	})
+
+	it("should return all configured galxModels correctly", () => {
+		const solHandler = new GalxHandler({ galxApiKey: "galx_live_test_key", galxModelId: "gpt-5.6-sol" })
+		should(solHandler.getModel().id).equal("gpt-5.6-sol")
+		should(solHandler.getModel().info.name).equal("OpenAI Codex GPT-5.6 Sol (Flagship SOTA)")
+
+		const terraHandler = new GalxHandler({ galxApiKey: "galx_live_test_key", galxModelId: "gpt-5.6-terra" })
+		should(terraHandler.getModel().id).equal("gpt-5.6-terra")
+		should(terraHandler.getModel().info.name).equal("OpenAI Codex GPT-5.6 Terra (Balanced Frontier)")
+
+		const lunaHandler = new GalxHandler({ galxApiKey: "galx_live_test_key", galxModelId: "gpt-5.6-luna" })
+		should(lunaHandler.getModel().id).equal("gpt-5.6-luna")
+		should(lunaHandler.getModel().info.name).equal("OpenAI Codex GPT-5.6 Luna (High-Velocity)")
+	})
+
+	it("should throw if no API key is provided when creating client", () => {
+		const handler = new GalxHandler({})
+		should(() => {
+			;(handler as unknown as GalxHandlerPrivate).ensureClient()
+		}).throw("GALXAI API key is required. Please configure your key in Settings.")
+	})
+
+	it("should use galxDefaultBaseUrl when galxBaseUrl is not specified", () => {
+		const createClientStub = sinon.stub(net, "createOpenAIClient").returns({} as unknown as OpenAI)
+		const handler = new GalxHandler({
+			galxApiKey: "galx_live_test_key",
+		})
+		;(handler as unknown as GalxHandlerPrivate).ensureClient()
+		should(createClientStub.calledOnce).be.true()
+		should(createClientStub.firstCall?.args[0]?.baseURL).equal("https://galx.ai/v1")
+		should(createClientStub.firstCall?.args[0]?.apiKey).equal("galx_live_test_key")
 	})
 
 	it("should yield text and calculate usage correctly with prompt caching discount", async () => {
@@ -60,14 +101,14 @@ describe("GalxHandler", () => {
 			},
 		}
 
-		sinon.stub(handler as unknown as { ensureClient: () => OpenAI }, "ensureClient").returns(fakeClient as unknown as OpenAI)
+		sinon.stub(handler as unknown as GalxHandlerPrivate, "ensureClient").returns(fakeClient as unknown as OpenAI)
 
 		const chunks = []
 		for await (const chunk of handler.createMessage("system prompt", [{ role: "user", content: "Hi" }])) {
 			chunks.push(chunk)
 		}
 
-		chunks.length.should.equal(2)
+		should(chunks.length).equal(2)
 		const textChunk = chunks[0]
 		const usageChunk = chunks[1]
 

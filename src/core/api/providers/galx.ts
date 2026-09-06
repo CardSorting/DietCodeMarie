@@ -1,4 +1,4 @@
-import { galxDefaultModelId, galxDefaultModelInfo, galxModels, ModelInfo } from "@shared/api"
+import { galxDefaultBaseUrl, galxDefaultModelId, galxDefaultModelInfo, galxModels, ModelInfo } from "@shared/api"
 import OpenAI from "openai"
 import type { ChatCompletionTool as OpenAITool } from "openai/resources/chat/completions"
 import { broccoliTransportSubstrate } from "@/integrations/galx/BroccoliTransportSubstrate"
@@ -37,13 +37,13 @@ export class GalxHandler implements ApiHandler {
 				throw new Error("GALXAI API key is required. Please configure your key in Settings.")
 			}
 			try {
-				const baseURL = (this.options.galxBaseUrl || "https://galx.ai/v1").replace(/\/$/, "")
+				const baseURL = (this.options.galxBaseUrl || galxDefaultBaseUrl || "https://galx.ai/v1").replace(/\/$/, "")
 				const activeShardId = broccoliTransportSubstrate.getActiveShardId()
 				this.client = createOpenAIClient({
 					baseURL,
 					apiKey: this.options.galxApiKey,
 					defaultHeaders: {
-						"X-GALX-Client": "LUMI/12.5.0",
+						"X-GALX-Client": "LUMI/12.5.1",
 						"X-GALX-Client-ID": "lumi-ide",
 						"X-OpenRouter-Title": "LUMI",
 						...(activeShardId ? { "X-Galx-Shard-Id": activeShardId } : {}),

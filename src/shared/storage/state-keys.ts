@@ -1,6 +1,6 @@
 import { AutoApprovalSettings, DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import type { ApiProvider, LiteLLMModelInfo, ModelInfo, OcaModelInfo, OpenAiCompatibleModelInfo } from "@shared/api"
-import { DEFAULT_API_PROVIDER } from "@shared/api-defaults"
+import { DEFAULT_API_PROVIDER, galxDefaultBaseUrl } from "@shared/api-defaults"
 import { BrowserSettings, DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
 import { DietCodeRulesToggles } from "@shared/dietcode-rules"
 import { DEFAULT_FOCUS_CHAIN_SETTINGS, FocusChainSettings } from "@shared/FocusChainSettings"
@@ -152,7 +152,7 @@ const API_HANDLER_SETTINGS_FIELDS = {
 	aihubmixBaseUrl: { default: undefined as string | undefined },
 	aihubmixAppCode: { default: undefined as string | undefined },
 	cloudflareAccountId: { default: undefined as string | undefined },
-	galxBaseUrl: { default: undefined as string | undefined },
+	galxBaseUrl: { default: galxDefaultBaseUrl as string | undefined },
 
 	// Embedding configuration
 	embeddingProvider: { default: DEFAULT_API_PROVIDER as ApiProvider },
