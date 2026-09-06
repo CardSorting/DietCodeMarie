@@ -39,9 +39,23 @@ interface ErrorDetails {
 	// Additional details that might be present in the error
 	// This can include things like current balance, error messages, etc.
 	details?: any
+	stack?: string
 }
 
-const RATE_LIMIT_PATTERNS = [/status code 429/i, /rate limit/i, /too many requests/i, /quota exceeded/i, /resource exhausted/i]
+const RATE_LIMIT_PATTERNS = [
+	/status code 429/i,
+	/rate limit/i,
+	/too many requests/i,
+	/quota exceeded/i,
+	/resource exhausted/i,
+	/capacity_constrained/i,
+	/temporarily constrained/i,
+	/temporarily saturated/i,
+	/capacity allocation/i,
+	/all_shards_cooldown/i,
+	/pool_exhausted/i,
+	/router_dispatch_failed/i,
+]
 
 export class DietCodeError extends Error {
 	readonly title = "DietCodeError"
@@ -56,10 +70,33 @@ export class DietCodeError extends Error {
 		public readonly modelId?: string,
 		public readonly providerId?: string,
 	) {
-		const error = serializeError(raw)
+		const error: any = serializeError(raw)
 
-		const message = error.message || error?.response?.message || String(error) || error?.cause?.means
-		super(message)
+		let rawMsg = raw?.message || error?.message || error?.response?.message || String(error) || error?.cause?.means || "An unexpected error occurred"
+		let parsedCode = error.code || error?.cause?.code || error?.error?.code
+
+		// Clean and parse nested JSON errors (e.g. 500 {"error":{"message":"..."}})
+		try {
+			const jsonMatch = rawMsg.match(/\{[\s\S]*\}/)
+			if (jsonMatch) {
+				const parsed = JSON.parse(jsonMatch[0])
+				if (parsed?.error?.message) {
+					rawMsg = parsed.error.message
+					if (parsed.error.code) parsedCode = parsed.error.code
+				} else if (parsed?.message) {
+					rawMsg = parsed.message
+					if (parsed.code) parsedCode = parsed.code
+				}
+			}
+		} catch {
+			// keep rawMsg
+		}
+
+		// Strip leading HTTP status code prefix if followed by text (e.g. "500 Something failed" -> "Something failed")
+		let cleanMessage = rawMsg.replace(/^\d{3}\s+/, "").trim()
+		if (!cleanMessage) cleanMessage = rawMsg
+
+		super(cleanMessage)
 
 		// Extract status from multiple possible locations
 		const status = error.status || error.statusCode || error.response?.status
@@ -70,14 +107,14 @@ export class DietCodeError extends Error {
 		// And ensure it has a consistent structure
 		this._error = {
 			...error,
-			message: raw.message || message,
+			message: cleanMessage,
 			status,
 			request_id:
 				error.error?.request_id ||
 				error.request_id ||
 				error.response?.request_id ||
 				error.response?.headers?.["x-request-id"],
-			code: error.code || error?.cause?.code,
+			code: parsedCode,
 			modelId: this.modelId,
 			providerId: this.providerId,
 			details: error.details || error.error, // Additional details provided by the server
@@ -148,6 +185,17 @@ export class DietCodeError extends Error {
 		const isAuthStatus = status !== undefined && status > 400 && status < 429
 		if (code === "ERR_BAD_REQUEST" || err instanceof AuthInvalidTokenError || isAuthStatus) {
 			return DietCodeErrorType.Auth
+		}
+
+		// Check rate limit patterns and HTTP 429 status code
+		if (
+			status === 429 ||
+			code === "capacity_constrained" ||
+			code === "rate_limit_exceeded" ||
+			code === "router_dispatch_failed" ||
+			code === "pool_exhausted"
+		) {
+			return DietCodeErrorType.RateLimit
 		}
 
 		if (message) {

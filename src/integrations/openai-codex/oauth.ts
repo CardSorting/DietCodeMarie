@@ -81,6 +81,7 @@ export interface CodexAuthDiagnostics {
 export interface GalxSyncResult {
 	success: boolean
 	userId?: string
+	sessionAffinity?: string
 	shardId?: string
 	sessionToken?: string
 	email?: string
@@ -90,7 +91,8 @@ export interface GalxSyncResult {
 export interface GalxSessionConfig {
 	baseUrl: string
 	userId: string
-	shardId: string
+	sessionAffinity?: string
+	shardId?: string
 	sessionToken: string
 	email?: string
 	shardMode?: string
@@ -101,6 +103,7 @@ export interface CloudSyncLedgerRecord {
 	id: string
 	status: "PENDING" | "SYNCED" | "FAILED"
 	userId?: string
+	sessionAffinity?: string
 	shardId?: string
 	sessionToken?: string
 	attempts: number
@@ -524,8 +527,8 @@ export class OpenAiCodexOAuthManager {
 						savedAt: Date.now(),
 					})
 					const galxSession = this.getGalxSession()
-					if (galxSession?.shardId) {
-						broccoliTransportSubstrate.setActiveShard(galxSession.shardId, galxSession.shardMode)
+					if (galxSession?.sessionAffinity) {
+						broccoliTransportSubstrate.setActiveSessionAffinity(galxSession.sessionAffinity)
 					}
 					return this.credentials
 				}
@@ -537,16 +540,16 @@ export class OpenAiCodexOAuthManager {
 			const loadedFromDisk = this.loadFromDisk()
 			if (loadedFromDisk && this.credentials) {
 				const galxSession = this.getGalxSession()
-				if (galxSession?.shardId) {
-					broccoliTransportSubstrate.setActiveShard(galxSession.shardId, galxSession.shardMode)
+				if (galxSession?.sessionAffinity) {
+					broccoliTransportSubstrate.setActiveSessionAffinity(galxSession.sessionAffinity)
 				}
 				return this.credentials
 			}
 
 			if (this.credentials) {
 				const galxSession = this.getGalxSession()
-				if (galxSession?.shardId) {
-					broccoliTransportSubstrate.setActiveShard(galxSession.shardId, galxSession.shardMode)
+				if (galxSession?.sessionAffinity) {
+					broccoliTransportSubstrate.setActiveSessionAffinity(galxSession.sessionAffinity)
 				}
 				return this.credentials
 			}
@@ -599,7 +602,7 @@ export class OpenAiCodexOAuthManager {
 		this.credentials = null
 		this.sessionCache.delete("active_lease")
 		this.cloudSyncLedger.delete("latest_sync")
-		broccoliTransportSubstrate.clearActiveShard()
+		broccoliTransportSubstrate.clearActiveSessionAffinity()
 	}
 
 	/**
@@ -1045,13 +1048,15 @@ export class OpenAiCodexOAuthManager {
 				}
 
 				const user = transportRes.data.user
-				broccoliTransportSubstrate.setActiveShard(user.shardId, user.shardMode || mode)
+				if (user.sessionAffinity) {
+					broccoliTransportSubstrate.setActiveSessionAffinity(user.sessionAffinity)
+				}
 
 				this.cloudSyncLedger.set("latest_sync", {
 					id: "latest_sync",
 					status: "SYNCED",
 					userId: user.id,
-					shardId: user.shardId,
+					sessionAffinity: user.sessionAffinity,
 					sessionToken: user.token,
 					attempts: transportRes.attempts,
 					lastAttemptAt: Date.now(),
@@ -1060,10 +1065,9 @@ export class OpenAiCodexOAuthManager {
 				const configRecord: GalxSessionConfig = {
 					baseUrl: cleanBaseUrl,
 					userId: user.id,
-					shardId: user.shardId,
+					sessionAffinity: user.sessionAffinity,
 					sessionToken: user.token,
 					email: user.email || this.credentials.email,
-					shardMode: user.shardMode || mode,
 					syncedAt: Date.now(),
 				}
 				this.saveGalxSessionToDisk(configRecord)
@@ -1071,7 +1075,7 @@ export class OpenAiCodexOAuthManager {
 				const syncResult: GalxSyncResult = {
 					success: true,
 					userId: user.id,
-					shardId: user.shardId,
+					sessionAffinity: user.sessionAffinity,
 					sessionToken: user.token,
 					email: user.email || this.credentials.email,
 				}
@@ -1125,10 +1129,11 @@ export class OpenAiCodexOAuthManager {
 
 	getGalxSession(): GalxSessionConfig | null {
 		const memRecord = this.cloudSyncLedger.get("latest_sync")
-		if (memRecord?.status === "SYNCED" && memRecord?.sessionToken && memRecord?.shardId) {
+		if (memRecord?.status === "SYNCED" && memRecord?.sessionToken) {
 			return {
 				baseUrl: process.env.GALX_URL || process.env.NEXT_PUBLIC_APP_URL || "https://galx.ai",
 				userId: memRecord.userId || "usr_synced",
+				sessionAffinity: memRecord.sessionAffinity,
 				shardId: memRecord.shardId,
 				sessionToken: memRecord.sessionToken,
 				email: this.credentials?.email || memRecord.userId,
@@ -1141,11 +1146,23 @@ export class OpenAiCodexOAuthManager {
 			if (fs.existsSync(dietcodeConfigPath)) {
 				const raw = fs.readFileSync(dietcodeConfigPath, "utf-8")
 				const data = JSON.parse(raw)
-				if (data.galx?.sessionToken && data.galx?.shardId) {
+				if (data.galx?.sessionToken) {
 					return data.galx as GalxSessionConfig
 				}
 			}
 		} catch {}
+
+		try {
+			const lumiConfigPath = path.join(os.homedir(), ".lumi", "config.json")
+			if (fs.existsSync(lumiConfigPath)) {
+				const raw = fs.readFileSync(lumiConfigPath, "utf-8")
+				const data = JSON.parse(raw)
+				if (data.galx?.sessionToken) {
+					return data.galx as GalxSessionConfig
+				}
+			}
+		} catch {}
+
 		return null
 	}
 

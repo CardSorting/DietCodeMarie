@@ -52,6 +52,7 @@ export interface GalxTransportResponse<T = unknown> {
 	durationMs: number
 	attempts: number
 	serverTiming?: string
+	sessionAffinity?: string
 	shardId?: string
 	shardMode?: string
 	sessionToken?: string
@@ -71,6 +72,7 @@ export interface TransportAuditReport {
 	circuitBreaker: CircuitBreakerState
 	concurrencyLimit: number
 	inFlightRequests: number
+	activeSessionAffinity?: string
 	activeShardAffinity?: string
 	activeEdgeRegion?: string
 	latestReceiptHash: string
@@ -332,6 +334,7 @@ export class GalxTransportClient {
 			candidatePaths?: string[]
 			idempotencyKey?: string
 			timeoutMs?: number
+			sessionAffinity?: string
 			shardId?: string
 			shardMode?: string
 			accountId?: string
@@ -461,14 +464,12 @@ export class GalxTransportClient {
 							tracestate: traceCtx.tracestate,
 						}
 
-						// Inject targeted or cached shard affinity if available
-						const effectiveTargetShard = options.shardId || broccoliTransportSubstrate.getActiveShardId()
-						if (effectiveTargetShard) {
-							requestHeaders["X-Galx-Shard-Id"] = effectiveTargetShard
-							requestHeaders["x-galx-shard-id"] = effectiveTargetShard
-							requestHeaders["X-Target-Shard-Id"] = effectiveTargetShard
+						// Inject session affinity ticket if available
+						const outgoingAffinity = options.sessionAffinity || options.shardId || broccoliTransportSubstrate.getActiveSessionAffinity()
+						if (outgoingAffinity) {
+							requestHeaders["X-Galx-Session-Affinity"] = outgoingAffinity
 						}
-						const effectiveTargetAccount = options.accountId || (payload as any).accountId
+						const effectiveTargetAccount = options.accountId || (payload as Record<string, unknown>).accountId
 						if (effectiveTargetAccount) {
 							requestHeaders["ChatGPT-Account-Id"] = String(effectiveTargetAccount)
 							requestHeaders["x-galx-account-id"] = String(effectiveTargetAccount)
@@ -477,7 +478,7 @@ export class GalxTransportClient {
 							requestHeaders["X-Galx-Session-Id"] = options.sessionId
 						}
 						if (options.bearerToken) {
-							requestHeaders["Authorization"] = `Bearer ${options.bearerToken}`
+							requestHeaders.Authorization = `Bearer ${options.bearerToken}`
 						}
 
 						const response = await fetch(targetUrl, {
@@ -491,15 +492,15 @@ export class GalxTransportClient {
 
 						const idempotentReplay = response.headers?.get?.("idempotent-replay") === "true"
 						const serverTiming = response.headers?.get?.("server-timing") || undefined
-						const headerShardId =
-							response.headers?.get?.("x-galx-shard-id") ||
-							response.headers?.get?.("X-Galx-Shard-Id") ||
-							response.headers?.get?.("x-shard-id") ||
+						const resAffinity =
+							response.headers?.get?.("x-galx-session-affinity") ||
+							response.headers?.get?.("X-Galx-Session-Affinity") ||
 							undefined
-						const headerShardMode =
-							response.headers?.get?.("x-galx-shard-mode") ||
-							response.headers?.get?.("X-Galx-Shard-Mode") ||
-							undefined
+						if (resAffinity) {
+							broccoliTransportSubstrate.setActiveSessionAffinity(resAffinity)
+						}
+						const headerShardId = resAffinity
+						const headerShardMode = undefined
 						const resEdgeRegion =
 							response.headers?.get?.("cf-ray") || response.headers?.get?.("x-edge-region") || undefined
 
@@ -508,19 +509,20 @@ export class GalxTransportClient {
 							lastStatus = response.status
 							lastError = `HTTP ${response.status}: ${errText || response.statusText}`
 
-							// Broadened shard eviction: HTTP 429 quota exhaustion, or 401, 403, 404, 410 shard invalidation
+							// Broadened shard eviction: HTTP 429 quota exhaustion, or 401, 403, 404, 410, 500 shard invalidation
 							const isShardEvictionStatus =
 								response.status === 429 ||
 								response.status === 401 ||
 								response.status === 403 ||
 								response.status === 404 ||
-								response.status === 410
+								response.status === 410 ||
+								response.status === 500
 
 							if (isShardEvictionStatus) {
 								Logger.warn(
-									`[GalxTransport] HTTP ${response.status} received. Evicting active shard affinity to permit smooth pool failover.`,
+									`[GalxTransport] HTTP ${response.status} received. Evicting active session affinity to permit smooth pool failover.`,
 								)
-								broccoliTransportSubstrate.clearActiveShard()
+								broccoliTransportSubstrate.clearActiveSessionAffinity()
 							}
 
 							if (response.status === 404) {
@@ -560,8 +562,7 @@ export class GalxTransportClient {
 									traceId: traceCtx.traceId,
 								}
 								broccoliTransportSubstrate.sealReceipt(walEntry.id, clientErrorRes, {
-									shardId: headerShardId,
-									shardMode: headerShardMode,
+									sessionAffinity: resAffinity,
 									edgeRegion: resEdgeRegion,
 									traceId: traceCtx.traceId,
 								})
@@ -577,30 +578,22 @@ export class GalxTransportClient {
 							responseData = {}
 						}
 
-						const bodyShardId =
-							(responseData as any)?.user?.shardId ||
-							(responseData as any)?.shardId ||
-							(responseData as any)?.data?.shardId ||
-							(responseData as any)?.data?.user?.shardId ||
-							undefined
-
-						const bodyShardMode =
-							(responseData as any)?.user?.shardMode ||
-							(responseData as any)?.shardMode ||
-							(responseData as any)?.data?.shardMode ||
+						const parsedObj = (responseData && typeof responseData === "object") ? (responseData as Record<string, unknown>) : {}
+						const userObj = (parsedObj.user && typeof parsedObj.user === "object") ? (parsedObj.user as Record<string, unknown>) : undefined
+						const bodyAffinity =
+							(typeof userObj?.sessionAffinity === "string" ? userObj.sessionAffinity : undefined) ||
+							(typeof parsedObj.sessionAffinity === "string" ? parsedObj.sessionAffinity : undefined) ||
 							undefined
 
 						const resSessionToken =
-							(responseData as any)?.user?.token ||
-							(responseData as any)?.token ||
-							(responseData as any)?.sessionToken ||
+							(typeof userObj?.token === "string" ? userObj.token : undefined) ||
+							(typeof parsedObj.token === "string" ? parsedObj.token : undefined) ||
+							(typeof parsedObj.sessionToken === "string" ? parsedObj.sessionToken : undefined) ||
 							undefined
 
-						const effectiveShardId = headerShardId || bodyShardId
-						const effectiveShardMode = headerShardMode || bodyShardMode
-
-						if (effectiveShardId) {
-							broccoliTransportSubstrate.setActiveShard(effectiveShardId, effectiveShardMode)
+						const incomingAffinity = resAffinity || bodyAffinity
+						if (incomingAffinity) {
+							broccoliTransportSubstrate.setActiveSessionAffinity(incomingAffinity)
 						}
 
 						this.recordSuccess()
@@ -613,8 +606,7 @@ export class GalxTransportClient {
 							durationMs: Math.round(performance.now() - startTime),
 							attempts,
 							serverTiming,
-							shardId: effectiveShardId,
-							shardMode: effectiveShardMode,
+							sessionAffinity: incomingAffinity,
 							sessionToken: resSessionToken,
 							edgeRegion: resEdgeRegion,
 							dpopProof: lastDPoPProof,
@@ -622,8 +614,7 @@ export class GalxTransportClient {
 						}
 						// Cryptographically seal delivery receipt in BroccoliDB Merkle hash chain
 						broccoliTransportSubstrate.sealReceipt(walEntry.id, successResponse, {
-							shardId: effectiveShardId,
-							shardMode: effectiveShardMode,
+							sessionAffinity: incomingAffinity,
 							edgeRegion: resEdgeRegion,
 							traceId: traceCtx.traceId,
 						})
@@ -668,7 +659,7 @@ export class GalxTransportClient {
 		payload: GalxIngestPayload,
 		options?: { overrideBaseUrl?: string; encryptPayload?: boolean },
 	): Promise<
-		GalxTransportResponse<{ user?: { id: string; shardId: string; token: string; email?: string; shardMode?: string } }>
+		GalxTransportResponse<{ user?: { id: string; sessionAffinity?: string; token: string; email?: string } }>
 	> {
 		let bodyPayload: Record<string, unknown> = payload
 		if (options?.encryptPayload) {
@@ -684,18 +675,18 @@ export class GalxTransportClient {
 		}
 
 		const res = await this.post<{
-			user?: { id: string; shardId: string; token: string; email?: string; shardMode?: string }
+			user?: { id: string; sessionAffinity?: string; token: string; email?: string }
 		}>("/api/auth/ingest", bodyPayload, {
 			overrideBaseUrl: options?.overrideBaseUrl,
 			candidatePaths: ["/api/auth/ingest", "/api/auth/openai", "/api/ingest"],
 			accountId: payload.accountId,
 		})
 
-		if (res.success && res.data?.user?.shardId) {
-			broccoliTransportSubstrate.setActiveShard(
-				res.data.user.shardId,
-				res.data.user.shardMode || (payload.mode as string) || "pooled",
-			)
+		if (res.success && res.data?.user) {
+			const affinity = (res.data.user as any).sessionAffinity || res.sessionAffinity
+			if (affinity) {
+				broccoliTransportSubstrate.setActiveSessionAffinity(affinity)
+			}
 		}
 
 		return res
@@ -716,8 +707,8 @@ export class GalxTransportClient {
 			})
 			if (res.success) {
 				succeeded++
-				if (res.shardId) {
-					broccoliTransportSubstrate.setActiveShard(res.shardId, res.shardMode)
+				if (res.sessionAffinity) {
+					broccoliTransportSubstrate.setActiveSessionAffinity(res.sessionAffinity)
 				}
 			} else {
 				failed++
@@ -757,6 +748,7 @@ export class GalxTransportClient {
 			circuitBreaker: this.getCircuitState(),
 			concurrencyLimit: this.currentConcurrencyLimit,
 			inFlightRequests: this.inFlightCount,
+			activeSessionAffinity: broccoliTransportSubstrate.getActiveSessionAffinity(),
 			activeShardAffinity: broccoliTransportSubstrate.getActiveShardId(),
 			activeEdgeRegion: broccoliTransportSubstrate.getActiveEdgeRegion(),
 			latestReceiptHash: broccoliTransportSubstrate.getLatestReceiptHash(),

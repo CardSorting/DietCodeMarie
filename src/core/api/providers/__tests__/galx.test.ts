@@ -3,6 +3,7 @@ import type OpenAI from "openai"
 import should from "should"
 import sinon from "sinon"
 import * as net from "@/shared/net"
+import { broccoliTransportSubstrate } from "@/integrations/galx/BroccoliTransportSubstrate"
 import { GalxHandler } from "../galx"
 
 interface GalxHandlerPrivate {
@@ -133,4 +134,80 @@ describe("GalxHandler", () => {
 			}
 		}
 	})
+
+	it("should not bake activeSessionAffinity into defaultHeaders", () => {
+		const createClientStub = sinon.stub(net, "createOpenAIClient").returns({} as unknown as OpenAI)
+		const handler = new GalxHandler({
+			galxApiKey: "galx_live_test_key",
+		})
+		sinon.stub(broccoliTransportSubstrate, "getActiveSessionAffinity").returns("aff_v1_test_ignore")
+
+		;(handler as unknown as GalxHandlerPrivate).ensureClient()
+		should(createClientStub.calledOnce).be.true()
+		const defaultHeaders = createClientStub.firstCall?.args[0]?.defaultHeaders as Record<string, string> | undefined
+		should(defaultHeaders?.["X-GALX-Client"]).equal("LUMI/12.5.1")
+		should(defaultHeaders?.["X-Galx-Session-Affinity"]).be.undefined()
+		should(defaultHeaders?.["X-Galx-Shard-Id"]).be.undefined()
+	})
+
+	it("should evict session affinity and auto-retry without affinity header when capacity_constrained occurs", async () => {
+		const handler = new GalxHandler({
+			galxApiKey: "galx_live_test_key",
+			galxModelId: "gpt-5.6-sol",
+		})
+
+		sinon.stub(broccoliTransportSubstrate, "getActiveSessionAffinity").returns("aff_v1_sample_ticket")
+		const clearAffinitySpy = sinon.spy(broccoliTransportSubstrate, "clearActiveSessionAffinity")
+
+		const createStub = sinon.stub()
+		// First call fails with 429 capacity_constrained
+		const capacityError = Object.assign(
+			new Error("429 Compute capacity is temporarily constrained for this model. Automatic failover active. Please retry shortly."),
+			{ status: 429 },
+		)
+		createStub.onFirstCall().rejects(capacityError)
+		// Second call (retry without affinity) succeeds
+		createStub.onSecondCall().resolves(
+			createAsyncIterable([
+				{
+					choices: [
+						{
+							delta: {
+								content: "Recovered successfully",
+							},
+						},
+					],
+				},
+			]),
+		)
+
+		const fakeClient = {
+			chat: {
+				completions: {
+					create: createStub,
+				},
+			},
+		}
+
+		sinon.stub(handler as unknown as GalxHandlerPrivate, "ensureClient").returns(fakeClient as unknown as OpenAI)
+
+		const chunks = []
+		for await (const chunk of handler.createMessage("system prompt", [{ role: "user", content: "Hi" }])) {
+			chunks.push(chunk)
+		}
+
+		should(createStub.calledTwice).be.true()
+		// First call had X-Galx-Session-Affinity
+		should(createStub.firstCall.args[1]?.headers?.["X-Galx-Session-Affinity"]).equal("aff_v1_sample_ticket")
+		// Second call had no session affinity header
+		should(createStub.secondCall.args[1]?.headers?.["X-Galx-Session-Affinity"]).be.undefined()
+		// Session affinity was cleared
+		should(clearAffinitySpy.called).be.true()
+		// Chunk received from retry
+		should(chunks[0]).deepEqual({
+			type: "text",
+			text: "Recovered successfully",
+		})
+	})
 })
+

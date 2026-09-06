@@ -19,6 +19,7 @@ export interface BroccoliTransportEntry {
 	updatedAtMs: number
 	serverTiming?: string
 	receiptHash?: string
+	sessionAffinity?: string
 	shardId?: string
 	shardMode?: string
 	edgeRegion?: string
@@ -35,6 +36,7 @@ export interface BroccoliDeliveryReceipt {
 	prevReceiptHash: string
 	timestampMs: number
 	durationMs: number
+	sessionAffinity?: string
 	shardId?: string
 	shardMode?: string
 	edgeRegion?: string
@@ -89,8 +91,7 @@ export class BroccoliTransportSubstrate {
 	private readonly deliveryReceipts = new Map<string, BroccoliDeliveryReceipt>()
 	private readonly latencyHistory: number[] = []
 	private lastReceiptHash = "0000000000000000000000000000000000000000000000000000000000000000"
-	private activeShardId?: string
-	private activeShardMode?: string
+	private activeSessionAffinity?: string
 	private activeEdgeRegion?: string
 	private workerTimer: NodeJS.Timeout | null = null
 
@@ -266,7 +267,7 @@ export class BroccoliTransportSubstrate {
 			attempts: 0,
 			createdAtMs: Date.now(),
 			updatedAtMs: Date.now(),
-			shardId: this.activeShardId,
+			sessionAffinity: this.activeSessionAffinity,
 			edgeRegion: this.activeEdgeRegion,
 			traceId: options.traceId,
 			spanId: options.spanId,
@@ -283,18 +284,16 @@ export class BroccoliTransportSubstrate {
 	public sealReceipt(
 		entryId: string,
 		response: GalxTransportResponse,
-		routingMeta: { shardId?: string; shardMode?: string; edgeRegion?: string; traceId?: string } = {},
+		routingMeta: { sessionAffinity?: string; shardId?: string; shardMode?: string; edgeRegion?: string; traceId?: string } = {},
 	): BroccoliDeliveryReceipt {
 		const entry = this.inMemoryEntries.get(entryId)
 		const now = Date.now()
 		const durationMs = response.durationMs || 0
 
-		// Update active shard affinity cache
-		if (routingMeta.shardId) {
-			this.activeShardId = routingMeta.shardId
-		}
-		if (routingMeta.shardMode) {
-			this.activeShardMode = routingMeta.shardMode
+		// Update active session affinity cache
+		const affinity = routingMeta.sessionAffinity || (routingMeta.shardId?.startsWith("aff_") ? routingMeta.shardId : undefined)
+		if (affinity) {
+			this.activeSessionAffinity = affinity
 		}
 		if (routingMeta.edgeRegion) {
 			this.activeEdgeRegion = routingMeta.edgeRegion
@@ -327,8 +326,7 @@ export class BroccoliTransportSubstrate {
 			prevReceiptHash: prevHash,
 			timestampMs: now,
 			durationMs,
-			shardId: routingMeta.shardId || this.activeShardId,
-			shardMode: routingMeta.shardMode || this.activeShardMode,
+			sessionAffinity: routingMeta.sessionAffinity || this.activeSessionAffinity,
 			edgeRegion: routingMeta.edgeRegion || this.activeEdgeRegion,
 			traceId: routingMeta.traceId || entry?.traceId,
 		}
@@ -340,9 +338,10 @@ export class BroccoliTransportSubstrate {
 			entry.updatedAtMs = now
 			entry.serverTiming = response.serverTiming
 			entry.receiptHash = receiptHash
-			entry.shardId = receipt.shardId
-			entry.shardMode = receipt.shardMode
+			entry.sessionAffinity = receipt.sessionAffinity
 			entry.edgeRegion = receipt.edgeRegion
+			delete entry.shardId
+			delete entry.shardMode
 			if (response.success) {
 				// Zero-trust hygiene: Scrub sensitive credential fields from committed entries
 				entry.payload = {
@@ -491,10 +490,9 @@ export class BroccoliTransportSubstrate {
 				})
 
 			const serializable = {
-				version: 3,
+				version: 4,
 				lastReceiptHash: this.lastReceiptHash,
-				activeShardId: this.activeShardId,
-				activeShardMode: this.activeShardMode,
+				activeSessionAffinity: this.activeSessionAffinity,
 				activeEdgeRegion: this.activeEdgeRegion,
 				updatedAt: Date.now(),
 				entries: sanitizedEntries,
@@ -522,13 +520,12 @@ export class BroccoliTransportSubstrate {
 				this.lastReceiptHash = data.lastReceiptHash
 			}
 
-			if (data.activeShardId) {
-				this.activeShardId = data.activeShardId
+			if (data.activeSessionAffinity && typeof data.activeSessionAffinity === "string" && data.activeSessionAffinity.startsWith("aff_")) {
+				this.activeSessionAffinity = data.activeSessionAffinity
+			} else if (data.activeShardId && typeof data.activeShardId === "string" && data.activeShardId.startsWith("aff_")) {
+				this.activeSessionAffinity = data.activeShardId
 			}
-
-			if (data.activeShardMode) {
-				this.activeShardMode = data.activeShardMode
-			}
+			// Legacy raw shard IDs (e.g. shard_us_east_4) are safely ignored and dropped to avoid leaking internal topology
 
 			if (data.activeEdgeRegion) {
 				this.activeEdgeRegion = data.activeEdgeRegion
@@ -613,37 +610,59 @@ export class BroccoliTransportSubstrate {
 	}
 
 	/**
-	 * Get active cached shard affinity ID
+	 * Get active opaque session affinity ticket (aff_v1_...)
+	 */
+	public getActiveSessionAffinity(): string | undefined {
+		return this.activeSessionAffinity
+	}
+
+	/**
+	 * Set active opaque session affinity ticket with immediate atomic WAL persistence
+	 */
+	public setActiveSessionAffinity(ticket: string): void {
+		if (ticket && typeof ticket === "string" && ticket.startsWith("aff_")) {
+			this.activeSessionAffinity = ticket
+			this.persistLedgerToDisk()
+		}
+	}
+
+	/**
+	 * Clear active session affinity upon logout, credential rotation, node failover, or capacity constraints
+	 */
+	public clearActiveSessionAffinity(): void {
+		this.activeSessionAffinity = undefined
+		this.persistLedgerToDisk()
+	}
+
+	/**
+	 * Backwards-compatibility alias for session affinity
 	 */
 	public getActiveShardId(): string | undefined {
-		return this.activeShardId
+		return this.activeSessionAffinity
 	}
 
 	/**
-	 * Get active cached shard isolation mode ('pooled' | 'private')
+	 * Backwards-compatibility alias for session isolation mode
 	 */
 	public getActiveShardMode(): string | undefined {
-		return this.activeShardMode
+		return undefined
 	}
 
 	/**
-	 * Set active cached shard affinity with optional mode and immediate atomic WAL persistence
+	 * Backwards-compatibility alias for setting session affinity
 	 */
-	public setActiveShard(shardId: string, shardMode?: string): void {
-		this.activeShardId = shardId
-		if (shardMode) {
-			this.activeShardMode = shardMode
+	public setActiveShard(ticketOrShard: string, _shardMode?: string): void {
+		if (ticketOrShard && typeof ticketOrShard === "string" && ticketOrShard.startsWith("aff_")) {
+			this.activeSessionAffinity = ticketOrShard
+			this.persistLedgerToDisk()
 		}
-		this.persistLedgerToDisk()
 	}
 
 	/**
-	 * Clear active cached shard affinity upon logout, credential rotation, or quota 429 backoff
+	 * Backwards-compatibility alias for clearing session affinity
 	 */
 	public clearActiveShard(): void {
-		this.activeShardId = undefined
-		this.activeShardMode = undefined
-		this.persistLedgerToDisk()
+		this.clearActiveSessionAffinity()
 	}
 
 	/**

@@ -210,7 +210,7 @@ export class OpenAiCodexHandler implements ApiHandler {
 			// Get ChatGPT account ID for organization subscriptions
 			const accountId = await openAiCodexOAuthManager.getAccountId()
 
-			const activeShardId = broccoliTransportSubstrate.getActiveShardId()
+			const activeAffinity = broccoliTransportSubstrate.getActiveSessionAffinity()
 
 			// Build Codex-specific headers
 			const codexHeaders: Record<string, string> = {
@@ -218,7 +218,7 @@ export class OpenAiCodexHandler implements ApiHandler {
 				session_id: this.sessionId,
 				"User-Agent": `dietcode/${process.env.npm_package_version || "1.0.0"} (${os.platform()} ${os.release()}; ${os.arch()}) node/${process.version.slice(1)}`,
 				...(accountId ? { "ChatGPT-Account-Id": accountId } : {}),
-				...(activeShardId ? { "X-Galx-Shard-Id": activeShardId } : {}),
+				...(activeAffinity ? { "X-Galx-Session-Affinity": activeAffinity } : {}),
 				...buildExternalBasicHeaders(),
 			}
 
@@ -491,7 +491,7 @@ export class OpenAiCodexHandler implements ApiHandler {
 
 		// Get ChatGPT account ID for organization subscriptions
 		const accountId = await openAiCodexOAuthManager.getAccountId()
-		const activeShardId = broccoliTransportSubstrate.getActiveShardId()
+		const activeAffinity = broccoliTransportSubstrate.getActiveSessionAffinity()
 
 		// Build headers with required Codex-specific fields
 		const headers: Record<string, string> = {
@@ -507,9 +507,9 @@ export class OpenAiCodexHandler implements ApiHandler {
 			headers["ChatGPT-Account-Id"] = accountId
 		}
 
-		// Add X-Galx-Shard-Id if active shard affinity is pinned
-		if (activeShardId) {
-			headers["X-Galx-Shard-Id"] = activeShardId
+		// Add X-Galx-Session-Affinity if session affinity ticket is present
+		if (activeAffinity) {
+			headers["X-Galx-Session-Affinity"] = activeAffinity
 		}
 
 		try {
@@ -520,9 +520,17 @@ export class OpenAiCodexHandler implements ApiHandler {
 				signal: this.abortController?.signal,
 			})
 
+			const incomingAffinity =
+				response.headers.get("x-galx-session-affinity") ||
+				response.headers.get("X-Galx-Session-Affinity")
+			if (incomingAffinity) {
+				broccoliTransportSubstrate.setActiveSessionAffinity(incomingAffinity)
+			}
+
 			if (!response.ok) {
 				const errorText = await response.text()
 				let errorMessage = `Codex API request failed: ${response.status}`
+				let errorCode = ""
 
 				try {
 					const errorJson = JSON.parse(errorText)
@@ -531,10 +539,68 @@ export class OpenAiCodexHandler implements ApiHandler {
 					} else if (errorJson.message) {
 						errorMessage = errorJson.message
 					}
+					errorCode = errorJson.code || errorJson.error?.code || ""
 				} catch {
 					if (errorText) {
 						errorMessage += ` - ${errorText}`
 					}
+				}
+
+				const isAffinityError =
+					response.status === 429 ||
+					response.status === 500 ||
+					errorCode === "capacity_constrained" ||
+					errorCode === "router_dispatch_failed" ||
+					errorMessage.includes("capacity_constrained") ||
+					errorMessage.includes("router_dispatch_failed") ||
+					errorMessage.includes("credential shards") ||
+					errorMessage.includes("pool_exhausted")
+
+				// Self-Healing Failover: If bound to an affinity route that became saturated,
+				// immediately evict the ticket and retry once with unpinned routing
+				if (isAffinityError && activeAffinity) {
+					Logger.warn(
+						`[OpenAiCodexHandler] Session affinity route saturated (${errorMessage}). Evicting affinity ticket and executing failover retry...`,
+					)
+					broccoliTransportSubstrate.clearActiveSessionAffinity()
+					delete headers["X-Galx-Session-Affinity"]
+
+					const retryResponse = await fetch(url, {
+						method: "POST",
+						headers,
+						body: JSON.stringify(requestBody),
+						signal: this.abortController?.signal,
+					})
+
+					const retryAffinity =
+						retryResponse.headers.get("x-galx-session-affinity") ||
+						retryResponse.headers.get("X-Galx-Session-Affinity")
+					if (retryAffinity) {
+						broccoliTransportSubstrate.setActiveSessionAffinity(retryAffinity)
+					}
+
+					if (!retryResponse.ok) {
+						const retryErrorText = await retryResponse.text()
+						let retryMsg = `Codex API request failed: ${retryResponse.status}`
+						try {
+							const retryJson = JSON.parse(retryErrorText)
+							retryMsg = retryJson.error?.message || retryJson.message || retryMsg
+						} catch {
+							if (retryErrorText) retryMsg += ` - ${retryErrorText}`
+						}
+						throw new Error(retryMsg)
+					}
+
+					if (!retryResponse.body) {
+						throw new Error("No response body from Codex API after failover retry")
+					}
+
+					yield* this.handleStreamResponse(retryResponse.body, model)
+					return
+				}
+
+				if (isAffinityError) {
+					broccoliTransportSubstrate.clearActiveSessionAffinity()
 				}
 
 				throw new Error(errorMessage)

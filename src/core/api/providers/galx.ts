@@ -38,7 +38,6 @@ export class GalxHandler implements ApiHandler {
 			}
 			try {
 				const baseURL = (this.options.galxBaseUrl || galxDefaultBaseUrl || "https://galx.ai/v1").replace(/\/$/, "")
-				const activeShardId = broccoliTransportSubstrate.getActiveShardId()
 				this.client = createOpenAIClient({
 					baseURL,
 					apiKey: this.options.galxApiKey,
@@ -46,7 +45,6 @@ export class GalxHandler implements ApiHandler {
 						"X-GALX-Client": "LUMI/12.5.1",
 						"X-GALX-Client-ID": "lumi-ide",
 						"X-OpenRouter-Title": "LUMI",
-						...(activeShardId ? { "X-Galx-Shard-Id": activeShardId } : {}),
 					},
 				})
 			} catch (error: any) {
@@ -81,23 +79,75 @@ export class GalxHandler implements ApiHandler {
 			;(requestParams as unknown as Record<string, unknown>).reasoning_effort = this.options.reasoningEffort
 		}
 
-		const activeShardId = broccoliTransportSubstrate.getActiveShardId()
+		const activeAffinity = broccoliTransportSubstrate.getActiveSessionAffinity()
 		const requestHeaders: Record<string, string> = {
-			...(activeShardId ? { "X-Galx-Shard-Id": activeShardId } : {}),
+			...(activeAffinity ? { "X-Galx-Session-Affinity": activeAffinity } : {}),
 		}
 
 		let stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>
 		try {
-			stream = await client.chat.completions.create(requestParams, {
+			const responsePromise = client.chat.completions.create(requestParams, {
 				headers: requestHeaders,
 			})
+			if (typeof (responsePromise as any).withResponse === "function") {
+				const { data, response } = await (responsePromise as any).withResponse()
+				const resAffinity =
+					response?.headers?.get?.("x-galx-session-affinity") ||
+					response?.headers?.get?.("X-Galx-Session-Affinity")
+				if (resAffinity) {
+					broccoliTransportSubstrate.setActiveSessionAffinity(resAffinity)
+				}
+				stream = data
+			} else {
+				stream = await responsePromise
+			}
 		} catch (error: unknown) {
 			const err = error as any
-			if (err?.status === 429 || err?.statusCode === 429) {
-				broccoliTransportSubstrate.clearActiveShard()
+			const errMsg = String(err?.message || "")
+			const isAffinityError =
+				err?.status === 429 ||
+				err?.statusCode === 429 ||
+				err?.status === 400 ||
+				err?.status === 401 ||
+				err?.status === 403 ||
+				err?.status === 404 ||
+				err?.status === 410 ||
+				err?.status === 500 ||
+				errMsg.includes("capacity_constrained") ||
+				errMsg.includes("router_dispatch_failed") ||
+				errMsg.includes("credential shards") ||
+				errMsg.includes("pool_exhausted")
+
+			if (isAffinityError && activeAffinity) {
+				Logger.warn(
+					`[GalxHandler] Session affinity constrained (${errMsg}). Evicting session route ticket and retrying with automatic failover...`,
+				)
+				broccoliTransportSubstrate.clearActiveSessionAffinity()
+				try {
+					const retryPromise = client.chat.completions.create(requestParams)
+					if (typeof (retryPromise as any).withResponse === "function") {
+						const { data, response } = await (retryPromise as any).withResponse()
+						const resAffinity =
+							response?.headers?.get?.("x-galx-session-affinity") ||
+							response?.headers?.get?.("X-Galx-Session-Affinity")
+						if (resAffinity) {
+							broccoliTransportSubstrate.setActiveSessionAffinity(resAffinity)
+						}
+						stream = data
+					} else {
+						stream = await retryPromise
+					}
+				} catch (retryErr: unknown) {
+					Logger.error(`GALXAI API Request Error after session failover retry: ${(retryErr as any)?.message}`, retryErr)
+					throw retryErr
+				}
+			} else {
+				if (isAffinityError) {
+					broccoliTransportSubstrate.clearActiveSessionAffinity()
+				}
+				Logger.error(`GALXAI API Request Error: ${err.message}`, err)
+				throw error
 			}
-			Logger.error(`GALXAI API Request Error: ${err.message}`, err)
-			throw error
 		}
 
 		let didOutputUsage = false
